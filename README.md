@@ -31,7 +31,9 @@ python get_mask.py
 ```
 **Output** `globe_mask_coastline.npz` (0:land, 1:sea, 2:coast)     
    
-#### 4. Use `parallel_is_land.sh` (or `is_land.py`) to identify locations in the ocean    
+#### 4. Use `parallel_is_land.sh` (or `is_land.py`) to identify locations in the ocean
+   Requirements: All files to be processed must be in the `./gbif_files/` folder.  
+   
 **Command**
 ```
 parallel-ssh -h hosts_file -t 0 parallel_is_land.sh
