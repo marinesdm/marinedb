@@ -1,0 +1,438 @@
+{
+    "ZERO_COORDINATE": {
+        "id": 0,
+        "description": "Coordinates are exactly 0/0, often indicating an actual null coordinate."
+    },
+    "COUNTRY_COORDINATE_MISMATCH": {
+        "id": 1,
+        "description": "The interpreted occurrence coordinates fall outside of the indicated country."
+    },
+    "COORDINATE_INVALID": {
+        "id": 2,
+        "description": "A coordinate value is given in some form, but GBIF is unable to interpret it."
+    },
+    "COORDINATE_OUT_OF_RANGE": {
+        "id": 3,
+        "description": "The supplied coordinates lie outside of the range for decimal lat/lon values (-90/90, -180/180)."
+    },
+    "GEODETIC_DATUM_ASSUMED_WGS84": {
+        "id": 4,
+        "description": "If the datum is null, data interpretation assumes the record coordinates are in WGS84."
+    },
+    "GEODETIC_DATUM_INVALID": {
+        "id": 5,
+        "description": "The geodetic datum given could not be interpreted."
+    },
+    "COUNTRY_MISMATCH": {
+        "id": 6,
+        "description": "Interpreted country for dwc:country and dwc:countryCode contradict each other."
+    },
+    "COUNTRY_DERIVED_FROM_COORDINATES": {
+        "id": 7,
+        "description": "The interpreted country is based on the coordinates, not the verbatim string information."
+    },
+    "COUNTRY_INVALID": {
+        "id": 8,
+        "description": "The dwc:ccountry or dwc:countryCode given cannot be matched to the vocabulary for country names."
+    },
+    "CONTINENT_COUNTRY_MISMATCH": {
+        "id": 9,
+        "description": "The interpreted continent and country do not match up."
+    },
+    "CONTINENT_COORDINATE_MISMATCH": {
+        "id": 10,
+        "description": "The interpreted occurrence coordinates fall outside of the indicated continent."
+    },
+    "CONTINENT_DERIVED_FROM_COORDINATES": {
+        "id": 11,
+        "description": "The interpreted continent is based on the coordinates, not the verbatim string information."
+    },
+    "CONTINENT_INVALID": {
+        "id": 12,
+        "description": "The continent given cannot be matched to the vocabulary for continent names."
+    },
+    "COORDINATE_ROUNDED": {
+        "id": 13,
+        "description": "The original coordinates are rounded to 6 decimals (~1m precision)."
+    },
+    "COORDINATE_REPROJECTED": {
+        "id": 14,
+        "description": "The original coordinates were successfully reprojected from a different geodetic datum to WGS84."
+    },
+    "COORDINATE_REPROJECTION_SUSPICIOUS": {
+        "id": 15,
+        "description": "Indicates successful coordinate reprojection according to provided datum, but which results in a datum shift larger than 0.1 decimal degrees."
+    },
+    "COORDINATE_REPROJECTION_FAILED": {
+        "id": 16,
+        "description": "The given decimal latitude and longitude could not be reprojected to WGS84 based on the provided datum."
+    },
+    "COORDINATE_UNCERTAINTY_METERS_INVALID": {
+        "id": 17,
+        "description": "Indicates an invalid or very unlikely dwc:uncertaintyInMeters."
+    },
+    "COORDINATE_PRECISION_INVALID": {
+        "id": 18,
+        "description": "Indicates an invalid or very unlikely dwc:coordinatePrecision"
+    },
+    "PRESUMED_NEGATED_LONGITUDE": {
+        "id": 19,
+        "description": "The supplied longitude value places the coordinates outside of the indicated country. Negating the longitude value would result in a country match."
+    },
+    "PRESUMED_NEGATED_LATITUDE": {
+        "id": 20,
+        "description": "The supplied latitude value places the coordinates outside of the indicated country. Negating the latitude value would result in a country match."
+    },
+    "PRESUMED_SWAPPED_COORDINATE": {
+        "id": 21,
+        "description": "Coordinates seem to be swapped when testing against the interpreted country."
+    },
+    "DEPTH_MIN_MAX_SWAPPED": {
+        "id": 22,
+        "description": "The values for minimum and maximum depth appear to the swapped (min > max)."
+    },
+    "DEPTH_NON_NUMERIC": {
+        "id": 23,
+        "description": "The values for minimum and maximum depth are non-numeric values and cannot be interpreted."
+    },
+    "DEPTH_UNLIKELY": {
+        "id": 24,
+        "description": "The values for minimum and maximum depth are negative or higher than 11000 (Mariana Trench depth in meters)."
+    },
+    "DEPTH_NOT_METRIC": {
+        "id": 25,
+        "description": "Set if supplied depth is not given in the metric system, for example using feet instead of meters."
+    },
+    "ELEVATION_MIN_MAX_SWAPPED": {
+        "id": 26,
+        "description": "The values for minimum and maximum elevation appear to the swapped (min > max)."
+    },
+    "ELEVATION_NON_NUMERIC": {
+        "id": 27,
+        "description": "The values for minimum and maximum elevation are non-numeric values and cannot be interpreted."
+    },
+    "ELEVATION_UNLIKELY": {
+        "id": 28,
+        "description": "The values for minimum and maximum elevation are above the troposphere (17000 m) or below Mariana Trench (11000 m)."
+    },
+    "ELEVATION_NOT_METRIC": {
+        "id": 29,
+        "description": "Set if supplied elevation is not given in the metric system, for example using feet instead of meters."
+    },
+    "TAXON_MATCH_HIGHERRANK": {
+        "id": 30,
+        "description": "The record can be matched to the GBIF taxonomic backbone at a higher rank, but not with the scientific name given."
+    },
+    "TAXON_MATCH_NONE": {
+        "id": 31,
+        "description": "Matching to the taxonomic backbone cannot be done because there was no match at all or several matches with too little information to keep them apart (homonyms)."
+    },
+    "TAXON_MATCH_FUZZY": {
+        "id": 32,
+        "description": "Matching to the taxonomic backbone can only be done using a fuzzy, non exact match."
+    },
+    "SCIENTIFIC_NAME_AND_ID_INCONSISTENT": {
+        "id": 33,
+        "description": "The dwc:scientificName provided in the occurrence record does not precisely match the name in the registered checklist when using the dwc:scientificNameID, dwc:taxonID or dwc:taxonConceptID to look it up."
+    },
+    "SCIENTIFIC_NAME_ID_NOT_FOUND": {
+        "id": 34,
+        "description": "The dwc:scientificNameID matched a known pattern, but it was not found in the associated checklist."
+    },
+    "TAXON_CONCEPT_ID_NOT_FOUND": {
+        "id": 35,
+        "description": "The dwc:taxonConceptID matched a known pattern, but it was not found in the associated checklist."
+    },
+    "TAXON_ID_NOT_FOUND": {
+        "id": 36,
+        "description": "The dwc:taxonID found matched a known pattern, but it was not found in the associated checklist."
+    },
+    "TAXON_MATCH_NAME_AND_ID_AMBIGUOUS": {
+        "id": 37,
+        "description": "The GBIF Backbone concept was found using the dwc:scientificNameID, dwc:taxonID or dwc:taxonConceptID, but it differs from what would have been found if the classification names on the record were used."
+    },
+    "TAXON_MATCH_SCIENTIFIC_NAME_ID_IGNORED": {
+        "id": 38,
+        "description": "The dwc:scientificNameID was not used when mapping the record to the GBIF backbone."
+    },
+    "TAXON_MATCH_TAXON_CONCEPT_ID_IGNORED": {
+        "id": 39,
+        "description": "The dwc:taxonConceptID was not used when mapping the record to the GBIF backbone."
+    },
+    "TAXON_MATCH_TAXON_ID_IGNORED": {
+        "id": 40,
+        "description": "The dwc:taxonID was not used when mapping the record to the GBIF backbone."
+    },
+    "TAXON_MATCH_AGGREGATE": {
+        "id": 41,
+        "description": "Matching to the taxonomic backbone can only be done at species level, but the occurrence was in fact considered a broader species aggregate/complex."
+    },
+    "RECORDED_DATE_INVALID": {
+        "id": 42,
+        "description": "The recording date given cannot be intrepreted because is invalid."
+    },
+    "RECORDED_DATE_MISMATCH": {
+        "id": 43,
+        "description": "The recording date specified as the dwc:eventDate string and the individual dwc:year, dwc:month, dwc:day are contradicting."
+    },
+    "RECORDED_DATE_UNLIKELY": {
+        "id": 44,
+        "description": "The recording date (dwc:eventDate, dwc:year, dwc:month, dwc:day) is highly unlikely, falling either into the future or representing a very old date before 1600 that predates modern taxonomy."
+    },
+    "IDENTIFIED_DATE_INVALID": {
+        "id": 45,
+        "description": "The identification date (dwc:dateIdentified) given cannot be intrepreted because is invalid."
+    },
+    "IDENTIFIED_DATE_UNLIKELY": {
+        "id": 46,
+        "description": "The identification date (dwc:dateIdentified) is in the future or before Linnean times (1700)."
+    },
+    "MODIFIED_DATE_INVALID": {
+        "id": 47,
+        "description": "A (partial) invalid modified date (dc:modified) is given."
+    },
+    "MODIFIED_DATE_UNLIKELY": {
+        "id": 48,
+        "description": "The modified date (dc:modified) given is in the future or predates unix time (1970)."
+    },
+    "MULTIMEDIA_DATE_INVALID": {
+        "id": 49,
+        "description": "The creation date (dc:created) given cannot be intrepreted because is invalid."
+    },
+    "GEOREFERENCED_DATE_INVALID": {
+        "id": 50,
+        "description": "The dwc:georeferencedDate given cannot be intrepreted because it is invalid."
+    },
+    "GEOREFERENCED_DATE_UNLIKELY": {
+        "id": 51,
+        "description": "The dwc:georeferenceDate given is in the future or before Linnean times (1700)."
+    },
+    "BASIS_OF_RECORD_INVALID": {
+        "id": 52,
+        "description": "The given dwc:basisOfRecord is impossible to interpret or very different from the recommended vocabulary."
+    },
+    "TYPE_STATUS_INVALID": {
+        "id": 53,
+        "description": "The given dwc:typeStatus is impossible to interpret or very different from the recommended vocabulary."
+    },
+    "OCCURRENCE_STATUS_UNPARSABLE": {
+        "id": 54,
+        "description": "The given dwc:occurenceStatus value (present/absent) cannot be interpreted."
+    },
+    "AMBIGUOUS_INSTITUTION": {
+        "id": 55,
+        "description": "The given institution matches with more than 1 GRSciColl institution."
+    },
+    "AMBIGUOUS_COLLECTION": {
+        "id": 56,
+        "description": "The given collection matches with more than 1 GRSciColl collection."
+    },
+    "INSTITUTION_MATCH_NONE": {
+        "id": 57,
+        "description": "The given institution couldn't be matched with any GRSciColl institution."
+    },
+    "INSTITUTION_MATCH_FUZZY": {
+        "id": 58,
+        "description": "The given institution was fuzzily matched to a GRSciColl institution."
+    },
+    "COLLECTION_MATCH_NONE": {
+        "id": 59,
+        "description": "The given collection couldn't be matched with any GRSciColl collection."
+    },
+    "COLLECTION_MATCH_FUZZY": {
+        "id": 60,
+        "description": "The given collection was fuzzily matched to a GRSciColl collection."
+    },
+    "INSTITUTION_COLLECTION_MISMATCH": {
+        "id": 61,
+        "description": "The collection matched doesn't belong to the institution matched."
+    },
+    "DIFFERENT_OWNER_INSTITUTION": {
+        "id": 62,
+        "description": "The given owner institution is different than the given institution."
+    },
+    "INDIVIDUAL_COUNT_INVALID": {
+        "id": 63,
+        "description": "Individual count value not parsable into a positive integer."
+    },
+    "INDIVIDUAL_COUNT_CONFLICTS_WITH_OCCURRENCE_STATUS": {
+        "id": 64,
+        "description": "The values given for the individual count and for the status of the occurrence (present/absent) contradict each other (e.g. the count is 0 but the status says “present”)."
+    },
+    "OCCURRENCE_STATUS_INFERRED_FROM_INDIVIDUAL_COUNT": {
+        "id": 65,
+        "description": "The present/absent status of the occurrence was inferred from the individual count value"
+    },
+    "REFERENCES_URI_INVALID": {
+        "id": 66,
+        "description": "An invalid URI is given for dc:references."
+    },
+    "MULTIMEDIA_URI_INVALID": {
+        "id": 67,
+        "description": "An invalid URI is given for a multimedia object (dwc:associatedMedia)."
+    },
+    "INTERPRETATION_ERROR": {
+        "id": 68,
+        "description": "An error occurred during interpretation, leaving the record interpretation incomplete."
+    },
+    "OCCURRENCE_STATUS_INFERRED_FROM_BASIS_OF_RECORD": {
+        "id": 69,
+        "description": "Occurrence status was inferred from basis of records."
+    },
+    "FOOTPRINT_SRS_INVALID": {
+        "id": 70,
+        "description": "The Footprint Spatial Reference System given could not be interpreted."
+    },
+    "FOOTPRINT_WKT_INVALID": {
+        "id": 71,
+        "description": "The Footprint Well-Known-Text given could not be interpreted."
+    },
+    "FOOTPRINT_WKT_MISMATCH": {
+        "id": 72,
+        "description": "The Footprint Well-Known-Text conflicts with the interpreted coordinates (dwc:decimalLatitude, dwcdecimalLongitude etc)."
+    },
+    "UNPARSABLE": {
+        "id": 73,
+        "description": "The scientific name string could not be parsed at all, but appears to be a parsable name type"
+    },
+    "PARTIALLY_PARSABLE": {
+        "id": 74,
+        "description": "The beginning of the scientific name string was parsed, but there is additional information in the string that was not understood."
+    },
+    "PARENT_NAME_USAGE_ID_INVALID": {
+        "id": 75,
+        "description": "The value for dwc:parentNameUsageID could not be resolved."
+    },
+    "ACCEPTED_NAME_USAGE_ID_INVALID": {
+        "id": 76,
+        "description": "The value for dwc:acceptedNameUsageID could not be resolved."
+    },
+    "ORIGINAL_NAME_USAGE_ID_INVALID": {
+        "id": 77,
+        "description": "The value for dwc:originalNameUsageID could not be resolved."
+    },
+    "RANK_INVALID": {
+        "id": 78,
+        "description": "dwc:taxonRank could not be interpreted"
+    },
+    "NOMENCLATURAL_STATUS_INVALID": {
+        "id": 79,
+        "description": "dwc:nomenclaturalStatus could not be interpreted"
+    },
+    "TAXONOMIC_STATUS_INVALID": {
+        "id": 80,
+        "description": "dwc:taxonomicStatus could not be interpreted"
+    },
+    "TAXONOMIC_STATUS_MISMATCH": {
+        "id": 81,
+        "description": "no description"
+    },
+    "SCIENTIFIC_NAME_ASSEMBLED": {
+        "id": 82,
+        "description": "The scientific name was assembled from the individual name parts and not given as a whole string."
+    },
+    "CHAINED_SYNOYM": {
+        "id": 83,
+        "description": "If a synonym points to another synonym as its accepted taxon the chain is resolved."
+    },
+    "BASIONYM_AUTHOR_MISMATCH": {
+        "id": 84,
+        "description": "The authorship of the original name does not match the authorship in brackets of the actual name."
+    },
+    "PARENT_CYCLE": {
+        "id": 85,
+        "description": "The child-parent classification resulted into a cycle that needed to be resolved/cut."
+    },
+    "CLASSIFICATION_NOT_APPLIED": {
+        "id": 86,
+        "description": "The denormalized classification could not be applied to the name usage."
+    },
+    "VERNACULAR_NAME_INVALID": {
+        "id": 87,
+        "description": "At least one part of a vernacular name attached to this taxon name could not be interpreted."
+    },
+    "DESCRIPTION_INVALID": {
+        "id": 88,
+        "description": "At least one description record for this taxon name could not be interpreted"
+    },
+    "DISTRIBUTION_INVALID": {
+        "id": 89,
+        "description": "At least one species distribution record for this taxon name could not be interpreted."
+    },
+    "SPECIES_PROFILE_INVALID": {
+        "id": 90,
+        "description": "At least one species profile record for this taxon name could not be interpreted."
+    },
+    "MULTIMEDIA_INVALID": {
+        "id": 91,
+        "description": "At least one multimedia extension record attached to this taxon name could not be interpreted."
+    },
+    "BIB_REFERENCE_INVALID": {
+        "id": 92,
+        "description": "At least one bibliographic reference for this taxon name could not be interpreted."
+    },
+    "ALT_IDENTIFIER_INVALID": {
+        "id": 93,
+        "description": "At least one alternative identifier for this taxon name could not be interpreted."
+    },
+    "BACKBONE_MATCH_NONE": {
+        "id": 94,
+        "description": "Name usage could not be matched to the GBIF backbone."
+    },
+    "BACKBONE_MATCH_AGGREGATE": {
+        "id": 95,
+        "description": "Name usage could only be matched to a GBIF backbone species, but was in fact a broader species aggregate/complex."
+    },
+    "ACCEPTED_NAME_MISSING": {
+        "id": 96,
+        "description": "Synonym lacking an accepted name."
+    },
+    "ACCEPTED_NAME_NOT_UNIQUE": {
+        "id": 97,
+        "description": "Synonym has a verbatim accepted name which is not unique and refers to several records."
+    },
+    "PARENT_NAME_NOT_UNIQUE": {
+        "id": 98,
+        "description": "Record has a verbatim parent name which is not unique and refers to several records."
+    },
+    "ORIGINAL_NAME_NOT_UNIQUE": {
+        "id": 99,
+        "description": "Record has a verbatim original name (basionym) which is not unique and refers to several records."
+    },
+    "RELATIONSHIP_MISSING": {
+        "id": 100,
+        "description": "There were problems representing all name relationships, i.e. the link to the parent, accepted and/or original name."
+    },
+    "ORIGINAL_NAME_DERIVED": {
+        "id": 101,
+        "description": "Record has a original name (basionym) relationship which was derived from name & authorship comparison, but did not exist explicitly in the data."
+    },
+    "CONFLICTING_BASIONYM_COMBINATION": {
+        "id": 102,
+        "description": "There have been more than one accepted name in a homotypical basionym group of names."
+    },
+    "NO_SPECIES": {
+        "id": 103,
+        "description": "The group (currently only genera are tested) are lacking any accepted species."
+    },
+    "NAME_PARENT_MISMATCH": {
+        "id": 104,
+        "description": "The (accepted) bi/trinomial name does not match the parent name and should be recombined into the parent genus/species."
+    },
+    "ORTHOGRAPHIC_VARIANT": {
+        "id": 105,
+        "description": "An entry in the backbone is suspected to be only a spelling variation of an otherwise existing name."
+    },
+    "HOMONYM": {
+        "id": 106,
+        "description": "A not synonymized homonym exists for this name in some other backbone source which have been ignored at build time."
+    },
+    "PUBLISHED_BEFORE_GENUS": {
+        "id": 107,
+        "description": "A bi/trinomial name published earlier than the parent genus was published. This might indicate that the name should rather be a recombination."
+    },
+    "CLASSIFICATION_RANK_ORDER_INVALID": {
+        "id": 108,
+        "description": "The given ranks of the names in the classification hierarchy do not follow the hierarchy of ranks."
+    }
+}
