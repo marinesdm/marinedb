@@ -6,12 +6,11 @@ import argparse
 import yaml
 import numpy as np
 import pandas as pd
-import datetime3_11 as datetime
 import time
 
 # Local imports
 import filters
-import filters.getwormsfilters as gwf
+import filters.createwormsfilters as cwf
 import fiters.standardizenan as stdnan
 import filters.convertdatetype as cvtdate
 
@@ -165,7 +164,7 @@ if __name__ == '__main__':
             ## Create the filters if needed or load them
             print(f'Processing | Full dataset')
             print('    * Creating WoRMS filters')
-            worms_matchfilter, worms_acceptedfilter = gwf.get_WoRMSfilter(config["gbif_gz_file"], store=True, outputpath=config["input_path"], overwrite=False)
+            worms_matchfilter, worms_acceptedfilter = cwf.get_WoRMSfilter(config["gbif_gz_file"], store=True, outputpath=config["input_path"], overwrite=False)
             ## Add the filters to config
             config["filters"][species_idx]["species"][isinworms_idx]["isinworms"]["matchfilter"] = worms_matchfilter.copy(deep=True)
             config["filters"][species_idx]["species"][isinworms_idx]["isinworms"]["acceptedfilter"] = worms_acceptedfilter.copy(deep=True)

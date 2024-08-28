@@ -81,7 +81,7 @@ data:
             keep: True
             inplace: False
             maxinterval_number: 1
-            maxinterval_year: 'year'
+            maxinterval_level: 'years'
             interval_delimiter: '/'
         - splitdate:
             overwrite: True

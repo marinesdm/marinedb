@@ -13,7 +13,7 @@ from suds.sudsobject import items
 import time
 
 # Local imports
-import filters.getwormsfilters as gwf
+import filters.createwormsfilters as cwf
 import filters.dropvalues as dropvalues
 
 
@@ -211,7 +211,7 @@ def apply_matchfilter(classification, matchfilter=None, allowed_mismatch_withNaN
 
         unique_species = classification[RANK['species']].unique.tolist()
         wormscall = dict(zip(list(worms_mapping.values()),list(worms_mapping.keys())))
-        matchfilter = gwf.match_WoRMS(unique_species, store=True, wormscall=wormscall, overwrite=False, outputpath=outputpath)
+        matchfilter = cwf.match_WoRMS(unique_species, store=True, wormscall=wormscall, overwrite=False, outputpath=outputpath)
 
     else:
 
@@ -273,7 +273,7 @@ def apply_acceptedfilter(classification, acceptedfilter=None, outputpath='./'):
         if acceptedfilter is None:
 
             valid_aphiaID = classification.loc[unaccepted_idx,"valid_aphiaID"].unique().tolist()
-            acceptedfilter = gwf.get_AcceptedWoRMS(valid_aphiaID, store=True, overwrite=False, outputpath=outputpath)
+            acceptedfilter = cwf.get_AcceptedWoRMS(valid_aphiaID, store=True, overwrite=False, outputpath=outputpath)
 
         else:
 
