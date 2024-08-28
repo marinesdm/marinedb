@@ -1,0 +1,184 @@
+data:
+
+  gbif_gz_file: "/mnt/smartbiodiv/gbif_building/gbif_ocean_full.txt.gz"
+
+  input_path: "/data/smartbiodiv/eberhocoi/source3/"
+
+  output_path: "/data/smartbiodiv/eberhocoi/experiment1_3/"
+
+  output_file: "gbif_ocean_clean.tsv"
+
+
+  #filters
+  filters:
+    #- taxonRank:
+    #    - isin: #also drop NaN
+    #        values: ['FORM','VARIETY','SUBSPECIES','SPECIES'] #'FORM',
+                                                              #'VARIETY',
+                                                              #'SUBSPECIES',
+                                                              #'SPECIES',
+                                                              #'GENUS',
+                                                              #'FAMILY',
+                                                              #'ORDER',
+                                                              #'CLASS',
+                                                              #'PHYLUM',
+                                                              #'KINGDOM',
+                                                              #'UNRANKED'
+    - species:
+        - dropna
+    - kingdom:
+        - notisin:
+            values: ['Bacteria', 'Archaea', 'Viruses']
+        - lettersonly
+    - phylum:
+        - lettersonly
+    - class:
+        - notisin:
+            values: ['Aves']
+        - lettersonly
+    - order:
+        - lettersonly
+    - family:
+        - lettersonly
+    - genus:
+        - lettersonly
+    - occurrenceStatus:
+        - isin: #also drop NaN
+            values: ['PRESENT','ABSENT']
+    - basisOfRecord:
+        - notisin:
+            values: ['OBSERVATION','OCCURRENCE']
+            flag: True
+
+    - decimalLatitude:
+        - isboundedby: #also drop NaN
+            operator: '>='
+            value: -90
+        - isboundedby: #also drop NaN
+            operator: '<='
+            value: 90
+    - decimalLongitude:
+        - isboundedby: #also drop NaN
+            operator: '>='
+            value: -180
+        - isboundedby: #also drop NaN
+            operator: '<='
+            value: 180
+    - filter:
+        - doeslateqlon:
+            keylat: 'decimalLatitude'
+            keylon: 'decimalLongitude'
+            flag: True
+    - filter:
+        - minlatlonprecision:
+            keylat: 'decimalLatitude'
+            keylon: 'decimalLongitude'
+            value: 2
+            flag: True
+
+    - eventDate:
+        - processdateinterval:
+            keep: True
+            inplace: False
+            maxinterval_number: 1
+            maxinterval_year: 'year'
+            interval_delimiter: '/'
+        - splitdate:
+            overwrite: True
+            overwrite_type: 'interval'
+    - year:
+        - isboundedby: #also drop NaN
+            operator: '>='
+            value: 1950
+
+    - issue:
+        - doesnotcontain:
+            values: ['ZERO_COORDINATE','COORDINATE_INVALID','COORDINATE_OUT_OF_RANGE','COORDINATE_REPROJECTION_FAILED','TAXON_MATCH_NONE','RECORDED_DATE_UNLIKELY','RECORDED_DATE_INVALID','INDIVIDUAL_COUNT_CONFLICTS_WITH_OCCURRENCE_STATUS']
+        - doesnotcontain:
+            values: ['COORDINATE_REPROJECTION_SUSPICIOUS','GEODETIC_DATUM_INVALID','GEODETIC_DATUM_ASSUMED_WGS84','TAXON_MATCH_NAME_AND_ID_AMBIGUOUS','SCIENTIFIC_NAME_AND_ID_INCONSISTENT','RECORDED_DATE_MISMATCH', 'DEPTH_UNLIKELY', 'DEPTH_MIN_MAX_SWAPPED']
+            flag: True
+
+    - species:
+        - isinworms:
+            allowed_mismatch_withoutNaN: 2
+            allowed_mismatch_withNaN: 1
+            keep_fossil: False
+            drop_conditions:
+              matchtype_classif: 'nomatch' #near1
+                                           #near2
+                                           #near3
+                                           #near4
+                                           #near5
+                                           #undecided
+              matchtype_species: ['match_deleted','near_3'] #exact
+                                                            #exact_subgenus
+                                                            #phonetic
+                                                            #near_1
+                                                            #near_2
+                                                            #near_3
+                                                            #match_quarantine #systematically deleted
+                                                            #match_deleted
+                                                            #NaN  
+                                                            #see https://www.marinespecies.org/aphia.php?p=manual#topic16
+              #status: #see https://www.marinespecies.org/aphia.php?p=manual#topic16
+                       #some are automatically deleted during processing
+
+
+  #dtype conversion, select & rename columns
+  variables:
+
+   #- original_name:
+   #    new_name: dtypes
+   # OR
+   #- original_name: new_name
+   # OR
+   #- original_name
+   #
+   # by default: dtypes=str
+
+    - decimalLatitude:
+        lat: 'float'
+    - decimalLongitude:
+        lon: 'float'
+    - eventDate:
+        date: 'datetime' #strings in ISO 8601 date or datetime format only
+    - depth:
+        depth: 'float'
+    - species:
+        species: 'str'
+    - genus:
+        genus: 'str'
+    - family:
+        family: 'str'
+    - order:
+        order: 'str'
+    - class:
+        class: 'str'
+    - phylum:
+        phylum: 'str'
+    - kingdom:
+        kingdom: 'str'
+    - gbifID:
+        gbifID: 'int'
+    - occurrenceStatus:
+        occurrence_status: 'str'
+    - individualCount:
+        individual_count: 'int'
+    - verbatimScientificName:
+        verbatim_species: 'str'
+    - issue:
+        issue: 'str'
+    - datasetKey:
+        datasetID: 'str'
+    - occurrenceID:
+        occurrenceID: 'str'
+    - basisOfRecord:
+        basisofrecord: 'str'
+    - license:
+        license: 'str'
+
+
+  postprocessing:
+    - subsample:
+        #upperbound: 1000
+        lowerbound: 50
