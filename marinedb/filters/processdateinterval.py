@@ -4,7 +4,7 @@ import numpy as np
 import filters.convertdatetype as convertdatetype
 
 
-def apply(df, key, drop=True, inplace=False, flag=False, maxinterval_number=1, maxinterval_level='years', interval_delimiter='/'): 
+def apply(df, key, drop=False, inplace=False, flag=False, maxinterval_number=1, maxinterval_level='years', interval_delimiter='/'): 
 
     #maxinterval_number=-1 keep the start date for all intervals
     #start date : a different strategy could be implemented (e.g. take the median date)
@@ -31,7 +31,7 @@ def apply(df, key, drop=True, inplace=False, flag=False, maxinterval_number=1, m
 
     print(f'            * processdateinterval | find date intervals')
 
-    delimiter_index=df[key].str.find(interval_delimiter).astype('Int64') # interval format: YYYY[-MM[-DD...]]/YYYY[-MM[-DD...]]
+    delimiter_index=df[key].astype('string').str.find(interval_delimiter).astype('Int64') # interval format: YYYY[-MM[-DD...]]/YYYY[-MM[-DD...]]
     interval_index=list(np.where((~pd.isnull(delimiter_index)) & (delimiter_index>0))[0])
     df.loc[interval_index, flagname]=True
 
@@ -61,13 +61,9 @@ def apply(df, key, drop=True, inplace=False, flag=False, maxinterval_number=1, m
 
         print(f'            * processdateinterval | replace date intervals with start date')
 
-        tempdf = pd.DataFrame(df.loc[df[flagname],key].str.split('/').tolist(), columns=['start','end'], index=df[df[flagname]].index)
+        tempdf = pd.DataFrame(df.loc[df[flagname],key].astype('string').str.split('/').tolist(), columns=['start','end'], index=df[df[flagname]].index)
         tempdf = convertdatetype.apply(tempdf,'start')
         tempdf = convertdatetype.apply(tempdf,'end')
-        #tempdf['index'] = df[df[flagname]].index
-        #tempdf['index'].set_index('index')
-        #tempdf.index.name=None
-
         tempdf.loc[tempdf['end'] < tempdf['start'],'start'], tempdf.loc[tempdf['end'] < tempdf['start'],'end'] = tempdf.loc[tempdf['end'] < tempdf['start'],'end'], tempdf.loc[tempdf['end'] < tempdf['start'],'start']
 
         if maxinterval_number==0:
