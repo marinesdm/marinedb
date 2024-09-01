@@ -11,8 +11,8 @@ import time
 # Local imports
 import filters
 import filters.createwormsfilters as cwf
-import fiters.standardizenan as stdnan
-import filters.convertdatetype as cvtdate
+import utils.standardizenan as stdnan
+import utils.convertdatetype as cvtdate
 
 TYPE = {
         'int':'Int64',
