@@ -1,5 +1,7 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
+*.py[cod]
+*$py.class
 
 # Jupyter Notebook
 .ipynb_checkpoints
@@ -35,3 +37,7 @@ venv.bak/
 
 #Vim
 *.swp
+
+# Unit test / coverage reports
+.cache
+.pytest_cache/
