@@ -3,23 +3,27 @@ import numpy as np
 
 def apply(df, keylat, keylon, value, flag=False):
 
-    oldcolumns = set(df.columns)
+    print(f'            * minlatlonprecision | minfloatprecision for {keylat}')
     df = mfp.apply(df, keylat, value, flag=True)
+    print(f'            * minlatlonprecision | minfloatprecision for {keylon}')
     df = mfp.apply(df, keylon, value, flag=True)
-    newcolumns = set(df.columns) - oldcolumns
-    if len(newcolumns)!=4:
-        raise Exception(f'There should be no more than four columns (2*latitude & 2*longitude)')
-    flag_newcolumns = [col for col in newcolumns if 'flag' in col]
-    precision_newcolumns = list(newcolumns - set(flag_newcolumns))
+    flagcolumns = [f'flag_{keylat}_minfloatprecision_{str(value)}', f'flag_{keylon}_minfloatprecision_{str(value)}']
+    precisioncolumns = [f'{keylat}_precision',f'{keylon}_precision']
+
+    doescontain_necessarycolumns = set(flagcolumns+precisioncolumns) - set(df.columns)
+    if len(doescontain_necessarycolumns)!=0:
+        raise Exception(f'Running minfloatprecision for latitude and longitude should produce 4 columns.')
 
     flagname = f'flag_minlatlonprecision_{str(value)}'
-    df[flagname] = df[flag_newcolumns[0]] * df[flag_newcolumns[1]] #latitude AND longitude below a threshold of `value` decimals
+    df[flagname] = df[flagcolumns[0]] * df[flagcolumns[1]] #latitude AND longitude below a threshold of `value` decimals
+
+    dropcolumns = flagcolumns + precisioncolumns
 
     if flag:
-        df['latlon_precision'] = df[precision_newcolumns].max(axis=1).astype('Int64')
-        df.drop(columns=new_columns, inplace=True)
+        df['latlon_precision'] = df[precisioncolumns].max(axis=1).astype('Int64')
+        df.drop(columns=dropcolumns, inplace=True)
         return df
     else:
         df = df[~df[flagname]].reset_index(drop=True)
-        df.drop(columns = new_columns + [flagname], inplace=True)
+        df.drop(columns=dropcolumns+[flagname], inplace=True)
         return df

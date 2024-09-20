@@ -19,7 +19,7 @@ def apply(df, key, value, flag=False):
 
     tempcol = f'{key}_precision'
     if tempcol in df.columns:
-        print(f'              {tempcol} column already exists and will be used')
+        print(f'              INFO | {tempcol} column already exists and will be used')
     else:
         df[tempcol] = get_floatprecision(df[key].astype('string')).astype('Int64')
 
