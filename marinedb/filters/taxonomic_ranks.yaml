@@ -1,0 +1,95 @@
+ascending_ranks:
+
+   #Remark:
+   #   botany: series < genus
+   #   lepidoptera: series > family > genus
+   #   ichthyology: series > order > family > genus
+
+   #Remark:
+   #   botany: subsection < section < genus
+   #   zoology: section > subsection > family > genus
+
+   - subform
+   - form
+   - subvariety
+   - variety
+   - subspecies
+   - species
+   - subgenus
+   - genus
+   - supergenus
+   - infratribe
+   - subtribe
+   - tribe
+   - supertribe
+   - infrafamily
+   - subfamily
+   - family
+   - group
+   - epifamily
+   - superfamily
+   - hyperfamily
+   - grandfamily
+   - megafamily
+   - gigafamily
+   - parvorder
+   - infraorder
+   - suborder
+   - minorder
+   - nanorder
+   - order
+   - superorder
+   - mirorder
+   - grandorder
+   - magnorder
+   - gigaorder
+   - infracohort
+   - subcohort
+   - cohort
+   - supercohort
+   - infralegion
+   - sublegion
+   - legion
+   - superlegion
+   - infradivision
+   - subdivision
+   - division
+   - superdivision
+   - parvclass
+   - subterclass
+   - infraclass
+   - subclass
+   - class
+   - superclass
+   - gigaclass
+   - parvphylum
+   - infraphylum
+   - subphylum
+   - phylum
+   - superphylum
+   - parvkingdom
+   - infrakingdom
+   - subkingdom
+   - kingdom
+   - superkingdom
+   - hyperkingdom
+   - subrealm
+   - realm
+   - subdomain
+   - domain
+   - superdomain
+
+equivalent_ranks:
+   form: variety
+   morph: variety
+   aberration: variety
+   microorder: parvorder
+   hyperorder: mirorder
+   capaxorder: grandorder
+   megaorder: magnorder
+   microphylum: parvphylum
+   division: phylum
+   superdivision: superphylum #PROBLEME !!!!!! SUBDIVISION DANS LISTE AU DESSUS !!!
+   subdivision: subphylum
+   empire: domain
+
