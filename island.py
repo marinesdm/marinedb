@@ -2,6 +2,7 @@
 
 import sys
 import os
+import glob
 import time
 import random
 from multiprocessing import Pool
@@ -12,7 +13,7 @@ from tqdm import tqdm
 from mpl_toolkits.basemap import Basemap
 from matplotlib.path import Path
 import pathlib
-
+import socket
 
 
 _path = pathlib.Path(__file__).parent.resolve()
@@ -189,11 +190,11 @@ def process_one_file(f):
     start_time = time.time()
     
     base=os.path.basename(f)
-    #dirn=os.path.dirname(f).split('/')
-    #dirn="/".join(dirn[:-1])+'/processed/'
+    hostname=socket.gethostname().split(".")[0]
     
-    res = os.path.join(_path,'processed/',base)
-    if os.path.exists(res):
+    res = os.path.join(_path,'processed/',f"{base}_{hostname}")
+    #if os.path.exists(res):
+    if len(glob.glob(f"{base}_*"))>0:
         return False
     
     print("Processing " + f)
