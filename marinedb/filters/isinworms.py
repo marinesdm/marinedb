@@ -15,18 +15,9 @@ import time
 
 # Local imports
 from marinedb.filters import createwormsfilters as cwf
-#import marinedb.filters.dropvalues as dropvalues
-from marinedb.filters import dropvalues #as dropvalues
-from marinedb.filters import higherranksthan #as higherranksthan
-from marinedb.utils import regexstrip #as regexstrip
-
-TYPE = {
-        'int':'Int64',
-        'float':'Float64',
-        'str':'string', #preserve NaN
-        'bool':'boolean',
-        'datetime':'datetime64[ns]'
-       }
+from marinedb.filters import dropvalues
+from marinedb.filters import higherranksthan
+from marinedb.utils import regexstrip
 
 #Rank names in the file to be processed
 #Schema: RANK = {rank_name: rank_name_in_the_file}
@@ -91,18 +82,9 @@ def handlenan(func):
         if isinstance(keys, str):
             keys = [keys]
 
-        #if 'dtype' in options.keys():
-        #    dtype = options["dtype"]
-        #else:
-        #    dtype = mapdtypes(df[keys[0]].dtypes)
-        #print(df)
-        #print(keys)
-        #print(df[keys[0]])
+        # Process cases with only missing values separately (return pd.NA)
         res = pd.Series([pd.NA]*len(df), dtype='object', index=df.index.to_list())
         isallnan = df[keys].isna().all(axis=1)
-        #print(res)
-        #print(isallnan)
-        #print(res[~isallnan])
         res[~isallnan] = func(df[~isallnan], keys, **options)
 
         return res
@@ -137,9 +119,13 @@ def naneqsingle(series1, series2):
     if (len(series1.shape)!=1) or (len(series2.shape)!=1):
         raise Exception
 
+    if series1.index.to_list()!=series2.index.to_list():
+        raise Exception
+
     temp = pd.concat([series1,series2], axis="columns")
     isallnan = temp.isna().all(axis="columns")
 
+    # Process cases with only missing values separately (return pd.NA)
     res = pd.Series([pd.NA]*len(series1), dtype='boolean', index=series1.index.to_list())
     res[~isallnan] = series1[~isallnan].eq(series2[~isallnan])
 
@@ -167,9 +153,11 @@ def clean_string(string):
     return string
 
 def _clean_split_Authorships(authorship):
-    print("********* _clean_split_Authorships *********")
+
     # Example: '(Claparède & Lachmann) Diesing' TO ['claparede', 'lachmann', 'diesing']
+
     authorship_print=authorship
+
     # replace "and" in different languages by " "
     # remark: do no delete all words of less than 1 or 2 letters,
     # as sometimes only the first letter of the author is specified
@@ -191,13 +179,10 @@ def _clean_split_Authorships(authorship):
 
     # Keep only non-empty strings
 
-    print(f"{authorship_print} : {list(authorship[keep])}")
     return list(authorship[keep])
 
 
 def _match_WormsToVerbatimSpecies(wormsspecies, verbatimspecies, phonetic=False, cutoff_phonetic=0.7):
-
-    print("********* _match_WormsToVerbatimSpecies *********")
 
     wormsspecies = _clean_split_Authorships(wormsspecies)
     verbatimspecies = _clean_split_Authorships(verbatimspecies)
@@ -211,36 +196,27 @@ def _match_WormsToVerbatimSpecies(wormsspecies, verbatimspecies, phonetic=False,
     mapping=[]
     for wormsstring in wormsspecies:
 
-        ## Find the component closest to `string` in `verbatimspecies`
+        # Find the component closest to `string` in `verbatimspecies`
         verbatimbestmatch=get_close_matches(wormsstring, verbatimspecies, n=1, cutoff=cutoff)
 
-        print(f"worms: {wormsstring}")
-        print(f"verbatim best match: {verbatimbestmatch}")
-
         if len(verbatimbestmatch)!=0:
-            ## Calculate the Levenshtein distance
+            # Calculate the Levenshtein distance
             levenshtein_distance+=Levenshtein.distance(wormsstring,verbatimbestmatch[0])
         else:
             levenshtein_distance=4
 
-        print(f"levenshtein: {levenshtein_distance}")
-
-        ## Store worms-to-verbatim mapping
+        # Store worms-to-verbatim mapping
         mapping+=verbatimbestmatch
 
     if not phonetic:
         if levenshtein_distance<=3:
-            # "near_3" (i.e 3-character mismatch) is the worst match level in WoRMS, excluding "phonetic"
-            print(f"result: {' '.join(mapping)}")
-            print()
+            # "near_3" (i.e 3-character mismatch) is the worst matching level in WoRMS, excluding "phonetic"
             return ' '.join(mapping)
         else:
-            print("result: ''")
-            print()
             return ''
 
     else:
-        # using a threshold with Levenshtein distance may not work for "phonetic" match level in WoRMS
+        # using a threshold with Levenshtein distance may not be relevant for "phonetic" matching level in WoRMS
         if len(mapping)==len(wormsspecies):
             return ' '.join(mapping)
         else:
@@ -248,11 +224,8 @@ def _match_WormsToVerbatimSpecies(wormsspecies, verbatimspecies, phonetic=False,
 
 
 def split_authorship(authorship):
-    print("********* split_authorship *********")
-    print(f"authorship: {authorship}")
 
-    if pd.isnull(authorship) or len(authorship)==0:
-         # i.e authorship==''
+    if pd.isnull(authorship) or len(authorship)==0: # i.e pd.NA or authorship==''
         return pd.NA, pd.NA, pd.NA
 
     # Find the date if there is one
@@ -274,8 +247,6 @@ def split_authorship(authorship):
         # No date
         # assumption : the string corresponds to the authors' names
 
-        print("No date")
-
         date=pd.NA
         author=regexstrip.apply(authorship,r'[^a-zA-Z0-9]+')
         more=''
@@ -283,7 +254,7 @@ def split_authorship(authorship):
     else:
 
         # One date
-        print("One date")
+
         match=match[0]
         date=int(match.group())
         start, stop = match.span()
@@ -292,7 +263,7 @@ def split_authorship(authorship):
 
             # Date at the beginning of the string
             # assumption : the end of the string corresponds to the authors' names
-            print("start = 0")
+
             author=regexstrip.apply(authorship[stop:],r'[^a-zA-Z0-9]+')
             more=''
             processed=True
@@ -301,7 +272,7 @@ def split_authorship(authorship):
 
             # Date at the end of the string
             # assumption : the beginning of the string corresponds to the authors' names
-            print("stop = len")
+
             author=regexstrip.apply(authorship[:start],r'[^a-zA-Z0-9]+')
             more=''
             processed=True
@@ -310,13 +281,13 @@ def split_authorship(authorship):
 
             # Date preceded by a parenthesis
             # Find the closing parenthesis
-            print("parenthèse ouvrante")
+
             res=re.fullmatch(fr"(?P<more1>.*?)\({authorship[start:stop]}(?P<author>.+)\)(?P<more2>.*)", authorship)
 
             if res:
-                print("autre parenthèse")
+
                 # assumption : the text up to the last closing parenthesis corresponds to the authors' names
-                # more (date author) more
+                # i.e more (date author) more
                 author = regexstrip.apply(res['author'],r'[^a-zA-Z0-9]+')
                 more = regexstrip.apply(res['more1'],r'[^a-zA-Z0-9]+') + regexstrip.apply(res['more2'],r'[^a-zA-Z0-9]+')
                 processed=True
@@ -325,16 +296,16 @@ def split_authorship(authorship):
                 processed=False
 
         elif authorship[stop]==")" and authorship[start-1]!="(":
-            print("parenthèse fermante")
+
             # Date followed by a parenthesis
             # Find the opening parenthesis
 
             res=re.fullmatch(fr"(?P<more1>.*?)\((?P<author>.+?){authorship[start:stop]}\)(?P<more2>.*)", authorship)
 
             if res:
-                print("autre parenthèse")
+
                 # assumption : the text up to the first opening parenthesis (read backwards) corresponds to the authors' names
-                # more (author date) more
+                # i.e more (author date) more
                 author = regexstrip.apply(res['author'],r'[^a-zA-Z0-9]+')
                 more = regexstrip.apply(res['more1'],r'[^a-zA-Z0-9]+') + regexstrip.apply(res['more2'],r'[^a-zA-Z0-9]+')
                 processed=True
@@ -365,22 +336,18 @@ def split_authorship(authorship):
                 author=start_string
                 more=stop_string
 
-    print(f"author: {author}")
-
-    # put aside the text that probably does not correspond to author's names
+    # set aside text that probably does not correspond to the authors' names
     match=re.search(r'[A-Z]', author)
     if match:
-        print("lettres capitales trouvées")
         start = match.start()
         if start!=0:
-            print("start!=0")
             try:
                 more += author[:start]
             except TypeError:
+                # may or may not correspond to the authors' name
                 more = author[:start]
             author = author[start:]
     else:
-        print("pas de lettres capitales trouvées")
         try:
             more += author
         except TypeError:
@@ -388,24 +355,17 @@ def split_authorship(authorship):
 
     # drop all special characters
     more=re.sub(r'[^a-zA-Z0-9]+','',more)
-    print(f"result: date={date}, auteur={author}, more={more}")
-    print()
+
     return date, author, more
 
 
 def _match_AuthorshipByAuthors(refauthors, authors,  difflib_cutoff=0.5, levenshtein_tolerance=0.7, author_tolerance=0.7):
-    print("********* _match_AuthorshipByAuthors *********")
-    print(f"refauthors: {refauthors}")
-    print(f"authors:{authors}")
+
     if pd.isnull(refauthors) or len(refauthors)==0 or pd.isnull(authors) or len(authors)==0:
         return pd.NA, pd.NA
 
     # Preparing authors' names
-    print("refauthors")
-    print("----------")
     refauthors=_clean_split_Authorships(refauthors)
-    print("authors")
-    print("-------")
     authors=_clean_split_Authorships(authors)
 
     # Do `authors` and `refauthors` match?
@@ -415,12 +375,12 @@ def _match_AuthorshipByAuthors(refauthors, authors,  difflib_cutoff=0.5, levensh
 
         ## Find the component closest to `author` in `refauthors`
         authorbestmatch=get_close_matches(author, refauthors, n=1, cutoff=difflib_cutoff) #difflib: cutoff=0.6 by default
-        print(f"author best match: {authorbestmatch}")
 
         ## Do `author` and `authorbestmatch` match?
 
-        # delete parts of the string containing 3 or fewer letters
-        # e.g. 'J.Lachm.' => `author`='j lachm' vs. "Lachmann" => `authorbestmatch`='lachmann'
+        # delete parts of the string containing 3 or fewer letters to avoid false mismatches
+        # e.g. "J.Lachm." => `author`='j lachm'
+        # vs.  "Lachmann" => `authorbestmatch`='lachmann'
         temp = author.split()
         temp = ' '.join([string for string in temp if len(string)>3])
         if len(temp)>0:
@@ -438,20 +398,17 @@ def _match_AuthorshipByAuthors(refauthors, authors,  difflib_cutoff=0.5, levensh
 
             if (author in authorbestmatch) or (authorbestmatch in author):
                 # one contains the other
-                print("contain")
                 Nmatch+=1
 
             elif Levenshtein.ratio(authorbestmatch, author)>=levenshtein_tolerance:
                 # the levenshtein ratio between `authorbestmatch` and `author` is higher than `levenstein_tolerance`
                 # `author` and `authorbestmatch` match sufficiently
-                print(f"levenshtein ratio: {Levenshtein.ratio(authorbestmatch, author)}")
                 Nmatch+=1
 
             # else: no match
 
     ## Full match
-    print(f"match auteur: {np.round(Nmatch/len(authors),1)}")
-    print()
+
     score = np.round(Nmatch/len(authors),1)
     if score>=author_tolerance:
         return True, score
@@ -460,9 +417,6 @@ def _match_AuthorshipByAuthors(refauthors, authors,  difflib_cutoff=0.5, levensh
 
 
 def _match_AuthorshipsByDatesAuthors(refauthorships, authorship, date_tolerance=2, difflib_cutoff=0.5, levenshtein_tolerance=0.7, author_tolerance=0.7): #author, date dataframe
-    print("********* _match_AuthorshipsByDatesAuthors *********")
-
-    # Date match
 
     authorship["date"]=authorship["date"].astype('Int64')
     refauthorships["date"]=refauthorships["date"].astype('Int64')
@@ -472,10 +426,10 @@ def _match_AuthorshipsByDatesAuthors(refauthorships, authorship, date_tolerance=
     refauthorships["authormatch_ratio"]=pd.NA
     refauthorships["authormatch"]=pd.NA
 
+    # Date match
+
     if any(~pd.isnull(authorship["date"])):
-        print("date")
-        #dates = list(range(authorship["date"]-date_tolerance, authorship["date"]+date_tolerance+1, 1))
-        #doesdatesmatch = refauthorships["date"].isin(dates)
+
         refauthorships["datematch_diff"] = np.abs(refauthorships["date"] - authorship.loc[0,"date"])
         refauthorships["datematch"] = (refauthorships["datematch_diff"] <= date_tolerance)
         refauthorships.loc[(pd.isnull(refauthorships["date"])),"datematch"] = pd.NA
@@ -484,7 +438,7 @@ def _match_AuthorshipsByDatesAuthors(refauthorships, authorship, date_tolerance=
         index = list(index)
 
     else:
-        print("pas de date")
+        # no date
         index = list(refauthorships.index)
 
     # Author match
@@ -498,44 +452,36 @@ def _match_AuthorshipsByDatesAuthors(refauthorships, authorship, date_tolerance=
 
     # Final match
     # date and author must both match when known,
-    # otherwise date or author, whichever is known, must match.
+    # otherwise date or author, whichever is known, must match
 
-    #refauthorships["match"] = refauthorships[["datematch","authormatch"]].min(axis=1, skipna=True).astype('boolean')
     refauthorships["match"] = pdmin(refauthorships, ["datematch","authormatch"], axis=1, skipna=True).astype('boolean')
     refauthorships["datematch_diff"] = refauthorships["datematch_diff"].astype("Int64")
     refauthorships["authormatch_ratio"] = refauthorships["authormatch_ratio"].astype("Float64")
-    print(refauthorships[["date","datematch_diff","datematch","authormatch","authormatch_ratio","match"]])
-    print()
+
     return refauthorships
 
 
 def _match_TaxaByAuthorship(verbatim, candidates, date_tolerance=2, difflib_cutoff=0.5, levenshtein_tolerance=0.7, author_tolerance=0.7): #species, authorship, worms status dataframe #same species
-    print("********* _match_TaxaByAuthorship *********")
-    print(f"verbatim: {verbatim}")
-    print("candidates:")
-    print(candidates)
+
     params = {'date_tolerance':date_tolerance,
               'difflib_cutoff':difflib_cutoff,
               'levenshtein_tolerance':levenshtein_tolerance,
               'author_tolerance':author_tolerance}
-    print("STEP 1 ")
+
     try:
-        verbatim=verbatim.encode('latin-1').decode('utf-8')
+        verbatim = verbatim.encode('latin-1').decode('utf-8')
     except UnicodeDecodeError:
         pass
-    verbatim=unidecode(verbatim.strip())
-    #verbatim=verbatim.replace("_"," ")
+    verbatim = unidecode(verbatim.strip())
     speidx = candidates.columns.to_list().index(RANK["species"])
-    #wormsspecies = unidecode(candidates.loc[0,RANK["species"]].strip())
     wormsspecies = unidecode(candidates.iloc[0,speidx].strip())
-    print(f"verbatim: {verbatim}")
-    print(f"wormsspecies: {wormsspecies}")
 
-    # Find WoRMS species in verbatim
-    print("STEP 2")
-    ## Determine the spelling of `wormsspecies` in `verbatimspecies`
+    # Find the species name in `verbatim`
+
+    ## Determine the spelling of the species name components in `verbatim` using `wormsspecies`
+    # (take misspelling into account)
     if worms_mapping["worms_status"] in candidates.columns:
-        status=candidates[worms_mapping["worms_status"]].tolist()
+        status = candidates[worms_mapping["worms_status"]].tolist()
         if "phonetic" in status:
             phonetic=True
         else:
@@ -543,29 +489,25 @@ def _match_TaxaByAuthorship(verbatim, candidates, date_tolerance=2, difflib_cuto
     else:
         phonetic=False
 
-    wormsspecies=_match_WormsToVerbatimSpecies(wormsspecies, verbatim, phonetic=phonetic)
+    wormsspecies = _match_WormsToVerbatimSpecies(wormsspecies, verbatim, phonetic=phonetic)
 
     if len(wormsspecies)==0:
-        print("STEP 3")
-        print("ismore1")
+        # no match between `wormsspecies` components and `verbatimspecies` components
         candidates["match"]=False
         candidates[["sensu_conflict","datematch_diff","datematch","authormatch_ratio","authormatch"]]=pd.NA
         ismore=True
 
     else:
-        print("STEP 4")
-        ## WoRMS species with mid-string variations allowed
+
+        ## Search for the species name in `verbatim`, taking into account mid-string variations
         # e.g. Atrina pectinata & Atrina (Servatrina) pectinata
-        print("wormsspecies",wormsspecies)
         wormsspecies_split = wormsspecies.split()
-        print("wormsspecies_split",wormsspecies_split)
-        wormsspecies_pattern = "".join(fr'{string}(?P<more{i}>.*?)' for i,string in enumerate(wormsspecies_split[:-1])) + wormsspecies_split[-1] #vérifier Dinophysis ovum ovum sensu Martin 1929 Phyllodoce maculata (Linnaeus, 1767) | Anaitides maculata
-        print("pattern :",wormsspecies_pattern)
+        wormsspecies_pattern = "".join(fr'{string}(?P<more{i}>.*?)' for i,string in enumerate(wormsspecies_split[:-1])) + wormsspecies_split[-1]
         speciesmatch = re.search(fr'(?<![a-zA-Z]){wormsspecies_pattern}', verbatim, flags=re.IGNORECASE)
 
-        if speciesmatch:
-            print("STEP 5")
-            print(f"species match: {speciesmatch.group()}")
+        if speciesmatch: # species name found
+
+            # Put aside the species name to find the authorship's information
 
             start, end = speciesmatch.span()
             verbatim_species = verbatim[start:end]
@@ -573,16 +515,13 @@ def _match_TaxaByAuthorship(verbatim, candidates, date_tolerance=2, difflib_cuto
 
             more = "".join(speciesmatch.groups())
             more=re.sub(r'[^a-zA-Z0-9]+','',more)
-            print("ismore2")
             if len(more)>1:
-                print(more)
                 ismore=True
             else:
                 ismore=False
 
             if len(verbatim_authorship)==0:
-                print("no additional information")
-                # there is no authorship information to separate candidates
+                # no authorship information to separate candidates
                 candidates["match"] = True
                 candidates[["sensu_conflict","datematch_diff","datematch","authormatch_ratio","authormatch"]]=pd.NA
 
@@ -604,7 +543,7 @@ def _match_TaxaByAuthorship(verbatim, candidates, date_tolerance=2, difflib_cuto
                 candidates.loc[doescontainsensu_candidates!=doescontainsensu_verbatim, "sensu_conflict"] = True
 
                 if doescontainsensu_verbatim:
-                    print("verbatim sensu")
+
                     # `verbatim_authorship` contains "sensu"
                     verbatim_authorship = verbatim_authorship.split("sensu")
 
@@ -619,15 +558,16 @@ def _match_TaxaByAuthorship(verbatim, candidates, date_tolerance=2, difflib_cuto
                     candidates_authorships = candidates.loc[doescontainsensu_candidates,["authorship"]].copy()
 
                 else:
-                    print("verbatim no sensu")
+
                     # `verbatim_authorship` does not contain "sensu"
                     # but one or more candidates may contain "sensu"
+                    # and `verbatim_authorship` could match one of the authors of these candidates
                     candidates_authorships = candidates[["authorship"]].copy()
 
 
                 if len(candidates_authorships)==0:
-                    # `verbatimauthorship` contains "sensu"
-                    # no candidate contains "sensu"
+                    # i.e `verbatimauthorship` contains "sensu"
+                    # but no candidate contains "sensu"
                     # no match
                     candidates[["datematch_diff","datematch","authormatch_ratio","authormatch"]]=pd.NA
                     _ , _ , more = split_authorship(verbatim_authorship[0])
@@ -636,7 +576,6 @@ def _match_TaxaByAuthorship(verbatim, candidates, date_tolerance=2, difflib_cuto
                         more += moretemp
                     if len(more)>0:
                         ismore=True
-                        print("ismore4")
 
                 else:
 
@@ -650,13 +589,9 @@ def _match_TaxaByAuthorship(verbatim, candidates, date_tolerance=2, difflib_cuto
                             #print(f"WARNING | More than one 'sensu' in {candidates["authorship"].tolist()}. Exit `_match_TaxaByAuthorship`.")
                             #return None
 
-                    candidates_authorships["authorship1"] = candidates_sensusplit.str[0]
-                    #candidates_authorships.loc[candidates_sensusplit.str.len()>1, "authorship2"] = candidates_sensusplit.str[1]
-                    candidates_authorships["authorship2"] = candidates_sensusplit.str[1] #pd.NA if len<2
-                    index = candidates_authorships.index.to_list()
-
                     ## Split authorships into date, author, more
 
+                    # `verbatim_authorship`
                     if doescontainsensu_verbatim:
                         verbatim_authorship = list(split_authorship(verbatim_authorship[0])) + list(split_authorship(verbatim_authorship[1]))
                     else:
@@ -666,7 +601,11 @@ def _match_TaxaByAuthorship(verbatim, candidates, date_tolerance=2, difflib_cuto
 
                     if any(verbatim_authorship["more1"].str.len()>0) or any(verbatim_authorship["more2"].str.len()>0):
                         ismore=True
-                        print("ismore3")
+
+                    # `candidates_authorships`
+                    candidates_authorships["authorship1"] = candidates_sensusplit.str[0]
+                    candidates_authorships["authorship2"] = candidates_sensusplit.str[1] #pd.NA if len<2
+                    index = candidates_authorships.index.to_list()
 
                     for i, authorship in enumerate(candidates_authorships[["authorship1","authorship2"]].values):
                         candidates_authorships.loc[index[i],["date1","author1","more1"]] = split_authorship(authorship[0])
@@ -697,362 +636,90 @@ def _match_TaxaByAuthorship(verbatim, candidates, date_tolerance=2, difflib_cuto
                     candidates["authormatch_ratio"]=candidates["authormatch_ratio"].astype("Float64")
 
                     # if `verbatim_authorship` does not contain "sensu":
-                    # for candidates containing "sensu" (i.e sensu_conflict=True), `verbatim_authorship` must match one of the candidates' authors
-                    # if `verbatim_authorhip` matches a candidate's two authors, store the best match information, if any
-                    # if the best match is not obvious, keep the information of the candidate whose author is the best match
+                    #   for candidates containing "sensu" (i.e sensu_conflict=True), `verbatim_authorship` must match one of the candidates' authors
+                    #     if `verbatim_authorhip` matches a candidate's two authors, store the best match information, if any
+                    #       if the best match is not obvious, keep the information of the candidate whose author is the best match
 
                     doescandidatecontain = (candidates.index.isin(index)) & (candidates["sensu_conflict"])
 
                     if any(doescandidatecontain):
-                        print("doescondidatecontain")
+
                         doescandidatecontain = doescandidatecontain[doescandidatecontain].index.to_list()
+
                         temp = candidates_authorships.loc[doescandidatecontain,:].copy()
                         temp_match = temp[["match1","match2"]].sum(axis=1)
-                        print("temp_match")
-                        print(temp_match)
 
+                        # no match
                         index_nomatch = temp_match[temp_match==0].index.to_list()
                         if len(index_nomatch)!=0:
-                            print("nomatch")
-                            candidates.loc[index_nomatch,"match"]=False #TESTÉ
-                            print("index_nomatch",index_nomatch)
+                            candidates.loc[index_nomatch,"match"]=False
 
                         idx1 = []
                         idx2 = []
 
-                        index_singlematch = temp_match[temp_match==1].index.to_list() #TESTÉ Haustorius arenarius (Slabber, 1769)
+                        # only one match
+                        index_singlematch = temp_match[temp_match==1].index.to_list()
                         if len(index_singlematch)!=0:
-                            #singlematch = temp.loc[index_singlematch,["match1","match2"]].idxmax(axis=1)
                             singlematch = idxmax(temp.loc[index_singlematch,:], ["match1","match2"], axis=1, skipna=True)
-                            print("singlematch")
-                            print(singlematch)
                             idx1 = idx1 + singlematch[singlematch=="match1"].index.to_list()
                             idx2 = idx2 + singlematch[singlematch=="match2"].index.to_list()
-                            #columns_singlematch = columns_singlematch.str[-1].values.reshape(-1,1)
-                            #columns_singlematch = np.repeat([columns],len(columns_singlematch),axis=0) + columns_singlematch
-                            print("idx1",idx1)
-                            print("idx2",idx2)
 
-                        index_morematch = temp_match[temp_match>1].index.to_list() #À TESTER
+                        # more than one match
+                        index_morematch = temp_match[temp_match>1].index.to_list()
                         if len(index_morematch)!=0:
-                            print("morematch")
-                            morematch = temp.loc[index_morematch,:]
-                        #if len(index_morematch)!=0:
-                        #morematch_eqauthors = (np.abs(temp.loc[index_morematch,"authormatch_ratio1"]-temp.loc[index_morematch,"authormatch_ratio2"]) <= 1e-2)
-                        #morematch_eqdates = temp.loc[index_morematch,"datematch_diff1"].eq(temp.loc[index_morematch,"datematch_diff1"])
-                        #morematch_bestauthor = temp.loc[index_morematch,["authormatch_ratio1","authormatch_ratio2"]].idxmax(axis=1).str[-1]
-                        #morematch_bestdate = temp.loc[index_morematch,["datematch_diff1","datematch_diff2"]].idxmin(axis=1).str[-1]
 
-                        ###################################### PROBLEME ######################################
-                            morematch_eqauthors = ((morematch["authormatch_ratio1"]-morematch["authormatch_ratio2"]).abs() <= 1e-2)
-                            isnull = morematch[["authormatch_ratio1","authormatch_ratio2"]].isna().sum(axis=1)
-                            morematch_eqauthors[isnull==1] = False
-                            morematch_eqauthors[isnull==2] = True
-                            print("morematch_eqauthors")
-                            print(morematch_eqauthors)
-
-                            #morematch_eqdates = morematch["datematch_diff1"].eq(morematch["datematch_diff2"])
-                            morematch_eqdates = naneqsingle(morematch["datematch_diff1"], morematch["datematch_diff2"])
-                            print(morematch_eqdates)
-                            morematch_eqdates[pd.isnull(morematch_eqdates)] = True
-                            print(pd.isnull(morematch_eqdates))
-                            print("morematch_eqdates")
-                            print(morematch_eqdates)
-
-                            #print("PROBLEME")
-                            #print("datematch_diff")
-                            #print(morematch[["datematch_diff1","datematch_diff2"]])
-                            #print("authormatch_ratio")
-                            #print(morematch[["authormatch_ratio1","authormatch_ratio2"]])
-
-                            #return morematch[["datematch_diff1","datematch_diff2"]], morematch[["authormatch_ratio1","authormatch_ratio2"]]
-                            #print("issue")
-                            #print(idxmax(morematch,["datematch_diff1","datematch_diff2"],axis=1,skipna=True))
-                            #print(morematch[["datematch_diff1","datematch_diff2"]].idxmax(axis=1,skipna=True))
-                            morematch_bestauthor = idxmax(morematch, ["authormatch_ratio1","authormatch_ratio2"], axis=1, skipna=True).str[-1]
-                            #morematch_bestauthor = morematch[["authormatch_ratio1","authormatch_ratio2"]].idxmax(axis=1, skipna=True).str[-1]
-                            morematch_bestdate = idxmin(morematch, ["datematch_diff1","datematch_diff2"], axis=1, skipna=True).str[-1]
-                            #morematch_bestdate = morematch[["datematch_diff1","datematch_diff2"]].idxmin(axis=1, skipna=True).str[-1]
-
-                            print("morematch_bestauthor")
-                            print(morematch_bestauthor)
-                            print("morematch_bestdate")
-                            print(morematch_bestdate)
-                        ###################################### PROBLEME ######################################
-
-                            #morematch_eqbest = morematch_bestauthor.eq(morematch_bestdate)
                             #(~morematch_eqauthors) & (~morematch_eqdates) & (morematch_eqbest) : best author (equivalent to best date)
                             #(~morematch_eqauthors) & (~morematch_eqdates) & (~morematch_eqbest) : if conflict between best author and best date, best author by default
                             #(~morematch_eqauthors) & (morematch_eqdates) : best author
                             #(morematch_eqauthors) & (~morematch_eqdates) : best date
                             #(morematch_eqauthors) & (morematch_eqdates) : best author (equivalent to best date)
+
+                            morematch = temp.loc[index_morematch,:]
+
+                            morematch_eqauthors = ((morematch["authormatch_ratio1"]-morematch["authormatch_ratio2"]).abs() <= 1e-2)
+                            isnull = morematch[["authormatch_ratio1","authormatch_ratio2"]].isna().sum(axis=1)
+                            morematch_eqauthors[isnull==1] = False
+                            morematch_eqauthors[isnull==2] = True
+
+                            morematch_eqdates = naneqsingle(morematch["datematch_diff1"], morematch["datematch_diff2"])
+                            morematch_eqdates[pd.isnull(morematch_eqdates)] = True
+
+                            morematch_bestauthor = idxmax(morematch, ["authormatch_ratio1","authormatch_ratio2"], axis=1, skipna=True).str[-1]
+                            morematch_bestdate = idxmin(morematch, ["datematch_diff1","datematch_diff2"], axis=1, skipna=True).str[-1]
+
                             conditions11 = (morematch_eqauthors) & (~morematch_eqdates) & (morematch_bestdate=="1")
                             conditions12 = ((~morematch_eqauthors) | (morematch_eqdates)) & (morematch_bestauthor=="1")
-                            print("condition11")
-                            print(conditions11)
-                            print("condition12")
-                            print(conditions12)
-                            #idx1 = idx1 + temp.loc[(temp.index.isin(index_morematch)) & (conditions11 | conditions12)].index.to_list()
-                            idx1 = idx1 + morematch[conditions11 | conditions12].index.to_list() 
+                            idx1 = idx1 + morematch[conditions11 | conditions12].index.to_list()
+
                             conditions21 = (morematch_eqauthors) & (~morematch_eqdates) & (morematch_bestdate=="2")
                             conditions22 = ((~morematch_eqauthors) | (morematch_eqdates)) & (morematch_bestauthor=="2")
-                            #idx2 = idx2 + temp.loc[(temp.index.isin(index_morematch)) & (conditions21 | conditions22)].index.to_list()
-                            print("condition21")
-                            print(conditions21)
-                            print("condition22")
-                            print(conditions22)
                             idx2 = idx2 + morematch[conditions21 | conditions22].index.to_list()
 
 
                         if len(idx1)!=0:
-                            #print("idx1",idx1)
-                            #print("store")
-                            #print(candidates_authorships.loc[idx1,list(itemgetter(*columns)(colmap1))])
-                            #print(candidates.loc[idx1, :])
                             candidates.loc[idx1, columns] = candidates_authorships.loc[idx1,list(itemgetter(*columns)(colmap1))].values
-                            print("candidat1")
-                            print(candidates.loc[idx1,columns])
                         if len(idx2)!=0:
                             candidates.loc[idx2, columns] = candidates_authorships.loc[idx2,list(itemgetter(*columns)(colmap2))].values
-                            print("candidat2")
-                            print(candidates.loc[idx2,columns])
 
                     # else:
-                    # both authorships must match when known
-                    # otherwise, whichever is known, must match
-                    print("doescandidateequal")
+                    #   both authorships must match when known
+                    #   otherwise, whichever is known, must match
+
                     doescandidateequal = (candidates.index.isin(index)) & (~candidates["sensu_conflict"])
                     doescandidateequal = doescandidateequal[doescandidateequal].index.to_list()
-                    print(doescandidateequal)
-                    print(candidates_authorships)
-                    #candidates.loc[doescandidateequal,"match"] = candidates_authorships.loc[doescandidateequal,["match1","match2"]].min(axis=1, skipna=True).astype("boolean")
+
                     candidates.loc[doescandidateequal,"match"] = pdmin(candidates_authorships.loc[doescandidateequal,:],["match1","match2"], axis=1, skipna=True).astype("boolean")
-                    #candidates.loc[doescandidateequal,"datematch"] = candidates_authorships.loc[doescandidateequal,["datematch1","datematch2"]].min(axis=1, skipna=True).astype("boolean")
                     candidates.loc[doescandidateequal,"datematch"] = pdmin(candidates_authorships.loc[doescandidateequal,:],["datematch1","datematch2"], axis=1, skipna=True).astype("boolean")
-                    #candidates.loc[doescandidateequal,"authormatch"] = candidates_authorships.loc[doescandidateequal,["authormatch1","authormatch2"]].min(axis=1, skipna=True).astype("boolean")
                     candidates.loc[doescandidateequal,"authormatch"] = pdmin(candidates_authorships.loc[doescandidateequal,:],["authormatch1","authormatch2"], axis=1, skipna=True).astype("boolean")
                     candidates.loc[doescandidateequal,"datematch_diff"] = candidates_authorships.loc[doescandidateequal,["datematch_diff1","datematch_diff2"]].sum(axis=1, skipna=True, min_count=1).astype('Int64')
-                    #candidates.loc[doescandidateequal,"authormatch_ratio"]=candidates_authorships.loc[doescandidateequal,["authormatch_ratio1","authormatch_ratio2"]].mean(axis=1, skipna=True).astype('Float64')
                     candidates.loc[doescandidateequal,"authormatch_ratio"] = pdmean(candidates_authorships.loc[doescandidateequal,:],["authormatch_ratio1","authormatch_ratio2"], axis=1, skipna=True).astype('Float64')
 
-        else:
-            print("STEP 5")
-            print("no species match")
-            candidates["match"]=True
+        else: # species name not found
+
+            candidates["match"]=False
             candidates[["sensu_conflict","datematch_diff","datematch","authormatch_ratio","authormatch"]]=pd.NA
             ismore=True
-            print("ismore6")
 
-    columns = ["sensu_conflict","match","datematch","datematch_diff","authormatch","authormatch_ratio"] #revoir Haustorius arenarius (Slabber, 1769)
-    print()
-    print(f"candidates:")
-    print(candidates[columns])
-    print(f"ismore: {ismore}")
-    return candidates, ismore #if ismore & all(~candidates["match"]), new WoRMS request with verbatim
-
-
-def _match_TaxaByAuthorship_old(verbatim, candidates, date_tolerance=2, difflib_cutoff=0.5, levenshtein_tolerance=0.7, author_tolerance=0.8): #species, authorship, worms status dataframe #same species
-    print("********* _match_TaxaByAuthorship *********")
-    print(f"verbatim: {verbatim}")
-    print("candidates:")
-    print(candidates)
-    params = {'date_tolerance':date_tolerance,
-              'difflib_cutoff':difflib_cutoff,
-              'levenshtein_tolerance':levenshtein_tolerance,
-              'author_tolerance':author_tolerance}
-    print("STEP 1 ")
-    try:
-        verbatim=verbatim.encode('latin-1').decode('utf-8')
-    except UnicodeDecodeError:
-        pass
-    verbatim=unidecode(verbatim.strip())
-    #verbatim=verbatim.replace("_"," ")
-    wormsspecies = unidecode(candidates.loc[0,RANK["species"]].strip())
-    print(f"verbatim: {verbatim}")
-    print(f"wormsspecies: {wormsspecies}")
-
-    # Find WoRMS species in verbatim
-    print("STEP 2")
-    ## Determine the spelling of `wormsspecies` in `verbatimspecies`
-    if worms_mapping["worms_status"] in candidates.columns:
-        status=candidates[worms_mapping["worms_status"]].tolist()
-        if "phonetic" in status:
-            phonetic=True
-        else:
-            phonetic=False
-    else:
-        phonetic=False
-
-    wormsspecies=_match_WormsToVerbatimSpecies(wormsspecies, verbatim, phonetic=phonetic)
-
-    if len(wormsspecies)==0:
-        print("STEP 3")
-        print("ismore1")
-        candidates["match"]=True
-        ismore=True
-
-    else:
-        print("STEP 4")
-        ## WoRMS species with mid-string variations allowed
-        # e.g. Atrina pectinata & Atrina (Servatrina) pectinata
-        wormsspecies_pattern = wormsspecies.split()
-        wormsspecies_pattern = r'(?P<more>.*?)'.join(wormsspecies_pattern)
-        speciesmatch = re.search(fr'(?<![a-zA-Z]){wormsspecies_pattern}', verbatim, flags=re.IGNORECASE)
-
-        if speciesmatch:
-            print("STEP 5")
-            print(f"species match: {speciesmatch.group()}")
-
-            start, end = speciesmatch.span()
-            verbatimspecies = verbatim[start:end]
-            verbatimauthorship = verbatim[:start] + verbatim[end:]
-
-            print("ismore2")
-            if len(speciesmatch['more'])>1: #empty string or \s or any special character
-                print(len(speciesmatch['more']))
-                ismore=True
-            else:
-                ismore=False
-
-            if len(verbatimauthorship)==0:
-                print("no additional information")
-                # there is no authorship information to separate candidates
-                candidates["match"] = True
-                candidates[["sensu_conflict","datematch_diff","datematch","authormatch_ratio","authormatch"]]=pd.NA
-
-            else:
-
-                # Authorship match
-
-                if "sensu" in verbatimauthorship:
-                    print("sensu")
-                    ## `verbatimauthorship` contains "sensu"
-
-                    verbatimauthorship = verbatimauthorship.split("sensu")
-                    if len(verbatimauthorship)>2:
-                        # more than one "sensu": unexpected
-                        raise NotImplemented(f'More than one "sensu" in the authorship ({verbatim}).') #pour le débug, à supprimer ensuite
-                        #print(f"WARNING | More than one 'sensu' in {verbatim}. Exit `_match_TaxaByAuthorship`.")
-                        #return None
-
-                    ## Do the candidate authorships contain "sensu"?
-                    doescontainsensu = candidates["authorship"].str.contains("sensu")
-                    #candidates2process = candidates[doescontainsensu]
-
-                    #if len(candidates2process)==0:
-                    #    candidates["match"] = False
-                    #    return candidates
-
-                    if any(doescontainsensu):
-                        print("worms authorships with sensu")
-                        # `verbatimauthorship` contains "sensu"
-                        # one or more candidates contain "sensu"
-                        # for candidates not containing "sensu", no match is possible
-                        candidates.loc[~doescontainsensu,"match"]=False
-                        candidates["sensu_conflict"]=False
-                        candidates.loc[~doescontainsensu,"sensu_conflict"]=True
-
-                        candidates_authorships = candidates.loc[doescontainsensu,"authorship"].str.split("sensu")
-                        exitcondition = (candidates_authorships.str.len()>2)
-                        #candidates_authorships=candidates_authorships[~exitcondition]
-                        #if len(candidates_authorships)==0:
-                        if any(exitcondition):
-                            # more than one "sensu": unexpected
-                            raise NotImplemented(f'More than one "sensu" in the authorship ({candidates["authorship"].tolist()}).')
-                            #print(f"WARNING | More than one 'sensu' in {candidates["authorship"].tolist()}. Exit `_match_TaxaByAuthorship`.")
-                            #return None
-
-                        ## Split authorships into date, author, more
-
-                        temp = np.array(candidates_authorships.tolist() + [verbatimauthorship])
-                        authorship_split=[]
-                        for i in range(temp.shape[0]):
-                            authorship_temp=temp[i,:]
-                            authorship_split.append([])
-                            authorship_split[i]+=split_authorship(authorship_temp[0])
-                            authorship_split[i]+=split_authorship(authorship_temp[1])
-                        authorship_split=np.array(authorship_split)
-
-                        verbatimauthorship1=pd.DataFrame([authorship_split[-1,:3]], columns=["date","author","more"])
-                        verbatimauthorship2=pd.DataFrame([authorship_split[-1,3:]], columns=["date","author","more"])
-                        if any(verbatimauthorship1["more"].str.len()>0) or any(verbatimauthorship2["more"].str.len()>0):
-                            ismore=True
-                            print("ismore3")
-
-                        candidates_authorships1=pd.DataFrame(authorship_split[:-1,:3], columns=["date","author","more"], index=candidates_authorships.index.to_list())
-                        candidates_authorships2=pd.DataFrame(authorship_split[:-1,3:], columns=["date","author","more"], index=candidates_authorships.index.to_list())
-                        #if any(candidates_authorships1["more"].str.len()>0) or any(candidates_authorships2["more"].str.len()>0):
-                        #    raise Exception #SUPPRIMER APRES DEBUG ?
-                        #ça peut arriver avec des trucs comme <i> sensu</i> dans WoRMS ; on va juste devoir faire confiance et supposer que mon code fonctionne correctement
-
-                        ## Match authorships, both before and after "sensu", by date and author
-
-                        candidates_authorships1=_match_AuthorshipsByDatesAuthors(candidates_authorships1, verbatimauthorship1, **params)
-                        candidates_authorships2=_match_AuthorshipsByDatesAuthors(candidates_authorships2, verbatimauthorship2, **params)
-                        columns = ["match","datematch_diff","datematch","authormatch_ratio","authormatch"]
-                        candidates_authorships=pd.concat([candidates_authorships1[columns],candidates_authorships2[columns]],axis=1)
-
-                        ## Final match
-                        # both authorships must match when known
-                        # otherwise, whichever is known, must match
-                        # keep the other information
-                        candidates.loc[list(candidates_authorships.index),["datematch","authormatch","match"]]=candidates_authorships[["datematch","authormatch","match"]].min(axis=1, skipna=True).astype('boolean')
-                        candidates.loc[list(candidates_authorships.index),"datematch_diff"]=candidates_authorships["datematch_diff"].sum(axis=1, skipna=True).astype('Int64')
-                        candidates.loc[list(candidates_authorships.index),"authormatch_ratio"]=candidates_authorships["authormatch_ratio"].mean(axis=1, skipna=True).astype('Float64')
-
-                    else:
-                        # `verbatimauthorship` contains "sensu"
-                        # no candidate contains "sensu"
-                        # no match is possible
-                        candidates["match"]=False
-                        _ , _ , more1 = split_authorship(verbatimauthorship[0])
-                        _ , _ , more2 = split_authorship(verbatimauthorship[1])
-                        if (len(more1)>0) or (len(more2)>0):
-                            ismore=True
-                            print("ismore4")
-                else:
-                    print("no sensu")
-
-                    # `verbatimauthorship` does not contain "sensu"
-                    # one or more candidates may contain "sensu"
-                    doescontainsensu = candidates["authorship"].str.contains("sensu")
-                    candidates["sensu_conflict"]=False
-                    candidates.loc[doescontainsensu,"sensu_conflict"]=True
-
-                    ## Split authorships into date, author, more
-                    verbatimauthorship=pd.DataFrame([split_authorship(verbatimauthorship)], columns=["date","author","more"])
-                    if len(verbatimauthorship.loc[0,"more"])>0:
-                        ismore=True
-                        print("ismore5")
-                    candidates_authorships = []
-                    for authorship in candidates["authorship"]:
-                        candidates_authorships.append(split_authorship(authorship))
-                    candidates_authorships=pd.DataFrame(candidates_authorships, columns=["date","author","more"], index=candidates.index.to_list())
-
-                    ## Match authorships by date and author
-
-                    candidates_authorships=_match_AuthorshipsByDatesAuthors(candidates_authorships, verbatimauthorship, **params)
-                    candidates[["match","datematch_diff","datematch","authormatch_ratio","authormatch"]]=candidates_authorships[["match","datematch_diff","datematch","authormatch_ratio","authormatch"]]
-
-                    #if len(candidates[candidates["match"]])>1: #ce n'est pas le rôle de ce code, laissr ça au match full
-                    #    print("éliminer les candidats sensu")
-                    #    # `verbatimauthorship` does not contain "sensu"
-                    #    # one or more candidates contain "sensu"
-                    #    # assumption: if there are several matches, some of which contain “sensu”, give preference to matches that do not contain “sensu”
-                    #    doescontainsensu = candidates["authorship"].str.contains("sensu")
-                    #    candidates.loc[doescontainsensu,"match"]=False
-
-        else:
-            print("STEP 5")
-            print("no species match")
-            candidates["match"]=True
-            ismore=True
-            print("ismore6")
-
-    print()
-    print(f"candidates:")
-    print(candidates)
-    print(f"ismore: {ismore}")
     return candidates, ismore #if ismore & all(~candidates["match"]), new WoRMS request with verbatim
 
 
