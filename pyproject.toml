@@ -8,6 +8,7 @@ dependencies = [
     "numpy>=1.26.3",
     "matplotlib>=3.7.1",
     "basemap>=1.4.1",
+    "basemap-data-hires>=1.3.2",
     "suds>=1.1.2",
     "Unidecode>=1.3.8",
     "Levenshtein>=0.25.1",
