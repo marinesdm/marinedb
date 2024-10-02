@@ -214,7 +214,7 @@ def match_ClassificationBySciname(species, wormscall=WORMSCALL):
 
         if len(resultsBySciname)!=0:
 
-            for taxon in resultsBySciname: 
+            for taxon in resultsBySciname:
 
                 taxon = dict(items(taxon))
                 taxon = process_rank(taxon)
@@ -339,8 +339,11 @@ def get_AcceptedClassification(valid_aphiaID, wormscall=WORMSCALL):
     aphiaID["aphiaids"] = valid_aphiaID
     results = _connect_getAphiaRecordsByIDs(aphiaID)
 
-    classification = []
     wormscallK = list(wormscall.keys())
+    wormscallV = list(itemgetter(*wormscallK)(wormscall))
+    colnames = ['group'] + wormscallV
+
+    classification = []
 
     for idx, taxon in enumerate(results):
 
@@ -348,9 +351,7 @@ def get_AcceptedClassification(valid_aphiaID, wormscall=WORMSCALL):
         classif = itemgetter(*wormscallK)(taxon)
         classification.append([valid_aphiaID[idx]] + list(classif))
 
-        #classification.append([valid_aphiaID[idx]] + list(itemgetter(*wormscallK)(taxon)))
-
-    classification = pd.DataFrame(classification, columns = ["group"] + list(itemgetter(*wormscallK)(wormscall)))
+    classification = pd.DataFrame(classification, columns=colnames)
 
     return classification
 
