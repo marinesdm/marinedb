@@ -100,16 +100,13 @@ data:
 
     - species:
         - isinworms:
-            allowed_mismatch_withoutNaN: 2
-            allowed_mismatch_withNaN: 1
+            fuzzy: True
+            fixed_allowedMismatch: False
+            verbatimcolumn: 'verbatimScientificName'
+            verbatimauthorshiponly: False
             keep_fossil: False
             drop_conditions:
-              matchtype_classif: 'nomatch' #near1
-                                           #near2
-                                           #near3
-                                           #near4
-                                           #near5
-                                           #undecided
+              matchtype_classif: 'nomatch'
               matchtype_species: ['match_deleted','near_3'] #exact
                                                             #exact_subgenus
                                                             #phonetic

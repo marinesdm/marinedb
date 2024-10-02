@@ -168,9 +168,12 @@ if __name__ == '__main__':
             ## Add the filters to config
             config["filters"][species_idx]["species"][isinworms_idx]["isinworms"]["matchfilter"] = worms_matchfilter.copy(deep=True)
             config["filters"][species_idx]["species"][isinworms_idx]["isinworms"]["acceptedfilter"] = worms_acceptedfilter.copy(deep=True)
+
             del worms_matchfilter
             del worms_acceptedfilter
+            config["filters"][species_idx]["species"][isinworms_idx]["isinworms"]["outputpath"] = config["input_path"]
             worms=True
+
         except ValueError:
             pass
     except ValueError:
