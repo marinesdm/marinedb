@@ -90,6 +90,7 @@ rm "${outputname}2split_idx.tsv"
 echo "Add the header to all new files"
 header="index\t$(head -n 1 ${outputname}2split.tsv)"
 sed -i "1i$header" "${outputname}"_split*
+rm "${outputname}2split.tsv"
 
 if [[ ${delimiter} != '\t' ]]; then
     # Convert to ${delimiter}-separated value file
