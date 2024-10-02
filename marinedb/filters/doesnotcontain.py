@@ -9,7 +9,7 @@ def apply(df, key, values, flag=False):
     delete = df[key].str.contains(rf'{searchfor}')
 
     if flag:
- 
+
         if key=="issue":
             with open('filters/gbif_issues.json','r') as issues_file:
                 issues_dict = json.load(issues_file)

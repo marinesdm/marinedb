@@ -1,7 +1,8 @@
 import pandas as pd
 import numpy as np
-import utils.convertdatetype as convertdatetype
-import filters.processdateinterval as processdateinterval
+
+from marinedb.utils import convertdatetype
+from marinedb.filters import processdateinterval
 
 
 def _processdateinterval(df, key, drop):
