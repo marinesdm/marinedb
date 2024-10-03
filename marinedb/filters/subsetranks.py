@@ -1,7 +1,13 @@
 import yaml
 import pathlib
+import itemgetter
 
-def apply(identification_level):
+def add_alternativeranks(ranks, eqranks):
+    alternative_ranks = list(eqranks.keys())
+    add = [r for r in alternative_ranks if eqranks[r] in ranks]
+    return ranks + add
+
+def apply(identification_level, lower=False, strict=True):
 
     rankfile_path = str(pathlib.Path(__file__).parent.resolve()) + '/taxonomic_ranks.yaml'
 
@@ -21,4 +27,15 @@ def apply(identification_level):
             identification_level=eqranks[identification_level]
             index=ranks.index(identification_level)
 
-    return ranks[index+1:]
+    if lower:
+        if strict:
+            ranks=ranks[:index]
+        else:
+            ranks=ranks[:index+1]
+    else:
+        if strict:
+            ranks=ranks[index+1:]
+        else:
+            ranks=ranks[index:]
+
+    return add_alternativeranks(ranks, eqranks)
