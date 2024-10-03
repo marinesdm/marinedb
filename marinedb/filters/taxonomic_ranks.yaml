@@ -9,10 +9,16 @@ ascending_ranks:
    #   botany: subsection < section < genus
    #   zoology: section > subsection > family > genus
 
+   #Remark:
+   #   __: subdivision < division < superdivision < subphylum
+   #   __: superdivision=superphylum > division=phylum > subdivision=subphylum
+
+   - mutatio
    - subform
    - form
    - subvariety
    - variety
+   - natio
    - subspecies
    - species
    - subgenus
@@ -51,16 +57,13 @@ ascending_ranks:
    - sublegion
    - legion
    - superlegion
-   - infradivision
-   - subdivision
-   - division
-   - superdivision
    - parvclass
    - subterclass
    - infraclass
    - subclass
    - class
    - superclass
+   - megaclass
    - gigaclass
    - parvphylum
    - infraphylum
@@ -80,7 +83,8 @@ ascending_ranks:
    - superdomain
 
 equivalent_ranks:
-   form: variety
+   forma: form
+   subforma: subform
    morph: variety
    aberration: variety
    microorder: parvorder
@@ -88,8 +92,5 @@ equivalent_ranks:
    capaxorder: grandorder
    megaorder: magnorder
    microphylum: parvphylum
-   division: phylum
-   superdivision: superphylum #PROBLEME !!!!!! SUBDIVISION DANS LISTE AU DESSUS !!!
-   subdivision: subphylum
    empire: domain
 
