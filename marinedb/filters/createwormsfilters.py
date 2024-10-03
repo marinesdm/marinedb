@@ -429,7 +429,7 @@ def get_WoRMSfilter(gzfile_path, wormscall=WORMSCALL, store=False, outputpath='.
     #columns = list(set(worms_acceptedfilter.columns) - set(["group"]))
     #worms_acceptedfilter.loc[index, columns] = get_AcceptedWoRMS(parent_aphiaID, **params)[columns]
 
-    issubspecies = (worms_acceptedfilter['worms_status']=="subspecies"]) & (~pd.isnull(worms_acceptedfilter["valid_aphiaID"]))
+    issubspecies = (worms_acceptedfilter['worms_status']=="subspecies") & (~pd.isnull(worms_acceptedfilter["valid_aphiaID"]))
     subspeciesByaphiaID = worms_acceptedfilter.loc[issubspecies, "valid_aphiaID"].groupby("valid_aphiaID")
     parent_aphiaID = list(worms_subspecies.groups.keys())
 

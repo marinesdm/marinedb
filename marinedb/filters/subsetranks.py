@@ -1,8 +1,8 @@
 import yaml
 import pathlib
-import itemgetter
+from operator import itemgetter
 
-def add_alternativeranks(ranks, eqranks):
+def _add_alternativeranks(ranks, eqranks):
     alternative_ranks = list(eqranks.keys())
     add = [r for r in alternative_ranks if eqranks[r] in ranks]
     return ranks + add
@@ -22,7 +22,7 @@ def apply(identification_level, lower=False, strict=True):
         index=ranks.index(identification_level)
     except ValueError:
         if identification_level not in eqranks.keys():
-            raise ValueError(f'{identification_level}: Unknown identification level. See `taxonomic_ranks.yaml`.')
+            raise ValueError(f'{identification_level} is an unknown identification level. See `taxonomic_ranks.yaml`.')
         else:
             identification_level=eqranks[identification_level]
             index=ranks.index(identification_level)
@@ -38,4 +38,4 @@ def apply(identification_level, lower=False, strict=True):
         else:
             ranks=ranks[index:]
 
-    return add_alternativeranks(ranks, eqranks)
+    return _add_alternativeranks(ranks, eqranks)

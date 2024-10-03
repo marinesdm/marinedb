@@ -817,7 +817,7 @@ def _match_TaxaByVerbatim(verbatim, candidates, verbatimcolumn=None, verbatimaut
             match_idx = None
             classif = ["nomatch"] + [pd.NA]*len(wormscolumns)
 
-       processed = True
+        processed = True
 
     elif len(candidates)==1:
 
@@ -1149,9 +1149,9 @@ def _match_TaxaByFullClassification(gbif_classif, worms_classif, verbatimcolumn=
                         classif = pd.DataFrame([["allAccepted"] + candidates.loc[match_idx,wormscolumns].values.flatten().tolist()], columns=colnames)
                         processed=True
 
-               # STEP N°5: Is it possible to decide between candidates on the basis of the information contained in the raw data?
+                # STEP N°5: Is it possible to decide between candidates on the basis of the information contained in the raw data?
 
-               if (not processed) and (verbatimcolumn is not None):
+                if (not processed) and (verbatimcolumn is not None):
 
                     verbatim = gbif_classif.loc[0,verbatimcolumn]
                     if (not pd.isnull(verbatim)) and (not len(verbatim)==0):
@@ -1163,30 +1163,30 @@ def _match_TaxaByFullClassification(gbif_classif, worms_classif, verbatimcolumn=
 
                         classif = pd.DataFrame([classif], columns=colnames)
 
-               # STEP N°6: Default rules
+                # STEP N°6: Default rules
 
-               if (not processed):
+                if (not processed):
 
-                   ## Best classification match
+                    ## Best classification match
 
-                   candidates = candidates[(candidates["mismatch_level"]==candidates["mismatch_level"].min())]
-                   candidates = candidates[(candidates["Nmismatch"]==candidates["Nmismatch"].min())]
+                    candidates = candidates[(candidates["mismatch_level"]==candidates["mismatch_level"].min())]
+                    candidates = candidates[(candidates["Nmismatch"]==candidates["Nmismatch"].min())]
 
-                   if len(candidates)==1:
+                    if len(candidates)==1:
 
-                       # Only one match
+                        # Only one match
 
-                       match_idx = candidates.index[0]
-                       classif = pd.DataFrame([["bestClassification"] + candidates.loc[match_idx,wormscolumns].values.flatten().tolist()], columns=colnames)
-                       processed = True
+                        match_idx = candidates.index[0]
+                        classif = pd.DataFrame([["bestClassification"] + candidates.loc[match_idx,wormscolumns].values.flatten().tolist()], columns=colnames)
+                        processed = True
 
-                   else:
+                    else:
 
-                       # Impossible to decide, check by hand or delete
+                        # Impossible to decide, check by hand or delete
 
-                       match_idx = None
-                       classif = pd.DataFrame([["undecided"] + [pd.NA]*len(wormscolumns)], columns=colnames)
-                       processed = True
+                        match_idx = None
+                        classif = pd.DataFrame([["undecided"] + [pd.NA]*len(wormscolumns)], columns=colnames)
+                        processed = True
 
 
         else:
@@ -1484,7 +1484,7 @@ def apply_acceptedfilter(classification, acceptedfilter=None, store=True, output
 
 
 
-def clean_taxonomy(classification, matchfilter=None, fuzzy=True, verbatimcolumn=None, verbatimauthorshiponly=False, fixed_allowedMismatch=False, fixed_allowedMismatch_withNaN=1, fixed_allowedMismatch_withoutNaN=2, keep_fossil=False, acceptedfilter=None, store=True, outputpath='./')
+def clean_taxonomy(classification, matchfilter=None, fuzzy=True, verbatimcolumn=None, verbatimauthorshiponly=False, fixed_allowedMismatch=False, fixed_allowedMismatch_withNaN=1, fixed_allowedMismatch_withoutNaN=2, keep_fossil=False, acceptedfilter=None, store=True, outputpath='./'):
 
     # Match WoRMS
 
@@ -1583,7 +1583,7 @@ def apply(df, *ignored_args, overwrite=True, verbatimcolumn=None, fixed_allowedM
 
     # Get unique classifications
 
-    dfByClassification = df.loc[(~pd.isnull(df[RANK["species"])), columns].fillna('unk').groupby(columns, dropna=False) #get_group() doesn't work with NaN
+    dfByClassification = df.loc[(~pd.isnull(df[RANK["species"]])), columns].fillna('unk').groupby(columns, dropna=False) #get_group() doesn't work with NaN
     taxonomy = pd.DataFrame(list(dfByClassification.groups.keys()), columns=rankcolumns)
 
     # Get WoRMS-accepted classifications associated with these classifications, if any
