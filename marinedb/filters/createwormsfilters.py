@@ -1,5 +1,7 @@
 #!/usr/bin/env python3r
 
+# External import
+
 import argparse
 import gzip
 import pandas as pd
@@ -14,8 +16,11 @@ from suds.client import Client
 from suds.sudsobject import items
 import http
 
+# Internal import
 
-#WoRMS
+from marinedb.filters import subsetranks
+
+# WoRMS call
 WORMSCALL = {
              'scientificname': 'species',
              'genus': 'genus',
@@ -130,43 +135,6 @@ def get_uniqueSpecies(gzfile_path, store=False, outputpath='./', outputfile='spe
     return list(unique_species)
 
 
-
-def process_rank_dirty(worms_dict):
-
-    rank = worms_dict['rank'].lower()
-    if rank!='species':
-        if rank=='subspecies':
-            name=worms_dict['scientificname'].split(' ')
-            if len(name)>2:
-                worms_dict['scientificname']=' '.join(name[:2])
-                worms_dict['rank']='Species'
-            else:
-                print(f"WARNING | Unexpected subspecies name: {worms_dict['scientificname']}")
-        else: #rank higher than species
-            worms_dict['scientificname']=pd.NA
-
-    return worms_dict
-
-
-def process_rank(worms_dict):
-
-    #other version: use "parentNameUsageID"
-
-    rank = worms_dict['rank'].lower()
-    if rank!='species':
-        if rank=='subspecies':
-            parent_aphiaID = worms_dict['parentNameUsageID']
-            if not pd.isnull(parent_aphiaID):
-                worms_dict['status']='subspecies'
-                worms_dict['valid_AphiaID']=parent_aphiaID
-            #else:
-                #worms_dict=process_rank_dirty(worms_dict)
-        else: #rank higher than species
-            worms_dict['scientificname']=pd.NA
-
-    return worms_dict
-
-
 #def _reconnect_matchAphiaRecordsByNames(scinames):
 #
 #    global cl
@@ -214,10 +182,9 @@ def match_ClassificationBySciname(species, wormscall=WORMSCALL):
 
         if len(resultsBySciname)!=0:
 
-            for taxon in resultsBySciname:
+            for taxon in resultsBySciname: #potentiellement plusieurs candidats worms
 
                 taxon = dict(items(taxon))
-                taxon = process_rank(taxon)
                 classif = itemgetter(*wormscallK)(taxon)
                 classification.append([species[idx]] + list(classif))
 
@@ -304,15 +271,27 @@ def match_WoRMS(species, wormscall=WORMSCALL, store=False, outputpath='./', outp
     return matched_worms
 
 
+def process_rank(worms_dict):
 
-#def _reconnect_getAphiaRecordsByIDs(aphiaID):
-#
-#    global cl
-#    try:
-#        return cl.service.getAphiaRecordsByIDs(aphiaID)
-#    except (http.client.RemoteDisconnected, TimeoutError):
-#        cl = Client('https://www.marinespecies.org/aphia.php?p=soap&wsdl=1', timeout=4000)
-#        return _reconnect_getAphiaRecordsByIDs(aphiaID)
+    rank = worms_dict['rank'].lower()
+    lowerthanspecies = subsetranks.apply('species', lower=True, strict=True)
+
+    if rank!='species':
+
+        if rank in lowerthanspecies:
+
+            parent_aphiaID = worms_dict['parentNameUsageID']
+
+            if not pd.isnull(parent_aphiaID):
+                worms_dict['status']='subspecies'
+                worms_dict['valid_AphiaID']=parent_aphiaID
+
+        else: #rank higher than species
+
+            worms_dict['scientificname']=pd.NA
+
+    return worms_dict
+
 
 def _connect_getAphiaRecordsByIDs(aphiaID, max_attempt=10, pause_duration=5):
 
@@ -347,7 +326,7 @@ def get_AcceptedClassification(valid_aphiaID, wormscall=WORMSCALL):
 
     for idx, taxon in enumerate(results):
 
-        taxon=process_rank(taxon)
+        taxon = process_rank(taxon)
         classif = itemgetter(*wormscallK)(taxon)
         classification.append([valid_aphiaID[idx]] + list(classif))
 
@@ -422,24 +401,45 @@ def get_AcceptedWoRMS(valid_aphiaID, wormscall=WORMSCALL, store=False, outputpat
 
 def get_WoRMSfilter(gzfile_path, wormscall=WORMSCALL, store=False, outputpath='./', overwrite=False):
 
+    params={'store':store,
+            'outputpath':outputpath,
+            'overwrite':overwrite}
+
     # Get unique species
 
-    unique_species = get_uniqueSpecies(gzfile_path, store=store, outputpath=outputpath, overwrite=overwrite)
+    unique_species = get_uniqueSpecies(gzfile_path, **params)
+
+    params['wormscall']=wormscall
 
     # Get WoRMS filter
 
-    worms_matchfilter = match_WoRMS(unique_species, wormscall=wormscall, store=store, outputpath=outputpath, overwrite=overwrite)
-
-    # Process subspecies
-
-    #worms_subspecies = worms_matchfilter.loc[worms_matchfilter['worms_status']=="subspecies"]
+    worms_matchfilter = match_WoRMS(unique_species, **params)
 
     # Get accepted classifications
 
-   #boucle jusqu'à plus subspecies ?
-    worms_unaccepted = worms_matchfilter.loc[(worms_matchfilter['worms_status']!="accepted") & (~pd.isnull(worms_matchfilter["valid_aphiaID"])), "valid_aphiaID"].unique().tolist()
-    worms_acceptedfilter = get_AcceptedWoRMS(worms_unaccepted, wormscall=wormscall, store=store, outputpath=outputpath, overwrite=overwrite)
+    isnotaccepted = (worms_matchfilter['worms_status']!="accepted") & (~pd.isnull(worms_matchfilter["valid_aphiaID"]))
+    unaccepted_aphiaID = worms_matchfilter.loc[isnotaccepted, "valid_aphiaID"].unique().tolist()
+    worms_acceptedfilter = get_AcceptedWoRMS(unaccepted_aphiaID, **params)
 
+    # Process subspecies
+
+    #worms_subspecies = worms_acceptedfilter.loc[(worms_acceptedfilter['worms_status']=="subspecies"]) & (~pd.isnull(worms_acceptedfilter["valid_aphiaID"]), "valid_aphiaID"]
+    #index = worms_subspecies.index.tolist()
+    #parent_aphiaID = worms_subspecies.tolist()
+    #columns = list(set(worms_acceptedfilter.columns) - set(["group"]))
+    #worms_acceptedfilter.loc[index, columns] = get_AcceptedWoRMS(parent_aphiaID, **params)[columns]
+
+    issubspecies = (worms_acceptedfilter['worms_status']=="subspecies"]) & (~pd.isnull(worms_acceptedfilter["valid_aphiaID"]))
+    subspeciesByaphiaID = worms_acceptedfilter.loc[issubspecies, "valid_aphiaID"].groupby("valid_aphiaID")
+    parent_aphiaID = list(worms_subspecies.groups.keys())
+
+    species_aphiaID = get_AcceptedWoRMS(parent_aphiaID, **params)
+
+    columns = list(set(worms_acceptedfilter.columns) - set(["group"]))
+    for idx,group in enumerate(species_aphiaID['group']):
+
+        indexes = subspeciesByaphiaID.get_group(group).index
+        worms_acceptedfilter.loc[indexes,columns] = species_aphiaID.loc[idx,columns]
 
     return worms_matchfilter, worms_acceptedfilter
 
