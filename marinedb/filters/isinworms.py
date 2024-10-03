@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 # External imports
+
 import pandas as pd
 import numpy as np
 import argparse
@@ -14,14 +15,18 @@ import Levenshtein
 import time
 
 # Local imports
+
 from marinedb.filters import createwormsfilters as cwf
 from marinedb.filters import dropvalues
-from marinedb.filters import higherranksthan
+from marinedb.filters import subsetranks
 from marinedb.utils import regexstrip
 from marinedb.utils import getdefaultargs
 
-#Rank names in the file to be processed
-#Schema: RANK = {rank_name: rank_name_in_the_file}
+# Global variables
+
+# Rank names in the file to be processed
+# schema: RANK = {rank_name: rank_name_in_the_file}
+# ! do not change `rank_name`, modify only `rank_name_in_the_file`, if necessary
 RANK = {
         'species':'species',
         'genus':'genus',
@@ -32,7 +37,9 @@ RANK = {
         'kingdom':'kingdom'
        }
 
-
+# Mapping custom vocabulary to WoRMS vocabulary
+# ! custom vocabulary must be the same as that used in createwormsfilters.py,
+# ! if filters have been created upstream
 worms_mapping = {
                   RANK['species']:'scientificname',
                   RANK['genus']:'genus',
@@ -49,6 +56,7 @@ worms_mapping = {
                   'authority':'authority'
                  }
 
+# WORMS-specific column dtypes
 worms_dtypes = {'worms_matchtype':'string',
                 'worms_status':'string',
                 'valid_aphiaID':'Int64',
@@ -66,7 +74,7 @@ NaN2AllowedMismatch = {0:2,
                        6:-1}
 
 
-class NotImplemented(Exception):
+class NotImplemented(Exception): #À SUPPRIMER APRES DEBUG
     pass
 
 def resume_process(filter, values):
@@ -1006,6 +1014,10 @@ def _match_TaxaByFullClassification(gbif_classif, worms_classif, verbatimcolumn=
                   'fixed_allowedMismatch_withNaN':fixed_allowedMismatch_withNaN,
                   'fixed_allowedMismatch_withoutNaN':fixed_allowedMismatch_withoutNaN}
 
+        processed = False
+
+        # STEP N°1: Do the higher ranks match?
+
         match = _match_TaxaByHigherRanks(worms_classif.loc[:,higherranks], gbif_classif.loc[:,higherranks], **params)
 
         # Worst-case strategy (risk aversion):
@@ -1024,6 +1036,7 @@ def _match_TaxaByFullClassification(gbif_classif, worms_classif, verbatimcolumn=
 
                 match_idx = np.where(match["match"])[0][0]
                 classif = pd.DataFrame([["singleMatch"] + worms_classif.loc[match_idx,wormscolumns].values.flatten().tolist()], columns=colnames)
+                processed = True
 
             else:
 
@@ -1032,9 +1045,7 @@ def _match_TaxaByFullClassification(gbif_classif, worms_classif, verbatimcolumn=
                 match = match[match["match"]]
                 match_index = match.index.tolist()
 
-                processed=False
-
-                # STEP N°1: Do all candidates refer to the same accepted species?
+                # STEP N°2: Do all candidates refer to the same accepted species?
 
                 unique_aphiaID = worms_classif.loc[match_index,'valid_aphiaID'].unique()
                 if len(unique_aphiaID)==1:
@@ -1046,7 +1057,7 @@ def _match_TaxaByFullClassification(gbif_classif, worms_classif, verbatimcolumn=
                     classif = pd.DataFrame([["singleAphiaID"] + worms_classif.loc[match_idx,wormscolumns].values.flatten().tolist()], columns=colnames)
                     processed=True
 
-                # STEP N°2: Does one of the candidates best match both the species name and the classification?
+                # STEP N°3: Does one of the candidates best match both the species name and the classification?
 
                 if not processed:
 
@@ -1120,7 +1131,7 @@ def _match_TaxaByFullClassification(gbif_classif, worms_classif, verbatimcolumn=
 
                 candidates = worms_classif.loc[match_index,:]
 
-                # STEP N°3: Do all candidates have the same classification and "accepted" status?
+                # STEP N°4: Do all candidates have the same classification and "accepted" status?
 
                 if not processed:
 
@@ -1138,7 +1149,7 @@ def _match_TaxaByFullClassification(gbif_classif, worms_classif, verbatimcolumn=
                         classif = pd.DataFrame([["allAccepted"] + candidates.loc[match_idx,wormscolumns].values.flatten().tolist()], columns=colnames)
                         processed=True
 
-               # STEP N°4: Is it possible to decide between candidates on the basis of the information contained in the raw data?
+               # STEP N°5: Is it possible to decide between candidates on the basis of the information contained in the raw data?
 
                if (not processed) and (verbatimcolumn is not None):
 
@@ -1152,7 +1163,7 @@ def _match_TaxaByFullClassification(gbif_classif, worms_classif, verbatimcolumn=
 
                         classif = pd.DataFrame([classif], columns=colnames)
 
-               # STEP N°5: Default rules
+               # STEP N°6: Default rules
 
                if (not processed):
 
@@ -1183,7 +1194,13 @@ def _match_TaxaByFullClassification(gbif_classif, worms_classif, verbatimcolumn=
             # No match for higher ranks
 
             candidates = worms_classif[worms_classif["worms_matchtype"].isin(["exact","exact_subgenus","phonetic","near_1","near_2","near_3"])]
-            candidates = candidates[candidates[RANK["kingdom"]]==gbif_classif.loc[0,RANK["kingdom"]]]
+
+            if fuzzy:
+                gbif_kingdom=gbif_classif.loc[0,RANK["kingdom"]]
+                match = [(Levenshtein.ratio(kingdom, gbif_kingdom)>=0.7) for _,kingdom in enumerate(candidates[RANK["kingdom"]])]
+                candidates = candidates[match]
+            else:
+                candidates = candidates[candidates[RANK["kingdom"]]==gbif_classif.loc[0,RANK["kingdom"]]]
 
             if len(candidates)!=0:
 
@@ -1496,10 +1513,13 @@ def clean_taxonomy(classification, matchfilter=None, fuzzy=True, verbatimcolumn=
         params['outputfile_suffix']='ismore'
 
         speciesrank = RANK["species"]
+        worms_mapping[verbatimcolumn]=worms_mapping.pop(RANK["species"])
         RANK["species"] = verbatimcolumn
 
         temp = apply_matchfilter(classification.loc[ismore_index,:], **params).rename(columns={RANK["species"]:speciesrank})
         classification.loc[ismore_index,:] = temp.loc[ismore_index,classification.columns] # specify indexes and columns to make sure everything has gone well
+
+        worms_mapping[speciesrank]=worms_mapping.pop(verbatimcolumn)
         RANK["species"] = speciesrank
 
     debug = classification[classification["classif_matchtype"].str.contains("ismore")] #À SUPPRIMER APRES DEBUG
@@ -1529,7 +1549,7 @@ def drop(df, drop_conditions):
         print(f'            * Final filtering | Drop conditions')
 
         if 'identification_level' in drop_conditions.keys():
-            dropranks=higherranksthan.apply(drop_conditions['identification_level'])
+            dropranks=subsetranks.apply(drop_conditions['identification_level'], lower=False, strict=True)
             drop_conditions['rank']=dropranks
             del drop_conditions['identification_level']
 
@@ -1607,7 +1627,7 @@ def apply(df, *ignored_args, overwrite=True, verbatimcolumn=None, fixed_allowedM
 
     for idx in classification_indexes:
 
-        group = tuple(taxonomy.iloc[idx,:].values)
+        group = tuple(taxonomy.loc[idx,:].values)
         indexes = dfByClassification.get_group(group).index
         df.loc[indexes, target_columns] = classification.loc[idx, classification_columns].values
 
