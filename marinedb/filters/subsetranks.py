@@ -9,7 +9,7 @@ def _add_alternativeranks(ranks, eqranks):
 
 def apply(identification_level, lower=False, strict=True):
 
-    rankfile_path = str(pathlib.Path(__file__).parent.resolve()) + '/taxonomic_ranks.yaml'
+    rankfile_path = str(pathlib.Path(__file__).parent.resolve()) + '/taxonomicRanks.yaml'
 
     with open(rankfile_path,'r') as file:
         rankfile=yaml.safe_load(file)
