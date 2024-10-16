@@ -33,12 +33,12 @@ def _store_data(data, outputpath):
 
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser(description='Retrieve data from a file according to a filter file containing the indices of the data to be retrieved')
+    parser = argparse.ArgumentParser(description='Retrieve data from a file according to a filter file containing the indices of the data to be retrieved', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('gzip_file', type=str, help='path to the gzip file to be processed (default delimiter: tab)')
     parser.add_argument('filter_file', type=str, help='path to the filter file (must have a sorted "index" column) (default delimiter: tab)')
     parser.add_argument('--gzip_delimiter', type=str, help='gzip file delimiter', default='\t')
     parser.add_argument('--filter_delimiter', type=str, help='filter file delimiter', default='\t')
-    parser.add_argument('--output_file', type=str, help='output file path', default='')
+    parser.add_argument('--output_file', type=str, help='output file path', default='./')
     args = parser.parse_args()
 
     gzipfile = args.gzip_file
@@ -47,7 +47,7 @@ if __name__ == '__main__':
     gzipsep = args.gzip_delimiter.encode('utf-8').decode('unicode_escape')
     outputfile = args.output_file
 
-    if len(outputfile.split('.'))==1: #not a file or ''
+    if len(os.path.basename(outputfile).split('.'))==1: #not a file or ''
         filename = os.path.basename(gzipfile).split('.')[0]
         outputfilename = os.path.join(outputfile, f'{filename}_marine.txt')
     else:

@@ -20,10 +20,10 @@ def write(df, tsv_filename, sep='\t', init=False):
 
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser(description='Extract marine occurrence indexes')
-    parser.add_argument('dir', type=str, help='path to directory containing files to be processed')
-    parser.add_argument('--delimiter', type=str, help='input files delimiter', default='\t')
-    parser.add_argument('--output_file', type=str, help='output file path', default='marine_filter')
+    parser = argparse.ArgumentParser(description='Extract marine occurrence indexes', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('dir', type=str, help='path to the directory containing the files to be processed')
+    parser.add_argument('--delimiter', type=str, help='input file delimiter', default='\t')
+    parser.add_argument('--output_file', type=str, help='output file path', default='./marine_filter')
     args = parser.parse_args()
 
     outputfile = args.output_file
