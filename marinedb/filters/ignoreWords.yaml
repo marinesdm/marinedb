@@ -1,0 +1,263 @@
+# Source:
+#    Global Names Parser, Dmitry Mozzherin et al., “gnames/gnparser: v1.10.1”. Zenodo, Jun. 05, 2024. doi: 10.5281/zenodo.11491706
+#    Sigovini, M., Keppel, E. and Tagliapietra, D. (2016), Open Nomenclature in the biodiversity era. Methods Ecol Evol, 7: 1217-1225. https://doi.org/10.1111/2041-210X.12594
+#    https://www.habitas.org.uk/invertebrateireland/glossary.html
+#    https://species.wikimedia.org/wiki/Wikispecies:Glossary
+
+
+SCN_IGNORE: #scn: scientific name
+
+    - subforma
+    - subform
+    - subf
+    - forma
+    - form
+    - fma
+    - fm
+    - fo
+    - fa
+    - f
+    - subvarietas
+    - subvar
+    - varietates
+    - varietas
+    - variety
+    - var
+    - v
+    - morph
+    - subspecies
+    - subspec
+    - subsp
+    - su
+    - ssp
+    - species
+    - spec
+    - spp
+    - sp
+    - pl
+    - subgenus
+    - subgen
+    - subgeen
+    - subg
+    - genus
+    - gen
+    - g
+    - subtribe
+    - subtr
+    - tribe
+    - trib
+    - tr
+    - supertribe
+    - supertrib
+    - subfam
+    - familia
+    - fam
+
+    - natio
+    - nat
+    - pseudovar
+    - pathovar
+    - pv
+    - subsect
+    - section
+    - sect
+    - subser
+    - series
+    - ser
+    - race
+    - typus
+    - type
+    - typ
+    - clade
+
+    - larvae
+    - larva
+    - lv
+    - l
+    - juveniles
+    - juvenile
+    - juv
+    - adultus
+    - adulti
+    - ad
+    - pupae
+    - pupa
+    - p
+    - ovigerous
+    - ovig
+    - ov
+    - agamo #uniparental organisms
+    - agamossp
+    - agamosp
+    - agamovar
+    - m #male
+    - f #female
+    - exuviae
+    - exuvia
+    - ex
+    - conchylium
+    - conchylia
+    - conch
+    - shell
+    - valvae
+    - valva
+    - fragment
+    - fragmentum
+    - fragmenta
+    - frag
+    - fr
+    - cultivar
+    - cultured
+    - cv
+    - uncultured
+    - candidatus
+    - group #Group ICNCP
+    - gp #Gp ICNCP
+    - convariety
+    - convar
+    - hybrid
+    - environmental
+    - env
+    - enrichment
+    - samples
+    - sample
+
+    - indeterminabilis
+    - indeterminata
+    - indet
+    - ind
+    - inquirenda
+    - inq
+    - dubia
+    - dub
+    - incertae
+    - sedis
+    - sed
+    - new
+    - nudum
+    - nod
+    - novum
+    - nova
+    - nov
+    - n
+    - affinis
+    - aff
+    #- ex
+    - proxima
+    - prox
+    - near
+    - nr
+    - grege
+    - grupo
+    - gr
+    - confer
+    - conf
+    - cfr
+    - cf
+    - incerta
+    - inc
+    - stetit
+    - stet
+    - complex
+    - compl
+    - aggregate
+    - agg
+    - group
+    - gr
+    - animalia
+    - a
+    - cetera
+    - cet
+    - c
+    - abberation
+    - aberratio
+    - ab
+
+    - bold
+    - vidi
+    - hort
+    - ht
+    - pro
+    - comb
+    - nomen
+    - nom
+    - tax
+    - nec
+    - non
+    - not
+    - none
+    - incl
+    - all
+    - vide
+    - ined #ineditus
+    - alt #alternativum
+    - ambig #ambiguum
+    - cons #conservandum
+    - orth
+    - inval #invalida
+    - illeg #illegitima
+    - superfl #superflua
+    - inadmiss #inadmissibile
+    - obl #oblitum
+    - praeocc #protectum
+    - provis #provisorium
+    - prov
+    - rej #rejiciendum
+    - prop #propositum
+    - seminud
+    - subnud
+    - supp #suppressum
+    - utique
+    - design
+    - hom #homonymum
+    - unnamed
+    - unamed
+    - identified
+
+AUTHORSHIP_IGNORE:
+
+    - secundum
+    - sec
+    - sensu
+    - sens
+    - s
+    - lato
+    - lat
+    #- l
+    - sl
+    - amplo
+    - ampl
+    #- a
+    - stricto
+    - strict
+    - str
+    #- s
+    - div
+    - ex
+    - et
+    - and
+    - apud
+    - y
+    - ms #manuscript name
+    - in
+    - author
+    - auctt # auctorum: latin of authors
+    - auct
+    - anon
+    - arg
+    - aliae #aliorum e.g. "et al."
+    - alia
+    - alii
+    - al
+    - filius
+    - fil
+    #- f
+    - corr
+    - excl
+    - emend
+    - mihi
+    - m
+    - fide
+    - syn
+    - bis
+    - von
