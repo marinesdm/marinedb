@@ -245,18 +245,14 @@ def process_one_file(filepath, sep='\t', outputdir='./', store_time=True, parall
         span = str(span)+'\n'
         timefilepath = os.path.join(outputdir,f"time_{base}")
         with open(timefilepath, 'a+', encoding='utf-8') as f:
-            f.write(span)
+            f.write(','.join([hostname,span]))
 
     del data
     del data_processed
 
+    # Display progress
     if parallel:
-        #time.sleep(0.1)
-        #global step
-        #step+=1
         print("#",end='',flush=True)
-        #global progress_bar
-        #progress_bar.update(step)
 
     return str(span)+'\n'
 
@@ -313,7 +309,9 @@ def concat_times(outputdir, outputfile='time', sep='\t', delete=True, overwrite=
 
     files2process = [os.path.join(outputdir,file) for file in os.listdir(outputdir) if 'time_' in file]
 
-    outputfile = os.path.join(outputdir,outputfile)
+    if os.path.dirname(outputfile)=='':
+        outputfile = os.path.join(outputdir,outputfile)
+
     if os.path.isfile(outputfile):
         if not overwrite:
             count=1
@@ -328,7 +326,7 @@ def concat_times(outputdir, outputfile='time', sep='\t', delete=True, overwrite=
     init=True
     for filepath in files2process:
 
-        content = pd.read_csv(filepath, sep=sep, names=["time"])
+        content = pd.read_csv(filepath, sep=',', names=["machine","time"])
         content["filename_input"] = '_'.join(os.path.basename(filepath).split('_')[1:])
 
         if init:
@@ -353,7 +351,7 @@ def concat_times(outputdir, outputfile='time', sep='\t', delete=True, overwrite=
 
 def land_sea_statistics(outputdir, outputfile='statistics', sep='\t', overwrite=False):
 
-    files = [os.path.join(outputdir,file) for file in os.listdir(outputdir) if ('split' in file)]
+    files = [os.path.join(outputdir,file) for file in os.listdir(outputdir) if ('split' in file) and ('time' not in file)]
 
     print(f'Compute land/sea/coast statistics ({len(files)} files)')
 
@@ -398,7 +396,10 @@ def land_sea_statistics(outputdir, outputfile='statistics', sep='\t', overwrite=
     stats = pd.DataFrame(stats, columns=["filename_output","filename_input","mask_0","mask_1","mask_2","sea","land"])
     stats["pct_coast"] = np.round(stats["mask_2"]/stats[["mask_0","mask_1","mask_2"]].sum(axis=1),2)
 
-    outputfile = os.path.join(outputdir,'statistics')
+
+    if os.path.dirname(outputfile)=='':
+        outputfile = os.path.join(outputdir,outputfile)
+
     if os.path.isfile(outputfile):
         if not overwrite:
             count=1
@@ -419,25 +420,31 @@ def land_sea_statistics(outputdir, outputfile='statistics', sep='\t', overwrite=
 #variation pour un même fichier
 #nombre de copies
 
-def plot_time(time, show=True, store=True, outputdir='./'):
+def plot_time(time, show=True, store=True, outputfile='time.png', outputdir='./'):
+
+    time['hour_rounded'] = np.round((time['time']/60)/60,0)
+    time['hour_rounded'] = time['hour'].astype('int')
 
     ncol=2
     fig, axarr = plt.subplots(1,2,figsize=(15,8), width_ratios=[1, 4])
     plt.tight_layout(pad=4)
 
     sns.boxplot(y='time', data=time, notch=True, showcaps=False, medianprops={"color": "coral"}, whis=[1,99], showmeans=True, ax=axarr[0])
-    sns.swarmplot(y='time', data=time, color='black', alpha=0.5, ax=axarr[0])
+    #sns.swarmplot(y='time', data=time, color='black', alpha=0.5, ax=axarr[0])
     axarr[0].set_ylabel('')
-    axarr[0].set_xlabel('time (seconds)')
+    axarr[0].set_xlabel('time per file (seconds)')
 
-    sns.countplot(x='hour', data=time, color="teal", ax=axarr[1])
-    axarr[1].set_xlabel('time (hours)')
+    sns.countplot(x='hour_rounded', data=time, color="teal", ax=axarr[1])
+    axarr[1].set_xlabel('time per file (hours)')
 
     if show:
         plt.show()
 
     if store:
-        outputfile = os.path.join(outputdir,'time.png')
+
+        if os.path.dirname(outputfile)=='':
+            outputfile = os.path.join(outputdir,outputfile)
+
         #fig = axarr.get_figure()
         fig.savefig(outputfile, bbox_inches='tight', dpi=96)
 
@@ -445,7 +452,7 @@ def plot_time(time, show=True, store=True, outputdir='./'):
 
     return True
 
-def plot_coastVStime(time, stats, show=True, store=True, outputdir='./'):
+def plot_coastVStime(time, stats, show=True, store=True, outputfile='coastVStime.png', outputdir='./'):
 
     stats = stats.drop_duplicates(subset=['filename_input'],keep='first')
     time = time[['time','filename_input']].groupby('filename_input').agg({'time':'mean'}).reset_index()
@@ -454,13 +461,19 @@ def plot_coastVStime(time, stats, show=True, store=True, outputdir='./'):
 
     ax = table.plot.scatter(x='mask_2',y='time',alpha=0.6,figsize=(30,20),s=20)
     ax.set_xlabel("number of coastal locations")
-    ax.set_ylabel("time (seconds)")
+    ax.set_ylabel("time per file (seconds)")
+    ax.ticklabel_format(style='plain')
+
+    fig = ax.get_figure()
+
     if show:
         plt.show()
 
     if store:
-        outputfile = os.path.join(outputdir,'coastVStime.png')
-        fig = ax.get_figure()
+
+        if os.path.dirname(outputfile)=='':
+            outputfile = os.path.join(outputdir,outputfile)
+
         fig.savefig(outputfile, bbox_inches='tight', dpi=96)
 
     plt.close(fig)
@@ -472,12 +485,12 @@ def plot_coastVStime(time, stats, show=True, store=True, outputdir='./'):
 
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser(description='Identify locations in the ocean')
-    parser.add_argument('inputdir', type=str, help='path to directory containing files to be processed')
-    parser.add_argument('--fileslist_path', type=str, help='path to file containing list of files to be processed', default=None)
-    parser.add_argument('--delimiter', type=str, help='file delimiter', default='\t') #!! delimiter must be enclosed in quotation marks !!
+    parser = argparse.ArgumentParser(description='Identify locations in the ocean', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('inputdir', type=str, help='path to the directory containing files to be processed')
+    parser.add_argument('--fileslist_path', type=str, help='path to the file containing the list of files to be processed', default=None)
+    parser.add_argument('--delimiter', type=str, help='input file delimiter', default='\t') #!! delimiter must be enclosed in quotation marks !!
     parser.add_argument('--cpu', type=int, help='number of CPUs', default=16)
-    parser.add_argument('--outputdir', type=str, help='path to folder where output files will be stored', default='./')
+    parser.add_argument('--outputdir', type=str, help='path to the folder in which the output files will be stored', default='./')
     parser.add_argument('--store_time', action='store_true', help='store processing time')
     args = parser.parse_args()
 
@@ -510,15 +523,5 @@ if __name__ == '__main__':
 
     print(f'Processing {len(fileslist)} files on {cpu} CPUs')
 
-    #Nsteps=len(fileslist)
-    #global step
-    #step=0
-    #global progress_bar
-    #progress_bar = ProgressBar(Nsteps, bar_length=Nsteps)
-    #progress_bar.start()
-
     with Pool(cpu) as p:
         p.map(partial(process_one_file, sep=sep, outputdir=outputdir, store_time=store_time, parallel=True), fileslist)
-
-    #progress_bar.finished()
-
