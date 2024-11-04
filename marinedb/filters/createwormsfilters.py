@@ -93,6 +93,7 @@ def write_tsvfile(df, tsv_filename, init=False):
     return True
 
 
+
 def get_uniqueSpecies(gzfile_path, store=False, outputpath='./', outputfile='species.tsv', overwrite=False):
 
 
@@ -138,6 +139,172 @@ def get_uniqueSpecies(gzfile_path, store=False, outputpath='./', outputfile='spe
     return list(unique_species)
 
 
+
+def _standardize_sciname(sciname):
+
+    empty=False
+    next=False
+
+    # Delete any words in ignoreWords.yaml
+    # e.g. "Leccinum scabrum sl, incl. cyaneobasileucum, melaneum"
+    # e.g. "Dactylorhiza incarnatavar.lobelii"
+    # e.g. "Makaira spp"
+    # e.g. "Tambja cf. verconis"
+
+    with open(os.path.join(PATH,'ignoreWords.yaml'),'r') as f:
+        file = yaml.safe_load(f)
+        ignoreWordsIn = file['SCN_IGNORE'] + file['AUTHORSHIP_IGNORE']
+
+    ignoreWordsIn = sorted(ignoreWordsIn, key=len, reverse=True)
+    ignoreWordsIn = '|'.join([fr'{word}' for word in ignoreWordsIn])
+    pattern1 = fr'(?<=\s|\.)({ignoreWordsIn})([^a-zA-Z]|$)' #e.g. " sl,", " incl.", "s.l.", "sp1"
+    pattern2 = fr'({ignoreWordsIn})(\.)' #e.g. "incarnatavar.lobelii"
+    sciname = re.sub(fr'{pattern1}|{pattern2}', ' ', sciname)
+
+    # Remove special characters
+
+    pattern = r'[^a-zA-Z\s\-]' #e.g. do not remove "-" in "Blechnum novae-zelandiae", but remove date
+    sciname = re.sub(pattern,' ',sciname).strip()
+
+    if not re.search(r'[a-zA-Z]',sciname):
+
+        ## Empty string
+
+        empty=True
+        next=True
+
+        return sciname, empty, next
+
+    # Capitalize the first letter, if necessary
+
+    sciname = sciname[0].upper() + sciname[1:]
+
+    # Standardize whitespace
+
+    sciname = re.sub(r'\s+',' ',sciname)
+
+    # Check whether the scientific name is defined at species level
+
+    sciname_split = re.split(r'\s',sciname)
+
+    if len(sciname_split)==1:
+
+        ## Empty string or rank higher than species
+
+        next=True
+
+    return sciname, empty, next
+
+
+def _standardize_scinames(raw_scinames):
+
+    if (pd.isnull(raw_scinames)) or (len(raw_scinames)==0):
+        return ''
+
+    # Do not proceed with the code if hybrid name
+    # e.g. "Branta hutchinsii x Branta leucopsis"
+    # e.g. "Branta hutchinsii xBranta leucopsis"
+
+    if re.search(r'(^|\s)x([A-Z\s]|$)|×',raw_scinames):
+        return ''
+
+    # Delete everything in parentheses
+    # e.g. "Haliclona (Rhizoniera) viscosa"
+    # e.g. "Cygnus olor (Gmelin, 1789)"
+    # e.g. "Centaurea nigra sens. lat. (=nigra/debeauxii)"
+    # e.g. " Lepidotrigla cf grandis (A) [Gomon, pers comm]"
+
+    pattern = r'\(.*?(\)|$)|\[.*?(\]|$)' #e.g. "Rusa timorensis (de"
+    scinames2process = re.sub(pattern,' ',raw_scinames)
+
+    if not re.search(r'[a-zA-Z]',sciname):
+        return ''
+
+    # Standardize whitespace
+
+    scinames2process = re.sub(r'\s+',' ',scinames2process)
+
+    # Convert uppercase words so that only the first letter is capitalised
+    # (not always a problem for WoRMS, but necessary at a later stage)
+    # assumption:
+    #   when an uppercase word and a lowercase word are joined,
+    #   the uppercase at the intersection is considered to belong to the uppercase word
+    #   and the two words are considered separately (i.e as two distinct items in the list below)
+    # explanation:
+    #   - WoRMS seems more robust to the absence of a letter at the end of a word
+    #     than to the addition of a letter at the beginning ;
+    #   - we will only consider the next item in the list if the first is not defined at species level
+    # e.g. "HALICLONA (RHIZONERIA) VISCOSA" to "Haliclona (rhizoneria) viscosa"
+    # e.g. "HALICLONA VISCOSAsardina pilchardus" to "Haliclona viscosa Sardina pilchardus"
+    # e.g. "HALICLONA VISCOSASardina pilchardus" to "Haliclona viscosas Ardina pilchardus"
+    # Note: undesirable result if "Haliclona (RHIZONERIA) viscosa" (but this function doesn't take into account what's in parentheses anyway)
+
+    pattern = r'((?<=[A-Z])[A-Z][^a-z]*?)([a-z]|$)'
+    scinames2process, Ncaps = re.subn(pattern, lambda m: (m.group(1).lower() + ' ' + m.group(2).upper()), scinames2process)
+    print(scinames2process)
+
+    if Ncaps>0:
+        isallcaps=True
+
+    # Split by +, |, /, \ and capital letters
+    # e.g. "Tringa (Heteroscelus) brevipesEopsaltria (Eopsaltria) griseogularis" (capital, no more parentheses at this stage)
+    # e.g. "Clupea harengus/Sprattus sprattus" (/)
+    # e.g. "Branta hutchinsii x Branta leucopsis" (capital)
+    # e.g. "Populus nigra + Populus x canadensis" (+ & capital)
+
+    pattern = r'[+|/\\]|(?=[A-Z])'
+    scinames2process = re.split(pattern, scinames2process)
+
+    # Keep only one scientific name if there are several, and standardize it
+    # assumption:
+    #  if several species are listed for an occurrence and the first one is not marine,
+    #  the others won't be either
+
+    next=True
+    first=True
+    idx=0
+    first_sciname=''
+
+    while next and (idx<len(scinames2process)):
+
+        # Standardize the scientific name
+
+        sciname = scinames2process[idx]
+
+        if len(sciname)>3:
+
+            sciname, empty, next = _standardize_sciname(sciname)
+            print(sciname)
+            if first and (not empty):
+
+                # First scientific name in `raw_sciname`
+
+                first_sciname=sciname
+                first=False
+
+            if next:
+
+                # Not a species name
+
+                idx+=1
+
+        else:
+
+            # Empty string or too short to be a scientific name
+
+            idx+=1
+
+    if (idx<len(scinames2process)):
+
+        sciname=re.split(r'\s',sciname)
+
+        return ' '.join(sciname[:3])
+
+    else:
+
+        return first_sciname
+
+
 def _connect_matchAphiaRecordsByNames(scinames, max_attempt=10, pause_duration=5):
 
     global cl
@@ -154,232 +321,38 @@ def _connect_matchAphiaRecordsByNames(scinames, max_attempt=10, pause_duration=5
             else:
                 raise
 
-def _standardize_singleSciname(sciname):
 
-    issue=False
-    next=False
+def _parse_matchAphiaRecordsByNames(species, results, keys):
 
-    # Do not proceed with the code if hybrid name
-    # e.g. "Branta hutchinsii x Branta leucopsis"
+    classification=[]
 
-    if re.search(r'(^|\s)x(\s|$)|×',sciname):
-        return sciname, issue, next
+    if len(results)!=0:
 
-    # Convert uppercase words to lowercase
-    # (not always a problem for WoRMS but necessary for the next step)
-    # e.g. "HALICLONA (RHIZONERIA) VISCOSA" to "haliclona (rhizoneria) viscosa"
+        for taxon in results: #may be more than one candidate
 
-    #pattern = r'([A-Z]{2,})'
-    #sciname = re.sub(pattern, lambda m: m.group(0).lower(), sciname)
-
-    # Remove special characters at the beginning of `sciname`
-    # including parenthesis and quotation marks
-
-    pattern = r'^[^a-zA-Z]+'
-    sciname = re.sub(pattern,'',sciname)
-
-    # Check for the presence of a string in parentheses that could correspond to a subgenus or a superspecies
-    # and that does not match the pattern (r'[A-Z][a-z]{2,}')
-    # e.g. "Charadrius (charadrius) ruficapillus"
-    # Check for consecutive strings in parentheses or for consecutive strings in square brackets
-    # followed by strings not in parentheses
-    # if one of these conditions is met, WoRMS cannot process the string properly
-    # try again without the string(s) in parentheses
-
-    if re.search(r'^[a-zA-Z]*\s*\((?![A-Z][a-z]{2,}\))',sciname):
-        issue=True
-    elif re.search(r'(([\[(].*?[\])]\s*){2,}|([\[{].*?[\]}]\s*))[a-z]',sciname): #EN FAIT ÇA ÇA N'A PAS L'AIR DE POSER PROBLÈME ... le problème c'est quand minuscules sans parethèses
-        issue=True
-
-    # Delete everything in parentheses
-    # e.g. "Haliclona (Rhizoniera) viscosa"
-    # e.g. "Cygnus olor (Gmelin, 1789)"
-
-    pattern = r'\(.*?(\)|$)|\[.*?(\]|$)'
-    sciname = re.sub(pattern,' ', sciname)
-
-    # Delete the words in ignoreWords.yaml
-    # e.g. "Leccinum scabrum sl, incl. cyaneobasileucum, melaneum"
-    # e.g. "Dactylorhiza incarnatavar.lobelii"
-    # e.g. "Makaira spp"
-    # e.g. "Tambja cf. verconis"
-
-    sciname_withIgnoreWords = sciname
-
-    with open(os.path.join(PATH,'ignoreWords.yaml'),'r') as f:
-        file = yaml.safe_load(f)
-        ignoreWordsIn = file['SCN_IGNORE'] + file['AUTHORSHIP_IGNORE']
-
-    ignoreWordsIn = sorted(ignoreWordsIn, key=len, reverse=True)
-    ignoreWordsIn = '|'.join([fr'{word}' for word in ignoreWordsIn])
-    pattern1 = fr'(?<=\s|\.)({ignoreWordsIn})([^a-zA-Z]|$)' #e.g. " sl,", " incl.", "s.l."
-    pattern2 = fr'({ignoreWordsIn})(\.)' #e.g. "incarnatavar.lobelii"
-    sciname = re.sub(fr'{pattern1}|{pattern2}', ' ', sciname)
-
-    # Remove special characters
-
-    #ATTENTION METTRE ISSUE SI "?" !!
-
-    pattern = r'[^a-zA-Z\s\-]' #e.g. do not remove "-" in "Blechnum novae-zelandiae", remove date
-    sciname = re.sub(pattern,' ',sciname).strip()
-    sciname_withIgnoreWords = re.sub(pattern,' ',sciname_withIgnoreWords).strip()
-
-    # Standardize whitespace
-
-    sciname = re.sub(r'\s+',' ',sciname)
-    sciname_withIgnoreWords = re.sub(r'\s+',' ',sciname_withIgnoreWords)
-
-    #cappattern = re.compile(r'.*?(?=[A-Z]|$)')
-
-    # Do not proceed with the code if the (first) scientific name is:
-    # - already standardized
-    # - and defined at species level
-    # assumption: if several species are listed for an occurrence and the first one is not marine,
-    # the others won't be either
-
-    # PROBLEME : Centaurea nigra sens. lat. (=nigra/debeauxii), Mesapamea secalis agg., Rusa timorensis (de Blainville, 1822) ?, Nocardioides sp. MMH1-2, Pelagic octopoda sp1 (ajouter pelagic aux mots)
-#Cuspidaria sp. sp., Bivalvia inc. sed., Lepidotrigla cf grandis (A) [Gomon, pers comm], Clausinella fasciata (da Costa, 1778), Bodotriidae sp12 c8 cs, auteur avec van aussi ? => revoir genre à 2 lettres,
-# ou spprimer moins de 4 lettres ailleurs qu'en première position ?
-
-    #if (len(sciname)==0) or (sciname[0].isupper()): #empty string or capitalized
-
-    if not sciname[0].isupper()
-
-    sciname_split = re.split(r'\s',sciname)
-
-    if len(sciname_split)==1: #empty string or rank higher than species
-
-        next=True
+            taxon = dict(items(taxon))
+            classif = itemgetter(*keys)(taxon)
+            classification.append([species] + list(classif))
 
     else:
 
-        if len(sciname)!=len(sciname_withIgnoreWords): #taxonomic abbreviations/terms
+        classification.append([species] + [pd.NA]*len(keys))
 
-            issue=True
-
-    return sciname, issue, next
+    return classification
 
 
-def _standardize_scinames(raw_scinames): #REFAIRE et process directement, ne pas donner la chaîne brute, ce sera moins coûteux et complexe finalement
+def match_ClassificationBySciname(species, wormscall=WORMSCALL, doublecheck=False):
 
-
-    if (pd.isnull(raw_scinames)) or (len(raw_scinames)==0):
-        return False
-
-    # Standardize whitespace
-
-    scinames2process = re.sub(r'\s+',' ',raw_scinames)
-
-    # Check for the prsence of "?"
-
-    isquestionmark = re.search(r'\?',raw_scinames)
-
-    # Check for the presence of a lowercase string not preceded by a special character
-    # anywhere other than at the beginning of `raw_scinames`
-    # e.g. Clupea harengus/Sprattus sprattus
-    # e.g. Prosthechea cochleata (L.) W.E.Higgins var. grandiflora (Mutel) Christenson
-
-    truncated_scinames = ' '.join(re.split(r'\s',raw_scinames)[3:])
-    lwrc_match = re.search(r'([\s\"\']|^)[a-z]+',truncated_scinames)
-    if lwrc_match:
-        lwrc_start = lwrc_match.start()
-        spec_match = re.search(r'\s[^a-zA-Z0-9"\']+?\s',raw_scinames)
-        if spec_match:
-            if spec_match.start()<lwrc_start:
-                islowercase=False
-            else:
-                islowercase=True
-    else:
-        islowercase=False
-
-
-    # Convert uppercase words so that only the first letter is capitalised
-    # (not always a problem for WoRMS, but necessary at a later stage)
-    # assumption: when an uppercase word and a lowercase word are joined,
-    # the uppercase at the intersection is considered to belong to the uppercase word
-    # and the two words are considered separately (i.e as two distinct items in the list below)
-    # (WoRMS seems more robust to the absence of a letter at the end of a word
-    # than to the addition of a letter at the beginning, moreover,
-    # we will only consider the next item in the list if the first is not defined at species level)
-    # e.g. "HALICLONA (RHIZONERIA) VISCOSA" to "Haliclona (rhizoneria) viscosa"
-    # e.g. "HALICLONA VISCOSAsardina pilchardus" to "Haliclona viscosa Sardina pilchardus"
-    # e.g. "HALICLONA VISCOSASardina pilchardus" to "Haliclona viscosas Ardina pilchardus"
-
-    #Ncaps = len(re.findall(r'[A-Z]',raw_scinames))
-
-    #pattern = r'((?<=[A-Z])[A-Z]+(?:[\s\-]+[A-Z]+)*)'
-    #pattern = r'((?<=[A-Z])[A-Z][^a-z]*?)([A-Z]?[a-z]|$)'
-    pattern = r'((?<=[A-Z])[A-Z][^a-z]*?)([a-z]|$)'
-    scinames2process, Ncaps = re.subn(pattern, lambda m: (m.group(1).lower() + ' ' + m.group(2).upper()), scinames2process)
-    print(scinames2process)
-
-    if Ncaps>0:
-        isallcaps=True
-
-    # Split by +, |, /, \ and capital letters (unless preceded by an opening parenthesis (see below))
-    # e.g. "Tringa (Heteroscelus) brevipesEopsaltria (Eopsaltria) griseogularis"
-    # e.g. "Clupea harengus/Sprattus sprattus"
-    # e.g. "Branta hutchinsii x Branta leucopsis"
-    # e.g. "Populus nigra + Populus x canadensis"
-
-    #pattern = r'[+|/\\]|(?<=[^\[(])(?<![A-Z])(?=[A-Z])'
-    pattern = r'[+|/\\]|(?<=[^\[(])(?=[A-Z])'
-    #pattern = r'[+|/\\]|(?<![A-Z]{2}\s)(?<=[^\[(A-Z])(?=[A-Z])|(?<=[A-Z]{2})\s?(?=[a-z])'
-    #pattern = r'[+|/\\]|(?<![A-Z]{2})(?:[^a-zA-Z])*?(?<![\[(A-Z])(?=[A-Z])|(?<=[A-Z]{2})[^a-zA-Z]*?(?=[a-z])'
-    scinames2process = re.split(pattern, scinames2process)
-    if isallcaps:
-        sciname_withAllCaps = re.split(pattern, raw_scinames)[0]
-    print(scinames2process)
-
-    try_again=True
-    new_candidate=False
-    idx=0
-
-    while (try_again) and (not new_candidate) and (idx<len(scinames2process)):
-
-        # Standardize the scientific name
-
-        sciname = scinames2process[idx]
-
-        if len(sciname)>5:
-
-            sciname, issue, next = _standardize_singleSciname(sciname)
-            print(sciname)
-            if next:
-                idx+=1
-
-            elif idx==0:
-                if issue:
-                    new_candidate=True
-                if isallcaps:
-                    if scinames2process[idx]==sciname_withAllCaps:
-                        print('HERE')
-                        try_again=False
-                    else:
-                        new_candidate=True
-                if islowercase:
-
-                else:
-                    try_again=False
-
-            else:
-                new_candidate=True
-
-        else:
-
-            idx+=1
-
-    if try_again and new_candidate:
-        return sciname
-    else:
-        return ''
-
-
-def match_ClassificationBySciname(species, wormscall=WORMSCALL):
-
-    print(f'            -- WoRMS API call --')
     if isinstance(species,str):
         species=[species]
+
+    print(f'            -- Scientific name pre-processing --')
+
+    for idx in range(len(species)):
+        species[idx] = _standardize_scinames(species[idx])
+
+    print(f'            -- WoRMS API call --')
+
     scinames["scientificname"] = species
 
     results = _connect_matchAphiaRecordsByNames(scinames)
@@ -388,22 +361,27 @@ def match_ClassificationBySciname(species, wormscall=WORMSCALL):
     wormscallV = list(itemgetter(*wormscallK)(wormscall))
     colnames = ['group'] + wormscallV
 
-    classification = []
+    classification=[]
 
-    print(f'            -- WoRMS/file match --')
+    print(f'            -- Format WoRMS match & Double-check --')
     for idx,resultsBySciname in enumerate(results):
 
         if len(resultsBySciname)!=0:
 
-            for taxon in resultsBySciname: #may be more than one candidate
-
-                taxon = dict(items(taxon))
-                classif = itemgetter(*wormscallK)(taxon)
-                classification.append([species[idx]] + list(classif))
+            classification += _parse_matchAphiaRecordsByNames(species[idx],resultsBySciname,wormscallK)
 
         else:
 
-            classification.append([species[idx]] + [pd.NA]*len(wormscallK))
+            spe = re.split(r'\s',specie[idx])
+            if doublecheck and len(spe)>2:
+
+                scinames["scientificname"] = [' '.join(spe[:2])]
+                res = _connect_matchAphiaRecordsByNames(scinames)
+                classification += _parse_matchAphiaRecordsByNames(spe,res,wormscallK))
+
+            else:
+
+                classification.append([species[idx]] + [pd.NA]*len(wormscallK))
 
 
     classification = pd.DataFrame(classification, columns=colnames)
@@ -412,8 +390,7 @@ def match_ClassificationBySciname(species, wormscall=WORMSCALL):
     return classification
 
 
-
-def match_WoRMS(species, wormscall=WORMSCALL, store=False, outputpath='./', outputfile='worms_matchfilter.tsv', overwrite=False):
+def match_WoRMS(species, wormscall=WORMSCALL, doublecheck=False, store=False, outputpath='./', outputfile='worms_matchfilter.tsv', overwrite=False):
 
     nspecies_print = len(species)
     resume=False
@@ -441,13 +418,13 @@ def match_WoRMS(species, wormscall=WORMSCALL, store=False, outputpath='./', outp
     for batch in range(nbatch):
 
         start_idx = batch*50
-        if batch == (nbatch-1):
+        if batch==(nbatch-1):
             end_idx = nspecies
         else:
             end_idx = start_idx + 50
 
         species_subset = species[start_idx:end_idx]
-        classification = match_ClassificationBySciname(species_subset, wormscall=wormscall)
+        classification = match_ClassificationBySciname(species_subset, wormscall=wormscall, doublecheck=doublecheck)
 
         if batch==0 and not resume:
             matched_worms = classification
