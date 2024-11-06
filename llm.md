@@ -20,19 +20,19 @@ The first list below is adapted from [meta-llama](https://github.com/meta-llama/
 3. Since your request is approved you will receive a signed URL via email. Remember that the links expire after 24 hours and a certain amount of downloads. You can always re-request a link if you start seeing errors such as 403: Forbidden.
 4. Install the Llama CLI: `pip install llama-stack.`
 5. Run `llama model list` to show the latest available models and determine the model ID you wish to download. For the task, use `Llama3.2-3B-Instruct` ID (identifier corresponding to a lightweight model capable of following prompted instructions).
-6. Run: `llama download --source meta --model-id CHOSEN_MODEL_ID`
+6. Run `llama download --source meta --model-id CHOSEN_MODEL_ID`
 7. Pass the URL provided when prompted to start the download.
    
 The model will be downloaded to the folder where the command was run. The name of the downloaded folder should be `.llama`. Run `ls -laht` to check that the download was successful. 
    
 To load the model via the `transformers` package, the downloaded checkpoint must first be converted using `transformers` [Llama conversion script](https://github.com/huggingface/transformers/blob/main/src/transformers/models/llama/convert_llama_weights_to_hf.py) `convert_llama_weights_to_hf.py`: 
-1. `PATH1`: Path to the conversion script. Run `pip show transformers` to find out where the `transformers` package is stored (look at the `Location` field). `PATH1` is the concatenation of this path with `transformers/models/llama/convert_llama_weights_to_hf.py`. 
+1. **PATH1**: Path to the conversion script. Run `pip show transformers` to find out where the `transformers` package is stored (look at the `Location` field). `PATH1` is the concatenation of this path with `transformers/models/llama/convert_llama_weights_to_hf.py`. 
 Example: `/opt/venv/ecolab/lib/python3.10/site-packages/transformers/models/llama/convert_llama_weights_to_hf.py`.
-2. `PATH2`: Path to the downloaded weights. `PATH2` is the concatenation of the path to the downloaded folder with `checkpoints/Llama3.2-3B-Instruct`. 
+2. **PATH2**: Path to the downloaded weights. `PATH2` is the concatenation of the path to the downloaded folder with `checkpoints/Llama3.2-3B-Instruct`. 
 Example: `./.llama/checkpoints/Llama3.2-3B-Instruct`.
-3. `PATH3`: Path to the folder in which you want to store the ready-to-use model.
+3. **PATH3**: Path to the folder in which you want to store the ready-to-use model.
 Example: `./Llama`
-4. Run `python PATH1 --input_dir PATH2 --num_shards 1 --output_dir PATH3 --llama_version 3.2`. 
+4. Run `python PATH1 --input_dir PATH2 --num_shards 1 --output_dir PATH3 --llama_version 3.2`, replacing `PATH1`, `PATH2` and `PATH3` with their values, as explained in the previous points.   
   
 You may want to change the number indicated after the `--num_shards` option depending on the computational resources you have access to. Read [this article](https://medium.com/@pranay.janupalli/understanding-model-sharding-and-model-parallelism-scaling-large-language-models-dee6144d0591) to find out more.
    
@@ -62,13 +62,16 @@ The first list below is adapted from [meta-llama](https://github.com/meta-llama/
    - Click on "Access Tokens"
    - Click on "Create new token" in the top right-hand corner
    - Choose "Read" for "Token type" at the top, give the token a name, save the token value
-5. In the terminal, run `hugginface-cli login`. You'll need to run this command every time you start a new terminal.
+5. In the terminal, run `hugginface-cli login`.
+6. Pass the access token created.   
+  
+You'll need to do steps 5 and 6 every time you start a new terminal.
 
 ### 2.3 Example
   
-Check that everything is set up correctly. 
+Check that everything is set up correctly.  
   
-The following code should now work:
+The following code should now work:    
 Replace  `PATH` by `PATH3` if you have followed the instructions in section 2.1, and by `meta-llama/Llama-3.2-3B-Instruct` if you followed the instructions in section 2.2.
 ```
 import torch
@@ -92,6 +95,6 @@ outputs = pipe(
 print(outputs[0]["generated_text"][-1])
 ```
   
-If you want to avoid the "Setting `pad_token_id` to `eos_token_id`:None for open-end generation." warning message, add the following code snippet to `outputs` after `max_new_tokens=256`: `pad_token_id=pipe.tokenizer.eos_token_id`. This [article](https://jaketae.github.io/study/gpt2/#setup) explains what's behind this message.
+If you want to avoid the "Setting `pad_token_id` to `eos_token_id`:None for open-end generation." warning message, add `pad_token_id=pipe.tokenizer.eos_token_id` to `outputs` after `max_new_tokens=256`. This [article](https://jaketae.github.io/study/gpt2/#setup) explains what's behind the warning.
 
 ## 3. Instructions
