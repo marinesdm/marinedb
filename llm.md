@@ -13,6 +13,8 @@ pip install --upgrade transformers
    
 ### 2.1 Via Meta Llama website (no account required)
    
+#### 2.1.1 Download weights
+  
 The first list below is adapted from [meta-llama](https://github.com/meta-llama/llama-models?tab=readme-ov-file#download) Github.
    
 1. Visit the [Meta Llama website](https://www.llama.com/llama-downloads/).
@@ -24,6 +26,8 @@ The first list below is adapted from [meta-llama](https://github.com/meta-llama/
 7. Pass the URL provided when prompted to start the download.
    
 The model will be downloaded to the folder where the command was run. The name of the downloaded folder should be `.llama`. Run `ls -laht` to check that the download was successful. 
+   
+#### 2.1.2 Convert weights
    
 To load the model via the `transformers` package, the downloaded checkpoint must first be converted using `transformers` [Llama conversion script](https://github.com/huggingface/transformers/blob/main/src/transformers/models/llama/convert_llama_weights_to_hf.py) `convert_llama_weights_to_hf.py`: 
 1. **PATH1**: Path to the conversion script. Run `pip show transformers` to find out where the `transformers` package is stored (look at the `Location` field). `PATH1` is the concatenation of this path with `transformers/models/llama/convert_llama_weights_to_hf.py`. 
@@ -72,7 +76,7 @@ You'll need to do steps 5 and 6 every time you start a new terminal.
 Check that everything is set up correctly.  
   
 The following code should now work:    
-Replace  `PATH` by `PATH3` if you have followed the instructions in section 2.1, and by `meta-llama/Llama-3.2-3B-Instruct` if you followed the instructions in section 2.2.
+Replace  **PATH** by **PATH3** if you have followed the instructions in section 2.1, and by `meta-llama/Llama-3.2-3B-Instruct` if you followed the instructions in section 2.2.
 ```
 import torch
 from transformers import pipeline
