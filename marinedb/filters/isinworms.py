@@ -26,7 +26,9 @@ from marinedb.utils import getdefaultargs
 
 # Rank names in the file to be processed
 # schema: RANK = {rank_name: rank_name_in_the_file}
-# ! do not change `rank_name`, modify only `rank_name_in_the_file`, if necessary
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# !Do not change `rank_name`, modify only `rank_name_in_the_file`, if necessary!
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 RANK = {
         'species':'species',
         'genus':'genus',
@@ -38,8 +40,10 @@ RANK = {
        }
 
 # Mapping custom vocabulary to WoRMS vocabulary
-# ! custom vocabulary must be the same as that used in createwormsfilters.py,
-# ! if filters have been created upstream
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# !Custom vocabulary must be the same as that used in createwormsfilters.py,!
+# !if filters have been created upstream                                    !
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 worms_mapping = {
                   RANK['species']:'scientificname',
                   RANK['genus']:'genus',
@@ -52,6 +56,7 @@ worms_mapping = {
                   'worms_status':'status',
                   'valid_aphiaID':'valid_AphiaID',
                   'isextinct':'isExtinct',
+                  'ismarine':'isMarine',
                   'rank':'rank',
                   'authority':'authority'
                  }
@@ -141,33 +146,6 @@ def naneqsingle(series1, series2):
 
     return res
 
-
-def elementwise_LevensteinRatio(strings, refstrings, difflib_cutoff=0.5): #!one-way
-
-    if pd.isnull(refstrings) or len(refstrings)==0 or pd.isnull(strings) or len(strings)==0:
-        return pd.NA, pd.NA
-
-    # Preparing strings
-    refstrings = clean_split_strings(refstrings)
-    strings = clean_split_strings(strings)
-
-    ratio=0
-    Nmatch=0
-    for string in strings:
-
-        ## Find the component closest to `string` in `refstrings`
-        stringbestmatch = get_close_matches(string, refstrings, n=1, cutoff=difflib_cutoff) #difflib: cutoff=0.6 by default
-
-        ## Compute the Levenstein ratio between `string` and `stringbestmatch`
-        if len(stringbestmatch)!=0:
-            Nmatch+=1
-            stringbestmatch=stringbestmatch[0]
-            ratio+=Levenshtein.ratio(string, stringbestmatch)
-            del refstrings[refstrings.index(stringbestmatch)]
-
-    return np.round(ratio/len(strings),2), Nmatch
-
-
 def clean_string(string):
 
     # remove the accents
@@ -218,6 +196,30 @@ def clean_split_strings(strings, authorship=False):
 
     return list(strings[keep])
 
+def elementwise_LevensteinRatio(strings, refstrings, difflib_cutoff=0.5): #!one-way
+
+    if pd.isnull(refstrings) or len(refstrings)==0 or pd.isnull(strings) or len(strings)==0:
+        return pd.NA, pd.NA
+
+    # Preparing strings
+    refstrings = clean_split_strings(refstrings)
+    strings = clean_split_strings(strings)
+
+    ratio=0
+    Nmatch=0
+    for string in strings:
+
+        ## Find the component closest to `string` in `refstrings`
+        stringbestmatch = get_close_matches(string, refstrings, n=1, cutoff=difflib_cutoff) #difflib: cutoff=0.6 by default
+
+        ## Compute the Levenstein ratio between `string` and `stringbestmatch`
+        if len(stringbestmatch)!=0:
+            Nmatch+=1
+            stringbestmatch=stringbestmatch[0]
+            ratio+=Levenshtein.ratio(string, stringbestmatch)
+            del refstrings[refstrings.index(stringbestmatch)]
+
+    return np.round(ratio/len(strings),2), Nmatch
 
 def _match_WormsToVerbatimSpecies(wormsspecies, verbatimspecies, phonetic=False, cutoff_phonetic=0.7):
 
@@ -1504,7 +1506,7 @@ def clean_taxonomy(classification, matchfilter=None, fuzzy=True, verbatimcolumn=
     # Relaunch WoRMS matching for classifications tagged "ismore"
 
     ismore_index = classification[classification["classif_matchtype"].str.contains("ismore")].index.tolist()
-    if len(ismore_index)!=0:
+    if (len(ismore_index)!=0) and (verbatimcolumn is not None):
 
         if verbatimauthorshiponly: #À SUPPRIMER APRES DEBUG
             raise Exception
