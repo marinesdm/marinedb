@@ -172,6 +172,7 @@ SCN_IGNORE: #scn: scientific name
     - abberation
     - aberratio
     - ab
+    - unknown
 
     - bold
     - vidi
