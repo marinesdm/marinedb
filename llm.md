@@ -76,7 +76,7 @@ You'll need to do steps 5 and 6 every time you start a new terminal.
 Check that everything is set up correctly.  
   
 The following code should now work:    
-Replace  **PATH** by **PATH3** if you have followed the instructions in section 2.1, and by `meta-llama/Llama-3.2-3B-Instruct` if you followed the instructions in section 2.2.
+Replace  **PATH** by **PATH3** if you have followed the instructions in section 2.1, and by `meta-llama/Llama-3.2-3B-Instruct` if you have followed the instructions in section 2.2.
 ```
 import torch
 from transformers import pipeline
