@@ -12,6 +12,7 @@ import os
 from unidecode import unidecode
 from operator import itemgetter
 import re
+from datetime import datetime
 
 from suds import null, WebFault
 from suds.client import Client
@@ -26,6 +27,8 @@ from marinedb.utils import regexstrip
 # Global variables
 
 PATH = os.path.dirname(os.path.abspath(__file__))
+
+YEAR_NOW = datetime.now().year
 
 WORMSCALL = {
              'scientificname': 'species',
@@ -98,7 +101,7 @@ def _store_uniqueRawSciname(unique_rawsciname, outputfile):
 
     print(f"            Storing in {outputfile} | {len(unique_rawsciname)} unique raw scientific names")
     with open(outputfile, 'w') as f:
-        f.writelines('\n'.join(['raw_sciname'] + list(unique_rawsciname)))
+        f.writelines('\n'.join(['raw_sciname'] + list(unique_rawsciname)) + '\n')
 
 def get_uniqueRawSciname(gzfile_path, colname, store=False, overwrite=False, outputpath='./', outputfile=''):
 
@@ -137,10 +140,9 @@ def get_uniqueRawSciname(gzfile_path, colname, store=False, overwrite=False, out
             if ((idx+1)%1000000)==0:
                 print(f"            Processing | {idx + 1} lines done, {len(unique_rawsciname)} unique raw scientific names")
 
-            if store and ((Nunique-count)!=0) and (Nunique%100000==0):
+            if store and ((Nunique-count)==100000):
                 _store_uniqueRawSciname(unique_rawsciname, outputfile)
-
-            count = Nunique
+                count = Nunique
 
     # Save progress
 
@@ -150,7 +152,7 @@ def get_uniqueRawSciname(gzfile_path, colname, store=False, overwrite=False, out
     return list(unique_rawsciname)
 
 
-def _format_scinamesForWoRMS_elementwise(sciname):
+def _format_scinamesForWoRMS_elementwise(sciname, identification_level='best'):
 
     empty=False
     next=False
@@ -182,7 +184,6 @@ def _format_scinamesForWoRMS_elementwise(sciname):
 
         empty=True
         next=True
-        print("Elementwise |", sciname, empty, next)
 
         return sciname, empty, next
 
@@ -196,30 +197,35 @@ def _format_scinamesForWoRMS_elementwise(sciname):
 
     # Check whether the scientific name is defined at species level
 
-    sciname_split = re.split(r'\s',sciname)
+    #sciname_split = re.split(r'\s',sciname)
+    sciname_split = sciname.split()
 
     if len(sciname_split)==1:
 
-        ## Empty string or rank higher than species
+        ## Rank higher than species
 
-        next=True
+        if (identification_level=='best') or (identification_level=='species'):
 
-    print("Elementwise |", sciname, empty, next)
+            next=True
+
+        else: #identification_level=='first'
+
+            next=False
 
     return sciname, empty, next
 
 
-def _format_scinamesForWoRMS(raw_scinames):
+def _format_scinamesForWoRMS(raw_scinames, identification_level='best'): # 'best', 'species', 'first'
 
     if (pd.isnull(raw_scinames)) or (len(raw_scinames)==0):
-        return ''
+        return '', 0, False
 
     # Do not proceed with the code if hybrid name
     # e.g. "Branta hutchinsii x Branta leucopsis"
     # e.g. "Branta hutchinsii xBranta leucopsis"
 
     if re.search(r'(^|\s)x([A-Z\s]|$)|×',raw_scinames):
-        return ''
+        return '', 0, False
 
     # Delete everything in parentheses
     # e.g. "Haliclona (Rhizoniera) viscosa"
@@ -230,10 +236,32 @@ def _format_scinamesForWoRMS(raw_scinames):
     pattern = r'\(.*?(\)|$)|\[.*?(\]|$)' #e.g. "Rusa timorensis (de"
     scinames2process = re.sub(pattern,' ',raw_scinames)
 
-
     # Convert to ASCII format
 
     scinames2process=unidecode(scinames2process)
+
+    # Delete parts of the string containing a number:
+    # - greater than the current year
+    # - less than 3 digits
+    # - or more than 4 digits
+    # i.e a number that cannot be the authorship year
+    # e.g. "Megaselia sp. BIOUG27368-A01"
+    # e.g. "BOLD:AEF8294"
+
+    pattern=r'(?:(?<=^)|(?<=\s))[^\s]*?(?P<number>[0-9]+)[^\s]*?(?:(?=\s)|(?=$))'
+    finditer=re.finditer(pattern,scinames2process)
+
+    cut=[0]
+    for match in finditer:
+        number=match['number']
+        Ndigits=len(number)
+        if (Ndigits<=3) or (Ndigits>4) or (int(number)>YEAR_NOW):
+            cut.append(match.start())
+            cut.append(match.end())
+    cut.append(-1)
+
+    if len(cut)>2:
+        scinames2process = ' '.join([scinames2process[i:j] for i,j in zip(cut[0::2],cut[1::2])])
 
     # Delete numbers
 
@@ -241,11 +269,7 @@ def _format_scinamesForWoRMS(raw_scinames):
     scinames2process = re.sub(pattern,' ',scinames2process)
 
     if not re.search(r'[a-zA-Z]',scinames2process):
-        return ''
-
-    # Standardize whitespace
-
-    scinames2process = re.sub(r'\s+',' ',scinames2process)
+        return '', 0, False
 
     # Convert uppercase words so that only the first letter is capitalised
     # (not always a problem for WoRMS, but necessary at a later stage)
@@ -254,9 +278,12 @@ def _format_scinamesForWoRMS(raw_scinames):
     #   the uppercase at the intersection is considered to belong to the uppercase word
     #   and the two words are considered separately (i.e as two distinct items in the list below)
     # explanation:
-    #   - WoRMS seems more robust to the absence of a letter at the end of a word
-    #     than to the addition of a letter at the beginning ;
-    #   - we will only consider the next item in the list if the first is not defined at species level
+    #   - WoRMS seems more robust to the absence of a letter at the beginning of a word
+    #     (and the addition of a letter at the end of a word)
+    #     than to the addition of a letter at the beginning of a word
+    #     (and the absence of a letter at the end of a word)
+    #   - we will only consider the next item in the list if the first is empty after processing
+    #     or is not defined at species level when identification_level is 'species or 'best'
     # e.g. "HALICLONA (RHIZONERIA) VISCOSA" to "Haliclona (rhizoneria) viscosa"
     # e.g. "HALICLONA VISCOSAsardina pilchardus" to "Haliclona viscosa Sardina pilchardus"
     # e.g. "HALICLONA VISCOSASardina pilchardus" to "Haliclona viscosas Ardina pilchardus"
@@ -264,10 +291,10 @@ def _format_scinamesForWoRMS(raw_scinames):
 
     pattern = r'((?<=[A-Z])[A-Z][^a-z]*?)([a-z]|$)'
     scinames2process, Ncaps = re.subn(pattern, lambda m: (m.group(1).lower() + ' ' + m.group(2).upper()), scinames2process)
-    print(scinames2process)
 
-    if Ncaps>0:
-        isallcaps=True
+    # Standardize whitespace
+
+    scinames2process = re.sub(r'\s+',' ',scinames2process)
 
     # Split by +, |, /, \, &, comma and capital letters
     # e.g. "Tringa (Heteroscelus) brevipesEopsaltria (Eopsaltria) griseogularis" (capital, no more parentheses at this stage)
@@ -278,7 +305,7 @@ def _format_scinamesForWoRMS(raw_scinames):
 
     pattern = r'[&,+|/\\]|(?=[A-Z])'
     scinames2process = re.split(pattern, scinames2process)
-    print(scinames2process)
+
     # Keep only one scientific name if there are several, and standardise it
     # assumption:
     #  if several species are listed for an occurrence and the first one is not marine,
@@ -289,15 +316,28 @@ def _format_scinamesForWoRMS(raw_scinames):
     idx=0
     first_sciname=''
 
-    while next and (idx<len(scinames2process)):
+    count=0 #À SUPPRIMER APRÈS DEBUG
+
+    minlength=3
+    if identification_level=='species':
+        minwords=2
+        minlength=minlength*minwords+1
+        first=False
+    else:
+        minwords=1
+
+    Nscinames=len(scinames2process)
+    while next and (idx<Nscinames):
 
         # Standardise the scientific name
 
-        sciname = regexstrip.apply(scinames2process[idx], pattern=r'^[^a-zA-Z\.]|[^a-zA-Z\.]$')
+        sciname = regexstrip.apply(scinames2process[idx], pattern=r'^[^a-zA-Z]|[^a-zA-Z\.]$')
 
-        if len(sciname)>3:
-
-            sciname, empty, next = _format_scinamesForWoRMS_elementwise(sciname)
+        Nwords=len(sciname.split())
+        length=len(sciname)
+        if (Nwords>=minwords) and (length>=minlength):
+            count+=1
+            sciname, empty, next = _format_scinamesForWoRMS_elementwise(sciname, identification_level=identification_level)
 
             if first and (not empty):
 
@@ -306,27 +346,33 @@ def _format_scinamesForWoRMS(raw_scinames):
                 first_sciname=sciname
                 first=False
 
-            if next:
+            if next or (len(sciname)<minlength):
 
-                # Not a species name
+                # Not a scientific name / species
 
                 idx+=1
 
         else:
 
-            # Empty string or too short to be a scientific name
+            # Empty string or too short to be a scientific name / species
 
             idx+=1
 
-    if (idx<len(scinames2process)):
+    if (idx==Nscinames):
+        sciname=first_sciname
 
-        sciname=re.split(r'\s',sciname)
+    if len(sciname)<minlength:
+        sciname=''
 
-        return ' '.join(sciname[:3])
+    #sciname=re.split(r'\s',sciname)
+    sciname=sciname.split()
 
+    if len(sciname)>3: #SUPRESS AFTER DEBUG
+        morethan3=True
     else:
+        morethan3=False
 
-        return first_sciname
+    return ' '.join(sciname[:3]), count, morethan3
 
 
 def _connect_matchAphiaRecordsByNames(scinames, max_attempt=10, pause_duration=5):
@@ -660,21 +706,47 @@ def get_WoRMSfilter(gzfile_path, wormscall=WORMSCALL, store=False, outputpath='.
 
 def test():
 
-    df = pd.read_csv('/home/GPU/eberhocoi/verbatimScientificName_more.txt', sep='\t')
+    df = pd.read_csv('/data/smartbiodiv/eberhocoi/source/unique_verbatimScientificName.txt', sep='\t')
     print(f"{len(df)} lines to process")
+    print()
 
     start=time.time()
 
-    total=0
-    count=0
-    for i,sciname in enumerate(df.loc[7545019:7545119,'verbatimScientificName']):
-        print(sciname)
-        print('***********************')
-        print("Result |",_format_scinamesForWoRMS(sciname))
-        print()
+    results=[fr'verbatim	processed	more']
+    outputfile='/data/smartbiodiv/eberhocoi/source/verbatimScientificName_processed.txt'
+
+    count=[]
+    full_time=0
+    for i,sciname in enumerate(df['raw_sciname']):
+        res, icount, morethan3=_format_scinamesForWoRMS(sciname, identification_level='best')
+        results.append(fr'{sciname}	{res}	{morethan3}')
+        count.append(icount)
+
+        if ((i+1)%10000==0):
+            print('SAMPLE RES')
+            print('-----------------------')
+            print(f'Line n°{i}:', sciname)
+            print("Result |",res,icount,morethan3)
+            print('GLOBAL RES')
+            print('-----------------------')
+            old_time=full_time
+            full_time=time.time()-start
+            time_10000=full_time-old_time
+            print("Time (last display) |", f'{np.round(time_10000,0)}s')
+            print("Time (beginning) |", f'{np.round(full_time,0)}s')
+            print(f'Average nb of processing | {np.round(np.mean(count),0)}')
+            print()
+
+        if ((i+1)%100000==0):
+            print('Storing')
+            print()
+            with open(outputfile, 'a') as f:
+                f.writelines('\n'.join(results)+'\n')
+            results.clear()
 
     end=time.time()
 
+    print(f'AVERAGE NB OF PROCESSING: {np.round(np.mean(count),0)}')
     print(f'TIME : {np.round(end - start,0)}s')
 
 
