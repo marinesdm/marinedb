@@ -30,17 +30,17 @@ The model will be downloaded to the folder where the command was run. The name o
 #### 2.1.2 Convert weights
    
 To load the model via the `transformers` package, the downloaded checkpoint must first be converted using `transformers` [Llama conversion script](https://github.com/huggingface/transformers/blob/main/src/transformers/models/llama/convert_llama_weights_to_hf.py) `convert_llama_weights_to_hf.py`: 
-1. **PATH1**: Path to the conversion script. Run `pip show transformers` to find out where the `transformers` package is stored (look at the `Location` field). `PATH1` is the concatenation of this path with `transformers/models/llama/convert_llama_weights_to_hf.py`. 
+1. **PATH1**: Path to the conversion script. Run `pip show transformers` to find out where the `transformers` package is stored (look at the `Location` field). **PATH1** is the concatenation of this path with `transformers/models/llama/convert_llama_weights_to_hf.py`.    
 Example: `/opt/venv/ecolab/lib/python3.10/site-packages/transformers/models/llama/convert_llama_weights_to_hf.py`.
-2. **PATH2**: Path to the downloaded weights. `PATH2` is the concatenation of the path to the downloaded folder with `checkpoints/Llama3.2-3B-Instruct`. 
+2. **PATH2**: Path to the downloaded weights. **PATH2** is the concatenation of the path to the downloaded folder with `checkpoints/Llama3.2-3B-Instruct`.    
 Example: `./.llama/checkpoints/Llama3.2-3B-Instruct`.
-3. **PATH3**: Path to the folder in which you want to store the ready-to-use model.
+3. **PATH3**: Path to the folder in which you want to store the ready-to-use model.   
 Example: `./Llama`
-4. Run `python PATH1 --input_dir PATH2 --num_shards 1 --output_dir PATH3 --llama_version 3.2`, replacing `PATH1`, `PATH2` and `PATH3` with their values, as explained in the previous points.   
+4. Run `python PATH1 --input_dir PATH2 --num_shards 1 --output_dir PATH3 --llama_version 3.2`, replacing **PATH1**, **PATH2** and **PATH3** with their values, as explained in the previous points.   
   
 You may want to change the number indicated after the `--num_shards` option depending on the computational resources you have access to. Read [this article](https://medium.com/@pranay.janupalli/understanding-model-sharding-and-model-parallelism-scaling-large-language-models-dee6144d0591) to find out more.
    
-Finally, to avoid raising an error when using `transformers` tools (and more specifically the `tokenizer` package), you need to add a line to the `tokenizer_config.json` file in the `PATH3` folder:
+Finally, to avoid raising an error when using `transformers` tools (and more specifically the `tokenizer` package), you need to add a line to the `tokenizer_config.json` file in the **PATH3** folder:
 1. Open `tokenizer_config.json`.
 2. If the `chat_template` attribute is not present at the end of the file, add the following line between `bos_token` and `clean_up_tokenization_spaces` lines:
 ```
