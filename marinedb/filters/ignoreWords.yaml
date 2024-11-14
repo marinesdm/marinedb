@@ -10,6 +10,7 @@ SCN_IGNORE: #scn: scientific name
     - subforma
     - subform
     - subf
+    - sub
     - forma
     - form
     - fma
@@ -52,6 +53,9 @@ SCN_IGNORE: #scn: scientific name
     - subfam
     - familia
     - fam
+    - taxon
+    - higher
+    - to
 
     - natio
     - nat
@@ -80,6 +84,8 @@ SCN_IGNORE: #scn: scientific name
     - adultus
     - adulti
     - ad
+    - life
+    - stage
     - pupae
     - pupa
     - p
@@ -107,6 +113,7 @@ SCN_IGNORE: #scn: scientific name
     - frag
     - fr
     - cultivar
+    - culture
     - cultured
     - cv
     - uncultured
@@ -116,6 +123,7 @@ SCN_IGNORE: #scn: scientific name
     - convariety
     - convar
     - hybrid
+    - clone
     - environmental
     - env
     - enrichment
@@ -126,6 +134,7 @@ SCN_IGNORE: #scn: scientific name
     - indeterminata
     - indet
     - ind
+    - identification
     - inquirenda
     - inq
     - dubia
@@ -173,6 +182,7 @@ SCN_IGNORE: #scn: scientific name
     - aberratio
     - ab
     - unknown
+    - unk
 
     - bold
     - vidi
@@ -307,7 +317,6 @@ AUTHORSHIP_IGNORE:
     - la
     - los
     - las
-    - y
     - mac
     - mc
     - o
