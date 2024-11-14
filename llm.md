@@ -66,7 +66,7 @@ The first list below is adapted from [meta-llama](https://github.com/meta-llama/
    - Click on "Access Tokens"
    - Click on "Create new token" in the top right-hand corner
    - Choose "Read" for "Token type" at the top, give the token a name, save the token value
-5. In the terminal, run `hugginface-cli login`.
+5. In the terminal, run `huggingface-cli login`.
 6. Pass the access token created.   
   
 You'll need to do steps 5 and 6 every time you start a new terminal.
