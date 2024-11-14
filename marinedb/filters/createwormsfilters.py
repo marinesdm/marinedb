@@ -23,10 +23,17 @@ import http
 
 from marinedb.filters import subsetranks
 from marinedb.utils import regexstrip
+from marinedb.utils.standardizenan import isnan
 
 # Global variables
 
 PATH = os.path.dirname(os.path.abspath(__file__))
+
+with open(os.path.join(PATH,'ignoreWords.yaml'),'r') as f:
+    file = yaml.safe_load(f)
+    IGNOREWORDS = file['SCN_IGNORE'] + file['AUTHORSHIP_IGNORE']
+IGNOREWORDS = sorted(IGNOREWORDS, key=len, reverse=True)
+IGNOREWORDS = '|'.join([fr'{word}' for word in IGNOREWORDS])
 
 YEAR_NOW = datetime.now().year
 
@@ -60,27 +67,14 @@ aphiaID["_arrayType"] = "int[]"
 
 def update(myset,key):
 
-    if key == '':
+    if isnan(key):
         return myset
 
     else:
+        myset.add(key)
+        return myset
 
-        try:
-            if pd.isnull(float(key)):
-                return myset
-            else:
-                myset.add(key)
-                return myset
-
-        except (ValueError,TypeError):
-            if pd.isnull(key):
-                return myset
-            else:
-                myset.add(key)
-                return myset
-
-
-def resume_process(filter, values):
+def _resume_process(filter, values):
 
     valuesprocessed = set(filter['group'].tolist())
     values2process = set(values) - valuesprocessed
@@ -100,14 +94,16 @@ def write_dataframe_txtfile(df, txt_filename, init=False):
 def _store_uniqueRawSciname(unique_rawsciname, outputfile):
 
     print(f"            Storing in {outputfile} | {len(unique_rawsciname)} unique raw scientific names")
+    #print(['raw_sciname'] + list(unique_rawsciname))
     with open(outputfile, 'w') as f:
-        f.writelines('\n'.join(['raw_sciname'] + list(unique_rawsciname)) + '\n')
+        f.writelines('\n'.join(['raw_sciname'] + list(unique_rawsciname)))
 
 def get_uniqueRawSciname(gzfile_path, colname, store=False, overwrite=False, outputpath='./', outputfile=''):
 
     print(f'            ** Retrieving unique raw scientific names from {gzfile_path}')
 
     unique_rawsciname = set()
+
     if len(outputfile)==0:
         outputfile=f'unique_{colname}.txt'
     outputfile = os.path.join(outputpath,outputfile)
@@ -115,12 +111,17 @@ def get_uniqueRawSciname(gzfile_path, colname, store=False, overwrite=False, out
     if store and os.path.isfile(outputfile):
 
         if overwrite:
-            print(f"            WARNING | {outputfile} already exists and will be overwritten (new values will be added at the end of the file)")
-            unique_rawsciname = set(pd.read_csv(outputfile, sep='\t').values.flatten())
+            print(f"            WARNING | {outputfile} already exists and will be overwritten")
+            #unique_rawsciname = set(pd.read_csv(outputfile, sep='\t').values.flatten()) #trop coûteux, temps exponentiel à mesure que le nombre de valeurs uniques augmente
+            #print('done')
         else:
             print(f"            INFO | {outputfile} already exists and will be used")
             unique_rawsciname = list(pd.read_csv(outputfile, sep='\t').values.flatten())
             return unique_rawsciname
+
+    start=time.time()
+    store_time=[]
+    last_time=start
 
     with gzip.open(gzfile_path,'r') as data:
 
@@ -131,6 +132,8 @@ def get_uniqueRawSciname(gzfile_path, colname, store=False, overwrite=False, out
         for idx, line in enumerate(data):
 
             sciname = line.decode("utf8").strip('\n').split('\t')[sciname_index]
+            sciname = regexstrip.apply(sciname, pattern=r'["\s]+')
+            sciname = regexstrip.apply(sciname, pattern=r"['\s]+")
 
             unique_rawsciname = update(unique_rawsciname,sciname)
             Nunique = len(unique_rawsciname)
@@ -138,18 +141,25 @@ def get_uniqueRawSciname(gzfile_path, colname, store=False, overwrite=False, out
             # Display progress
 
             if ((idx+1)%1000000)==0:
-                print(f"            Processing | {idx + 1} lines done, {len(unique_rawsciname)} unique raw scientific names")
+                store_time.append([Nunique,round(time.time()-last_time)])
+                print(f"            Processing | {idx + 1} lines done ({round(time.time()-start)}s), {len(unique_rawsciname)} unique raw scientific names")
+                last_time=time.time()
+
+            # Save progress
 
             if store and ((Nunique-count)==100000):
                 _store_uniqueRawSciname(unique_rawsciname, outputfile)
                 count = Nunique
+
 
     # Save progress
 
     if store:
         _store_uniqueRawSciname(unique_rawsciname, outputfile)
 
-    return list(unique_rawsciname)
+    print(f"            TIME: {round(time.time()-start)}s")
+
+    return store_time, list(unique_rawsciname)
 
 
 def _format_scinamesForWoRMS_elementwise(sciname, identification_level='best'):
@@ -163,19 +173,18 @@ def _format_scinamesForWoRMS_elementwise(sciname, identification_level='best'):
     # e.g. "Makaira spp"
     # e.g. "Tambja cf. verconis"
 
-    with open(os.path.join(PATH,'ignoreWords.yaml'),'r') as f:
-        file = yaml.safe_load(f)
-        ignoreWordsIn = file['SCN_IGNORE'] + file['AUTHORSHIP_IGNORE']
-
-    ignoreWordsIn = sorted(ignoreWordsIn, key=len, reverse=True)
-    ignoreWordsIn = '|'.join([fr'{word}' for word in ignoreWordsIn])
-    pattern1 = fr'((?<=\s|\.)|(?<=^))(notho)?({ignoreWordsIn})([^a-zA-Z]|$)' #e.g. " sl,", " incl.", "s.l.", "sp1"
-    pattern2 = fr'({ignoreWordsIn})(\.)' #e.g. "incarnatavar.lobelii"
+    pattern1 = fr'((?<=\s|\.|\_)|(?<=^))(notho)?({IGNOREWORDS})([^a-zA-Z]|$)' #e.g. " sl,", " incl.", "s.l.", "sp1"
+    pattern2 = fr'({IGNOREWORDS})(\.)' #e.g. "incarnatavar.lobelii"
     sciname = re.sub(fr'{pattern1}|{pattern2}', ' ', sciname, flags=re.IGNORECASE) #re.IGNORECASE e.g. "Van" in "Dreissena Van Beneden, 1835"
+
+    # Delete parts of the string containing a .
+
+    pattern = r'(?:(?<=^)|(?<=\s))[^\s]*?\.[^\s]*?(?:(?=\s)|(?=$))'
+    sciname = re.sub(pattern,' ',sciname)
 
     # Remove special characters
 
-    pattern = r'[^a-zA-Z\s\-]' #e.g. do not remove "-" in "Blechnum novae-zelandiae", but remove date
+    pattern = r'[^a-zA-Z\s\-]|\-(?=[^a-zA-Z])|(?<=[^a-zA-Z])\-' #e.g. do not remove "-" in "Blechnum novae-zelandiae", but remove date
     sciname = re.sub(pattern,' ',sciname).strip()
 
     if not re.search(r'[a-zA-Z]',sciname):
@@ -241,10 +250,11 @@ def _format_scinamesForWoRMS(raw_scinames, identification_level='best'): # 'best
     scinames2process=unidecode(scinames2process)
 
     # Delete parts of the string containing a number:
-    # - greater than the current year
+    # - greater than the current year or lower than 1600
     # - less than 3 digits
     # - or more than 4 digits
     # i.e a number that cannot be the authorship year
+    # i.e a word that probably refers to a sequenced-based observation
     # e.g. "Megaselia sp. BIOUG27368-A01"
     # e.g. "BOLD:AEF8294"
 
@@ -255,7 +265,7 @@ def _format_scinamesForWoRMS(raw_scinames, identification_level='best'): # 'best
     for match in finditer:
         number=match['number']
         Ndigits=len(number)
-        if (Ndigits<=3) or (Ndigits>4) or (int(number)>YEAR_NOW):
+        if (Ndigits<=3) or (Ndigits>4) or (int(number)>YEAR_NOW) or (int(number)<1600):
             cut.append(match.start())
             cut.append(match.end())
     cut.append(-1)
@@ -296,14 +306,14 @@ def _format_scinamesForWoRMS(raw_scinames, identification_level='best'): # 'best
 
     scinames2process = re.sub(r'\s+',' ',scinames2process)
 
-    # Split by +, |, /, \, &, comma and capital letters
+    # Split by +, |, /, \, &, ;, comma and capital letters
     # e.g. "Tringa (Heteroscelus) brevipesEopsaltria (Eopsaltria) griseogularis" (capital, no more parentheses at this stage)
     # e.g. "Clupea harengus/Sprattus sprattus" (/)
     # e.g. "Branta hutchinsii x Branta leucopsis" (capital)
     # e.g. "Populus nigra + Populus x canadensis" (+ and capital)
     # e.g. "Centroberyx affinis, Centroberyx gerrardi & Centroberyx australis [Soviet Fishery Data, 1998]" (&, comma and capital)
 
-    pattern = r'[&,+|/\\]|(?=[A-Z])'
+    pattern = r'[&,+|/;\\]|(?=[A-Z])'
     scinames2process = re.split(pattern, scinames2process)
 
     # Keep only one scientific name if there are several, and standardise it
@@ -333,9 +343,10 @@ def _format_scinamesForWoRMS(raw_scinames, identification_level='best'): # 'best
 
         sciname = regexstrip.apply(scinames2process[idx], pattern=r'^[^a-zA-Z]|[^a-zA-Z\.]$')
 
-        Nwords=len(sciname.split())
+        Nwords=len(re.split(r'[\s_]+',sciname))
         length=len(sciname)
         if (Nwords>=minwords) and (length>=minlength):
+
             count+=1
             sciname, empty, next = _format_scinamesForWoRMS_elementwise(sciname, identification_level=identification_level)
 
@@ -350,6 +361,7 @@ def _format_scinamesForWoRMS(raw_scinames, identification_level='best'): # 'best
 
                 # Not a scientific name / species
 
+                next=True
                 idx+=1
 
         else:
@@ -411,7 +423,7 @@ def _parse_matchAphiaRecordsByNames(species, results, keys):
     return classification
 
 
-def match_ClassificationBySciname(species, wormscall=WORMSCALL, doublecheck=False):
+def match_ClassificationBySciname(species, wormscallK=[], wormscall=WORMSCALL, doublecheck=False):
 
     if isinstance(species,str):
         species=[species]
@@ -427,9 +439,8 @@ def match_ClassificationBySciname(species, wormscall=WORMSCALL, doublecheck=Fals
 
     results = _connect_matchAphiaRecordsByNames(scinames)
 
-    wormscallK = list(wormscall.keys())
-    wormscallV = list(itemgetter(*wormscallK)(wormscall))
-    colnames = ['group'] + wormscallV
+    if (len(wormscallK)==0):
+        wormscallK = list(wormscall.keys())
 
     classification=[]
 
@@ -451,16 +462,92 @@ def match_ClassificationBySciname(species, wormscall=WORMSCALL, doublecheck=Fals
 
             else:
 
-                classification.append([species[idx]] + [pd.NA]*len(wormscallK))
+                classification += [[species[idx]] + [pd.NA]*len(wormscallK)]
 
 
-    classification = pd.DataFrame(classification, columns=colnames)
+    #classification = pd.DataFrame(classification, columns=colnames)
 
 
     return classification
 
 
 def match_WoRMS(species, wormscall=WORMSCALL, doublecheck=False, store=False, outputpath='./', outputfile='worms_matchfilter.tsv', overwrite=False):
+
+    wormscallK = list(wormscall.keys())
+    wormscallV = list(itemgetter(*wormscallK)(wormscall))
+    colnames = ['group'] + wormscallV
+
+    nspecies_print = len(species)
+    wormsmatch_temp = []
+
+    print(f'            ** WoRMS filter (recognized marine taxa) | {nspecies_print} unique species')
+
+    if os.path.isfile(outputpath + outputfile):
+
+        if overwrite:
+
+            print(f"            WARNING | {outputpath + outputfile} already exists and will be overwritten")
+
+        else:
+
+            print(f"            INFO | {outputpath + outputfile} already exists and will be used")
+
+            wormsmatch=pd.read_csv((outputpath + outputfile), sep='\t')
+            species=_resume_process(wormsmatch, species)
+
+            if len(species)==0:
+                return wormsmatch
+            else:
+                print(f'            UPDATE | {len(species)}/{nspecies_print} ({np.round(len(species)/nspecies_print*100,2)}%) remaining species to be processed')
+                wormsmatch_temp=wormsmatch.values.tolist()
+
+    Nnomatch=0
+    batch=[]
+    init=True
+    for idx,spe in enumerate(species):
+
+        if isnan(spe):
+            wormsmatch_temp += [[spe] + [pd.NA]*len(wormscallK)]
+
+        else:
+            batch.append(spe)
+
+        if len(batch)==50:
+            wormsmatch_temp += match_ClassificationBySciname(batch, wormscallK=wormscallK, doublecheck=doublecheck)
+            batch=[]
+
+        # Display progress
+
+        if (idx+1)%100==0:
+
+            wormsmatch=pd.DataFrame(wormsmatch_temp,columns=colnames)
+
+            Nnomatch = Nnomatch + len(wormsmatch[pd.isnull(wormsmatch["worms_matchtype"])])
+            Nmatch = ((idx+1) - Nnomatch)
+            percentage_done=np.round((idx+1)/nspecies_print*100,2)
+
+            print(f'            Processing | {(idx+1)}/{nspecies_print} species done ({percentage_done}%): no_match={Nnomatch}, match={Nmatch}')
+
+        # Save progress
+
+        if store and (((idx+1)%10000==0) or (idx==len(species)-1)):
+
+            wormsmatch=pd.DataFrame(wormsmatch_temp,columns=colnames)
+            wormsmatch.loc[pd.isnull(wormsmatch["worms_matchtype"]),"worms_matchtype"] = "nomatch"
+
+            if 'valid_aphiaID' in wormscall.keys():
+                wormsmatch["valid_aphiaID"] = wormsmatch["valid_aphiaID"].astype('Int64')
+
+            file = outputpath + outputfile
+            write_dataframe_txtfile(wormsmatch, file, init=init)
+
+            init=False
+            wormsmatch_temp.clear()
+
+    return wormsmatch
+
+
+def old_match_WoRMS(species, wormscall=WORMSCALL, doublecheck=False, store=False, outputpath='./', outputfile='worms_matchfilter.tsv', overwrite=False):
 
     nspecies_print = len(species)
     resume=False
@@ -710,16 +797,16 @@ def test():
     print(f"{len(df)} lines to process")
     print()
 
+    results=[fr'ID	verbatim	processed	more	nbprocess']
+    outputfile='/data/smartbiodiv/eberhocoi/source/verbatimScientificName_processed_first.txt'
+
     start=time.time()
-
-    results=[fr'verbatim	processed	more']
-    outputfile='/data/smartbiodiv/eberhocoi/source/verbatimScientificName_processed.txt'
-
     count=[]
     full_time=0
     for i,sciname in enumerate(df['raw_sciname']):
-        res, icount, morethan3=_format_scinamesForWoRMS(sciname, identification_level='best')
-        results.append(fr'{sciname}	{res}	{morethan3}')
+
+        res, icount, morethan3=_format_scinamesForWoRMS(sciname, identification_level='first')
+        results.append(fr'{i}	{sciname}	{res}	{morethan3}	{icount}')
         count.append(icount)
 
         if ((i+1)%10000==0):
@@ -746,6 +833,12 @@ def test():
 
     end=time.time()
 
+    print('Storing')
+    print()
+    with open(outputfile, 'a') as f:
+        f.writelines('\n'.join(results))
+
+
     print(f'AVERAGE NB OF PROCESSING: {np.round(np.mean(count),0)}')
     print(f'TIME : {np.round(end - start,0)}s')
 
@@ -754,7 +847,7 @@ if __name__ == '__main__':
 
      test()
 #    parser = argparse.ArgumentParser(description='Get WoRMS filter and accepted classification')
-#    parser.add_argument('gbif_tsv_gzfile', type=str, help='path to the tab-separated file from GBIF to be processed')   
+#    parser.add_argument('gbif_tsv_gzfile', type=str, help='path to the tab-separated file from GBIF to be processed')
 #    parser.add_argument('--output_path', type=str, help='path to folder where output files will be stored', default='./')
 #    args = parser.parse_args()
 
