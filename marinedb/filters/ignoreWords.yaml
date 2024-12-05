@@ -53,6 +53,7 @@ SCN_IGNORE: #scn: scientific name
     - subfam
     - familia
     - fam
+    - subterclass
     - taxon
     - higher
     - to
@@ -112,12 +113,14 @@ SCN_IGNORE: #scn: scientific name
     - fragmenta
     - frag
     - fr
+    - nucl
     - cultivar
     - culture
     - cultured
     - cv
     - uncultured
     - candidatus
+    - candidate
     - group #Group ICNCP
     - gp #Gp ICNCP
     - convariety
@@ -129,27 +132,30 @@ SCN_IGNORE: #scn: scientific name
     - enrichment
     - samples
     - sample
+    - marine
+    - virus
 
     - indeterminabilis
     - indeterminata
     - indet
     - ind
     - identification
+    - unidentified
     - inquirenda
     - inq
-    - dubia
+    #- dubia #counterexample:'Lindernia dubia', 'Halcampactis dubia'
     - dub
     - incertae
     - sedis
     - sed
     - new
-    - nudum
+    #- nudum #counterexample:'Eriogonum nudum'
     - nod
     - novum
     - nova
     - nov
     - n
-    - affinis
+    #- affinis #counterexample:'Dryopteris affinis subsp. borreri'
     - aff
     #- ex
     - proxima
@@ -184,6 +190,7 @@ SCN_IGNORE: #scn: scientific name
     - unknown
     - unk
 
+    - from
     - bold
     - vidi
     - hort
