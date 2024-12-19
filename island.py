@@ -138,7 +138,7 @@ def is_land_basemap(lat,lon):
     """
 
     Return boolean array of whether the coordinates are on land or at sea.
-    Code from Basemap documentation. 
+    Code from Basemap documentation.
     See: https://basemaptutorial.readthedocs.io/en/latest/utilities.html#is-land
 
     Parameters
@@ -251,6 +251,7 @@ def process_one_file(filepath, sep='\t', outputdir='./', store_time=True, parall
     del data_processed
 
     # Display progress
+
     if parallel:
         print("#",end='',flush=True)
 
