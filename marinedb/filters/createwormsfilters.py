@@ -550,9 +550,9 @@ def _resume_matchWoRMS(values2process, outputfile):
 
     return values2process, valuesprocessed
 
-def _process_rank(worms_results, ismatchfilter, species_only=True): #no NaN
+def _process_rank(worms_results, ismatchfilter, wormscall=WORMSCALL, species_only=True): #no NaN
 
-    rank = worms_results[WORMSCALL['rank']]
+    rank = worms_results[wormscall['rank']]
 
     if pd.isnull(rank):
         return worms_results
@@ -563,19 +563,36 @@ def _process_rank(worms_results, ismatchfilter, species_only=True): #no NaN
 
         if rank in LOWER_THAN_SPECIES:
 
+            # The taxon is identified at a rank lower than species
+
             parent_aphiaID = worms_results['parentNameUsageID']
 
             condition = (not ismatchfilter) or (ismatchfilter and (worms_results['status']=='accepted'))
 
             if not pd.isnull(parent_aphiaID):
+
+                # Mark the taxon as a subspecies for later processing
+
                 worms_results['status']='subspecies'
+
                 if condition:
+
+                    # Resolve unaccepted status before addressing ranks below species
+                    # in scientific name matching
+                    # i.e leave the identifier unchanged:
+                    #     - unless the taxon is accepted
+                    #     - or during the creation of the WoRMS accepted filter
+                    # e.g. "Isodictya delicata var. megachela"
+                    #       valid_aphiaID=1731907 "Isodictya megachela"
+                    #       parentNameUsageID=168450 "Isodictya delicata"
+                    #       therefore, the final result depends on the processing order
+
                     worms_results['valid_AphiaID']=parent_aphiaID
 
         elif species_only:
 
             # The identification level must be at the species rank
-            # but the actual rank is higher
+            # but the taxon rank is higher
 
             worms_results['scientificname']=pd.NA
 
@@ -611,9 +628,11 @@ def _connect_matchAphiaRecordsByNames(wormsscinames, max_attempt=10, pause_durat
             else:
                 raise
 
-def _parse_matchAphiaRecordsByNames(sciname, worms_results, keys, species_only=True):
+def _parse_matchAphiaRecordsByNames(sciname, worms_results, wormscallK, wormscallV, species_only=True):
 
-    # Extract the match information specified in `keys`
+    wormscall = dict(zip(wormscallK, wormscallV))
+
+    # Extract the match information specified in `wormscallK`
 
     classification=[]
 
@@ -622,22 +641,22 @@ def _parse_matchAphiaRecordsByNames(sciname, worms_results, keys, species_only=T
         for taxon in worms_results: #may be more than one candidate
 
             taxon = dict(items(taxon))
-            taxon = _process_rank(taxon, ismatchfilter=True, species_only=species_only)
+            taxon = _process_rank(taxon, ismatchfilter=True, species_only=species_only, wormscall=wormscall)
 
             if pd.isnull(taxon['scientificname']):
-                classification.append([sciname] + [pd.NA]*len(keys))
+                classification.append([sciname] + [pd.NA]*len(wormscallK))
 
             else:
-                classification.append([sciname] + list(itemgetter(*keys)(taxon)))
+                classification.append([sciname] + list(itemgetter(*wormscallK)(taxon)))
 
     else:
 
-        classification.append([sciname] + [pd.NA]*len(keys))
+        classification.append([sciname] + [pd.NA]*len(wormscallK))
 
     return classification
 
 
-def _match50_WoRMSBySciname(wormsscinames, wormscallK, species_only=True):
+def _match50_WoRMSBySciname(wormsscinames, wormscallK, wormscallV, species_only=True):
 
     if isinstance(wormsscinames,str):
         wormsscinames=[wormsscinames]
@@ -654,7 +673,7 @@ def _match50_WoRMSBySciname(wormsscinames, wormscallK, species_only=True):
 
     for idx,res in enumerate(worms_results):
 
-        classification += _parse_matchAphiaRecordsByNames(wormsscinames[idx], res, wormscallK, species_only=species_only)
+        classification += _parse_matchAphiaRecordsByNames(wormsscinames[idx], res, wormscallK, wormscallV, species_only=species_only)
 
     return classification
 
@@ -736,7 +755,7 @@ def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level
 
     # Pre-process scientific names for WoRMS queries
 
-    printv(f'               -- Scientific names pre-processing --', verbose=verbose)
+    printv(f'               -- Preprocessing of scientific names --', verbose=verbose)
 
     raw2worms_scinames=[]
     for idx,sci in enumerate(raw_scinames):
@@ -803,7 +822,7 @@ def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level
 
             ## WoRMS API call
 
-            fullwormsmatch += _match50_WoRMSBySciname(unique_wormsscinames[start:end], wormscallK=wormscallK, species_only=species_only)
+            fullwormsmatch += _match50_WoRMSBySciname(unique_wormsscinames[start:end], wormscallK=wormscallK, wormscallV=wormscallV, species_only=species_only)
 
             ## Save progress
 
@@ -816,7 +835,7 @@ def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level
 
         # Match WoRMS
 
-        printv(f'               -- WoRMS match filter construction --', verbose=verbose)
+        printv(f'               -- Construction of the WoRMS match filter --', verbose=verbose)
 
         isduplicated = fullwormsmatch.duplicated(subset=['rawsciname'],keep=False)
 
@@ -830,7 +849,7 @@ def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level
 
         duplicated_wormsmatch = fullwormsmatch[isduplicated]
 
-        isduplicated_match = (~pd.isnull(duplicated_wormsmatch[WORMSCALL['match_type']])) #duplicated match
+        isduplicated_match = (~pd.isnull(duplicated_wormsmatch[wormscall['match_type']])) #duplicated match
         isduplicated_NaN = duplicated_wormsmatch[(~isduplicated_match)].duplicated(subset=['rawsciname'],keep=False) #duplicated NaN
 
         if sum(isduplicated_NaN)>0:
@@ -854,7 +873,7 @@ def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level
 
             duplicated_wormsmatch = duplicated_wormsmatch[isduplicated]
 
-            isduplicated_match = (~pd.isnull(duplicated_wormsmatch[WORMSCALL['match_type']]))
+            isduplicated_match = (~pd.isnull(duplicated_wormsmatch[wormscall['match_type']]))
 
         if sum(isduplicated_match)>0:
 
@@ -877,10 +896,14 @@ def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level
 
         printv(f'               -- Storing in {outputfile} --', verbose=verbose)
 
-        wormsmatch.loc[pd.isnull(wormsmatch[WORMSCALL['match_type']]),WORMSCALL['match_type']] = 'nomatch'
+        wormsmatch.loc[pd.isnull(wormsmatch[wormscall['match_type']]),wormscall['match_type']] = 'nomatch'
 
-        if 'valid_AphiaID' in wormscallK:
-            wormsmatch[WORMSCALL['valid_AphiaID']] = wormsmatch[WORMSCALL['valid_AphiaID']].astype('Int64')
+        IDfields = [wormscall[key] for key in wormscallK if 'ID' in key]
+        for colname in IDfields:
+            wormsmatch[colname] = wormsmatch[colname].astype('Int64')
+
+        #if 'valid_AphiaID' in wormscallK:
+        #    wormsmatch[wormscall['valid_AphiaID']] = wormsmatch[wormscall['valid_AphiaID']].astype('Int64')
 
         write_dataframe2txtfile(wormsmatch, outputfile, init=init)
 
@@ -890,6 +913,10 @@ def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level
 
     if not init:
         wormsmatch=pd.concat([previous_wormsmatch,wormsmatch],axis=0).reset_index(drop=True)
+
+    IDfields = [wormscall[key] for key in wormscallK if 'ID' in key]
+    for colname in IDfields:
+        wormsmatch[colname] = wormsmatch[colname].astype('Int64')
 
     if return_filename:
         return outputfile, wormsmatch
@@ -917,7 +944,9 @@ def _connect_getAphiaRecordsByIDs(aphiaID, max_attempt=10, pause_duration=5):
                 raise
 
 
-def _match50_WoRMSByAcceptedSciname(valid_aphiaID, wormscallK, species_only=True):
+def _match50_WoRMSByAcceptedSciname(valid_aphiaID, wormscallK, wormscallV, species_only=True):
+
+    wormscall=dict(zip(wormscallK,wormscallV))
 
     if isinstance(valid_aphiaID, int):
         valid_aphiaID=[valid_aphiaID]
@@ -932,13 +961,17 @@ def _match50_WoRMSByAcceptedSciname(valid_aphiaID, wormscallK, species_only=True
         success=[]
 
     for idx,taxon in enumerate(worms_results):
-
-        taxon = _process_rank(taxon, ismatchfilter=False, species_only=species_only)
+        #print(idx, taxon)
+        taxon = _process_rank(taxon, ismatchfilter=False, species_only=species_only, wormscall=wormscall)
 
         if pd.isnull(taxon['scientificname']):
+
             # The taxon is identified at a rank higher than species
+
             classification.append([taxon['AphiaID']] + [pd.NA]*len(wormscallK)) #valid_aphiaID[idx]
+
         else:
+
             classification.append([taxon['AphiaID']] + list(itemgetter(*wormscallK)(taxon)))
 
         if quarantined:
@@ -952,7 +985,7 @@ def _match50_WoRMSByAcceptedSciname(valid_aphiaID, wormscallK, species_only=True
     return classification
 
 
-def match_WoRMSByAcceptedSciname(valid_aphiaID, wormscall=WORMSCALL, species_only=True, store=True, overwrite=False, return_filename=False, outputpath='./', outputfile='worms_acceptedfilter.txt', verbose=True, indent='', parallel=False, version=None):
+def match_WoRMSByAcceptedSciname(valid_aphiaID, wormscall=WORMSCALL, species_only=True, resume=True, store=True, overwrite=False, return_filename=False, outputpath='./', outputfile='worms_acceptedfilter.txt', verbose=True, indent='', parallel=False, version=None):
 
     if parallel:
         store=True
@@ -969,7 +1002,7 @@ def match_WoRMSByAcceptedSciname(valid_aphiaID, wormscall=WORMSCALL, species_onl
     init=True
     NaphiaID = len(valid_aphiaID)
 
-    printv(indent + f'            ** WoRMS filter (accepted marine taxa) | {NaphiaID} unaccepted taxa',verbose=verbose)
+    printv(indent + f'            ** WoRMS filter (accepted marine taxa) | {NaphiaID} unique WoRMS identifiers',verbose=verbose)
 
     if NaphiaID==0:
         if return_filename:
@@ -977,7 +1010,7 @@ def match_WoRMSByAcceptedSciname(valid_aphiaID, wormscall=WORMSCALL, species_onl
         else:
             return pd.DataFrame([],columns=colnames)
 
-    if ((not parallel) or (version is not None)) and os.path.isfile(outputfile):
+    if (((not parallel) and resume) or (parallel and (version is not None))) and os.path.isfile(outputfile):
 
         if overwrite:
 
@@ -996,7 +1029,7 @@ def match_WoRMSByAcceptedSciname(valid_aphiaID, wormscall=WORMSCALL, species_onl
                 else:
                     return previous_wormsaccepted
             else:
-                printv(indent + f'               UPDATE | {len(valid_aphiaID)}/{NaphiaID} ({round(len(valid_aphiaID)/NaphiaID*100,2)}%) unaccepted taxa remaining to process',verbose=verbose)
+                printv(indent + f'               UPDATE | {len(valid_aphiaID)}/{NaphiaID} ({round(len(valid_aphiaID)/NaphiaID*100,2)}%) WoRMS identifiers remaining to process',verbose=verbose)
                 init=False
                 NaphiaID = len(valid_aphiaID)
 
@@ -1017,7 +1050,7 @@ def match_WoRMSByAcceptedSciname(valid_aphiaID, wormscall=WORMSCALL, species_onl
     wormsaccepted=[]
 
     printv(indent + f'               -- WoRMS API call --',verbose=verbose)
-    printv(indent + f'               {NaphiaID} valid scientific names to retrieve',verbose=verbose)
+    printv(indent + f'               {NaphiaID} WoRMS identifiers to retrieve',verbose=verbose)
 
     nbatch = math.ceil(NaphiaID/50)
 
@@ -1034,22 +1067,28 @@ def match_WoRMSByAcceptedSciname(valid_aphiaID, wormscall=WORMSCALL, species_onl
         else:
             end = start + 50
 
-        wormsaccepted += _match50_WoRMSByAcceptedSciname(valid_aphiaID[start:end], wormscallK=wormscallK)
+        wormsaccepted += _match50_WoRMSByAcceptedSciname(valid_aphiaID[start:end], wormscallK=wormscallK, wormscallV=wormscallV)
 
         ## Save progress
 
         if store and ((((batch+1)%200)==0) or (end==NaphiaID)):
             store_wormsaccepted=pd.DataFrame(wormsaccepted,columns=colnames)
-            store_wormsaccepted[WORMSCALL['valid_AphiaID']]=store_wormsaccepted[WORMSCALL['valid_AphiaID']].astype('Int64')
-            store_wormsaccepted['group']=store_wormsaccepted['group'].astype('Int64')
+
+            IDfields = ['group']
+            IDfields += [wormscall[key] for key in wormscallK if 'ID' in key]
+            for colname in IDfields:
+                store_wormsaccepted[colname] = store_wormsaccepted[colname].astype('Int64')
+
             write_dataframe2txtfile(store_wormsaccepted, outputfile, init=init)
 
     wormsaccepted=pd.DataFrame(wormsaccepted,columns=colnames)
     if not init:
         wormsaccepted=pd.concat([previous_wormsaccepted,wormsaccepted],axis=0).reset_index(drop=True)
 
-    wormsaccepted[WORMSCALL['valid_AphiaID']] = wormsaccepted[WORMSCALL['valid_AphiaID']].astype('Int64')
-    wormsaccepted['group'] = wormsaccepted['group'].astype('Int64')
+    IDfields = ['group']
+    IDfields += [wormscall[key] for key in wormscallK if 'ID' in key]
+    for colname in IDfields:
+        wormsaccepted[colname] = wormsaccepted[colname].astype('Int64')
 
     if return_filename:
         return outputfile, wormsaccepted
@@ -1142,7 +1181,7 @@ def _parallel_WoRMSmatch(func_WoRMSmatch, data, cpu, max_attempt=3, indent='', o
 
                    if future.exception():
                        id, count = _retry_WoRMSmatch(func_WoRMSmatch, future, tasks, executor, **params)
-                       if count==max_attempt:
+                       if count>max_attempt:
                            print(indent + f'               Failure: More than {max_attempt} attempts, slice {id} will not be processed. Please try again later.')
                            print(indent + f'               Exception: {future.exception()}')
                            cpu-=1
@@ -1250,13 +1289,13 @@ def parallel_match_WoRMSByAcceptedSciname(valid_aphiaID, cpu, wormscall=WORMSCAL
     return outputfile, wormsmatch
 
 
-def _process_subspecies(worms_acceptedfilter, parallel, cpu=2, max_attempt=3, **params):
+def _process_subspecies(worms_acceptedfilter, parallel, wormscall=WORMSCALL, cpu=2, max_attempt=3, **params):
 
     ## Find taxa identified at a rank lower than species
 
-    issubspecies = (worms_acceptedfilter[WORMSCALL['status']].isin(['subspecies','process'])) & (~pd.isnull(worms_acceptedfilter[WORMSCALL['valid_AphiaID']]))
+    issubspecies = (worms_acceptedfilter[wormscall['status']].isin(['subspecies','process'])) & (~pd.isnull(worms_acceptedfilter[wormscall['valid_AphiaID']]))
 
-    temp=worms_acceptedfilter[(worms_acceptedfilter[WORMSCALL['status']]=='subspecies') & (pd.isnull(worms_acceptedfilter[WORMSCALL['valid_AphiaID']]))] #SUPPRESS
+    temp=worms_acceptedfilter[(worms_acceptedfilter[wormscall['status']]=='subspecies') & (pd.isnull(worms_acceptedfilter[wormscall['valid_AphiaID']]))] #SUPPRESS
     if len(temp)!=0: #DEBUG
         print()
         print("subspecies but no valid_aphiaID")
@@ -1265,7 +1304,7 @@ def _process_subspecies(worms_acceptedfilter, parallel, cpu=2, max_attempt=3, **
 
     if any(issubspecies):
 
-        subspecies = worms_acceptedfilter.loc[issubspecies,[WORMSCALL['valid_AphiaID']]].rename(columns={WORMSCALL['valid_AphiaID']:'group'})
+        subspecies = worms_acceptedfilter.loc[issubspecies,[wormscall['valid_AphiaID']]].rename(columns={wormscall['valid_AphiaID']:'group'})
         parent_aphiaID = subspecies['group'].unique().tolist()
 
         ## Retrieve the classification of parent taxa
@@ -1294,42 +1333,42 @@ def _process_subspecies(worms_acceptedfilter, parallel, cpu=2, max_attempt=3, **
         #   to parentNameUsageID=145525 "Cystoseira montagnei" (superseded combination)
         #   to valid_aphiaID=1731896 "Gongolaria montagnei" (accepted, species)
 
-        isaphiaID = (~pd.isnull(subspecies[WORMSCALL['valid_AphiaID']]))
-        isunaccepted = (subspecies[WORMSCALL['status']]!='accepted') & (subspecies[WORMSCALL['valid_AphiaID']]!=subspecies['group'])
+        isaphiaID = (~pd.isnull(subspecies[wormscall['valid_AphiaID']]))
+        isunaccepted = (subspecies[wormscall['status']]!='accepted') & (subspecies[wormscall['valid_AphiaID']]!=subspecies['group'])
         index = subspecies.index
-        iscircularity = (subspecies[WORMSCALL['valid_AphiaID']]==worms_acceptedfilter.loc[index,'cyclic_valid_AphiaID'])
+        iscircularity = (subspecies[wormscall['valid_AphiaID']]==worms_acceptedfilter.loc[index,'cyclic_valid_AphiaID'])
 
-        cyclic_status = subspecies[WORMSCALL['status']].values
+        cyclic_status = subspecies[wormscall['status']].values
         cyclic_valid_AphiaID = subspecies['group'].values
 
         # Perform additional processing for unaccepted taxa
 
         condition = isaphiaID & isunaccepted & (~iscircularity)
-        subspecies.loc[condition,WORMSCALL['status']] = 'process'
+        subspecies.loc[condition,wormscall['status']] = 'process'
 
         # Resolve circularity between identifiers
 
         condition = isaphiaID & isunaccepted & iscircularity
-        islowerthanspecies = (subspecies[WORMSCALL['status']]=='subspecies')
+        islowerthanspecies = (subspecies[wormscall['status']]=='subspecies')
 
         donotchange = (condition & islowerthanspecies)
         index = subspecies[donotchange].index
-        columns = list(set(subspecies.columns) - set(['group',WORMSCALL['valid_AphiaID']]))
+        columns = list(set(subspecies.columns) - set(['group',wormscall['valid_AphiaID']]))
         subspecies.loc[index,columns] = worms_acceptedfilter.loc[index,columns].values
-        subspecies.loc[index,WORMSCALL['status']] = worms_acceptedfilter.loc[index,'cyclic_status']
-        subspecies.loc[donotchange & (subspecies[WORMSCALL['status']]=='subspecies'), WORMSCALL['status']] = 'cycle'
+        subspecies.loc[index,wormscall['status']] = worms_acceptedfilter.loc[index,'cyclic_status']
+        subspecies.loc[donotchange & (subspecies[wormscall['status']]=='subspecies'), wormscall['status']] = 'cycle'
 
         finalchange = (condition & (~islowerthanspecies))
-        subspecies.loc[finalchange,WORMSCALL['valid_AphiaID']] = subspecies.loc[finalchange,'group'].values
+        subspecies.loc[finalchange,wormscall['valid_AphiaID']] = subspecies.loc[finalchange,'group'].values
 
-        temp=subspecies[isaphiaID & (subspecies[WORMSCALL['status']]=='accepted') & (subspecies[WORMSCALL['valid_AphiaID']]!=subspecies['group'])] #DEBUG
+        temp=subspecies[isaphiaID & (subspecies[wormscall['status']]=='accepted') & (subspecies[wormscall['valid_AphiaID']]!=subspecies['group'])] #DEBUG
         if len(temp)!=0:
             print()
             print("accepted but aphiaID goup and valid are different")
             print(temp[['group','species','valid_aphiaID']])
             print()
 
-        subspecies[WORMSCALL['valid_AphiaID']]=subspecies[WORMSCALL['valid_AphiaID']].astype('Int64')
+        subspecies[wormscall['valid_AphiaID']]=subspecies[wormscall['valid_AphiaID']].astype('Int64')
 
         return subspecies, cyclic_status, cyclic_valid_AphiaID
 
@@ -1398,7 +1437,7 @@ def create_WoRMSfilter(gzfile_path, colname, wormscall=WORMSCALL, identification
         params_func['verbose']=True
         worms_matchfilter = match_WoRMSBySciname(unique_rawscinames, **params_func)
 
-    worms_matchfilter[WORMSCALL['valid_AphiaID']] = worms_matchfilter[WORMSCALL['valid_AphiaID']].astype('Int64')
+    worms_matchfilter[wormscall['valid_AphiaID']] = worms_matchfilter[wormscall['valid_AphiaID']].astype('Int64')
 
     # Get WoRMS-accepted classifications
 
@@ -1412,8 +1451,8 @@ def create_WoRMSfilter(gzfile_path, colname, wormscall=WORMSCALL, identification
 
     ## Identify unaccepted taxa classifications
 
-    isunaccepted = (worms_matchfilter[WORMSCALL['status']]!='accepted') & (~pd.isnull(worms_matchfilter[WORMSCALL['valid_AphiaID']]))
-    unaccepted_aphiaID = worms_matchfilter.loc[isunaccepted, WORMSCALL['valid_AphiaID']].unique().tolist()
+    isunaccepted = (worms_matchfilter[wormscall['status']]!='accepted') & (~pd.isnull(worms_matchfilter[wormscall['valid_AphiaID']]))
+    unaccepted_aphiaID = worms_matchfilter.loc[isunaccepted, wormscall['valid_AphiaID']].unique().tolist()
 
     ## Retrieve the classification of their scientifically accepted counterparts
 
@@ -1429,7 +1468,7 @@ def create_WoRMSfilter(gzfile_path, colname, wormscall=WORMSCALL, identification
         params_func['verbose']=True
         filename, worms_acceptedfilter = match_WoRMSByAcceptedSciname(unaccepted_aphiaID, **params_func)
 
-    worms_acceptedfilter[WORMSCALL['valid_AphiaID']] = worms_acceptedfilter[WORMSCALL['valid_AphiaID']].astype('Int64')
+    worms_acceptedfilter[wormscall['valid_AphiaID']] = worms_acceptedfilter[wormscall['valid_AphiaID']].astype('Int64')
 
     # Process taxa identified at a rank lower than species and any remaining unaccepted taxa
 
@@ -1438,49 +1477,16 @@ def create_WoRMSfilter(gzfile_path, colname, wormscall=WORMSCALL, identification
 
     # identify and replace any remaining unaccepted taxa with their accepted counterparts
 
-    isunaccepted = (worms_acceptedfilter[WORMSCALL['status']]!='accepted') & (~pd.isnull(worms_acceptedfilter[WORMSCALL['valid_AphiaID']])) & (worms_acceptedfilter[WORMSCALL['valid_AphiaID']]!=worms_acceptedfilter['group'])
-    worms_acceptedfilter.loc[isunaccepted,WORMSCALL['status']]='process'
+    isunaccepted = (worms_acceptedfilter[wormscall['status']]!='accepted') & (~pd.isnull(worms_acceptedfilter[wormscall['valid_AphiaID']])) & (worms_acceptedfilter[wormscall['valid_AphiaID']]!=worms_acceptedfilter['group'])
+    worms_acceptedfilter.loc[isunaccepted,wormscall['status']]='process'
 
     # resolve cyclic dependencies between identifiers
     # when retrieving species classification for taxa below species rank
 
-    worms_acceptedfilter['cyclic_valid_AphiaID'] = worms_acceptedfilter[WORMSCALL['valid_AphiaID']].values
-    worms_acceptedfilter['cyclic_status'] = worms_acceptedfilter[WORMSCALL['status']].values
+    worms_acceptedfilter['cyclic_valid_AphiaID'] = worms_acceptedfilter[wormscall['valid_AphiaID']].values
+    worms_acceptedfilter['cyclic_status'] = worms_acceptedfilter[wormscall['status']].values
 
     subspecies, cyclic_status, cyclic_valid_AphiaID = _process_subspecies(worms_acceptedfilter, parallel, cpu=cpu, max_attempt=max_attempt, **params_func)
-
-    ## Find subspecies
-
-    #issubspecies = (worms_acceptedfilter[WORMSCALL['status']]=="subspecies") & (~pd.isnull(worms_acceptedfilter[WORMSCALL['valid_AphiaID']]))
-
-    #temp=worms_acceptedfilter[(worms_acceptedfilter[WORMSCALL['status']]=="subspecies") & (pd.isnull(worms_acceptedfilter[WORMSCALL['valid_AphiaID']]))] #SUPPRESS
-    #if len(temp)!=0:
-    #    print()
-    #    print(temp)
-    #    print()
-
-    #subspecies = worms_acceptedfilter.loc[issubspecies,[WORMSCALL['valid_AphiaID']]].rename(columns={WORMSCALL['valid_AphiaID']:'group'})
-    #parent_aphiaID = subspecies['group'].unique().tolist()
-
-    ## Retrieve the classification of species corresponding to the identified subspecies
-
-    #print(f'            ** WoRMS filter (subspecies) | {len(parent_aphiaID)} subspecies')
-
-    #if parallel and (len(parent_aphiaID)>=1000):
-    #    params_func['verbose']=False
-    #    _, parent_classification = parallel_match_WoRMSByAcceptedSciname(parent_aphiaID, cpu=cpu, max_attempt=max_attempt, store_parallel=False, **params_func)
-    #else:
-    #    params_func['verbose']=True
-    #    parent_classification = match_WoRMSByAcceptedSciname(parent_aphiaID, **params_func)
-
-    #subspecies = subspecies.reset_index().merge(parent_classification,how='inner',on='group').set_index('index')
-
-    ## Ensure consistency of identifiers
-    # In most cases there should be equality,
-    # but sometimes there is circularity between identifiers
-    # e.g. for “Parastenhelia spinosa”: valid_AphiaID=116446 to parentNameUsageID=116446 to valid_AphiaID=1164466
-
-    #subspecies[WORMSCALL['valid_AphiaID']]=subspecies['group']
 
     while subspecies is not None:
 
