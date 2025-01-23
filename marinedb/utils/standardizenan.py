@@ -23,8 +23,7 @@ STR_NAN_VALUES = ["-1.#IND",
                   "",
                   "None"]
 
-
-def isnan(value, nan_values=None):
+def isnan(value, nan_values=None, letters_only=False):
 
     try:
         if pd.isnull(float(value)): #NaN, nan, 'nan', 'NaN' ...
@@ -37,25 +36,32 @@ def isnan(value, nan_values=None):
         nan_values=[]
     elif isinstance(nan_values,str):
         nan_values=[nan_values]
-    nan_values+=STR_NAN_VALUES
+    nan_values = list(set(nan_values + STR_NAN_VALUES))
+
     if str(value) in nan_values:
         return True
 
-    if not re.search(r'[a-zA-Z0-9]',str(value)):
+    if letters_only:
+        pattern=r'[a-zA-Z]'
+    else:
+        pattern=r'[a-zA-Z0-9]'
+
+    if not re.search(pattern,str(value)):
         return True
 
     return False
 
-def apply(df, key=None, nan_encoding=[]):
+def apply(df, key=None, nan_values=None, letters_only=False):
 
     visnan = np.vectorize(isnan)
 
     if key is None:
 
-        # Convert all missing value in the dataset to pd.NA
-        df = pd.DataFrame(np.where(visnan(df,nan_encoding=nan_encoding), pd.NA, df),columns=df.columns)
+        # Convert all missing values in the dataset to pd.NA
+        df = pd.DataFrame(np.where(visnan(df, nan_values=nan_values, letters_only=letters_only), pd.NA, df),columns=df.columns)
 
     else:
-        df[key]=np.where(visnan(df[key], nan_encoding=nan_encoding), pd.NA, df[key])
+        # Convert all missing values in `key` columns to pd.NA
+        df[key]=np.where(visnan(df[key], nan_values=nan_values, letters_only=letters_only), pd.NA, df[key])
 
     return df
