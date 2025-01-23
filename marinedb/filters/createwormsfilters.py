@@ -9,12 +9,14 @@ import math
 import yaml
 import json
 import time
+import glob
 import os
 from unidecode import unidecode
 from operator import itemgetter
 import itertools
 import re
 from datetime import datetime
+from datetime import date
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures import as_completed
 from tqdm import tqdm
@@ -28,6 +30,7 @@ import http
 
 from marinedb.filters import subsetranks
 from marinedb.utils import regexstrip
+from marinedb.utils import standardizenan
 from marinedb.utils.standardizenan import isnan
 
 # Global variables
@@ -44,32 +47,39 @@ YEAR_NOW = datetime.now().year
 
 LOWER_THAN_SPECIES = subsetranks.apply('species', lower=True, strict=True)
 
+## Map custom vocabulary to WoRMS vocabulary
+
+ ###########################################
+ # Do not remove starred dictionary keys #
+ ###########################################
+
 WORMSCALL = {
-             "scientificname": "species", #`scientificname` must never be removed from `WORMSCALL`
-             "genus": "genus",
-             "family": "family",
-             "order": "order",
-             "cls": "class",
-             "phylum": "phylum",
-             "kingdom": "kingdom",
-             "match_type":"worms_matchtype", #`match_type` must never be removed from `WORMSCALL`
-             "status": "worms_status", #`status` must never be removed from `WORMSCALL`
-             "valid_AphiaID":"valid_aphiaID", #`valid_AphiaID` must never be removed from `WORMSCALL`
-             "isExtinct":"isextinct",
-             "isMarine":"ismarine",
-             "rank":"rank", #`rank` must never be removed from `WORMSCALL`
-             "authority":"authority"
+             'scientificname': 'species', #*
+             'genus': 'genus',
+             'family': 'family',
+             'order': 'order',
+             'cls': 'class',
+             'phylum': 'phylum',
+             'kingdom': 'kingdom',
+             'match_type':'worms_matchtype', #*
+             'status': 'worms_status', #*
+             'valid_AphiaID':'valid_aphiaID', #*
+             'isExtinct':'isextinct',
+             'isMarine':'ismarine',
+             'rank':'rank', #*
+             'authority':'authority'
             }
 
+
+## Instantiate a client and objects to serve as arguments for the WoRMS functions
 
 cl = Client('https://www.marinespecies.org/aphia.php?p=soap&wsdl=1', timeout=4000)
 
 scinames = cl.factory.create('scientificnames')
-scinames["_arrayType"] = "string[]"
+scinames['_arrayType'] = 'string[]'
 
-aphiaID = cl.factory.create("aphiaids")
-aphiaID["_arrayType"] = "int[]"
-
+aphiaID = cl.factory.create('aphiaids')
+aphiaID['_arrayType'] = 'int[]'
 
 def write_dataframe2txtfile(df, txt_filename, init=False, verbose=False):
 
@@ -96,11 +106,11 @@ def printv(message, verbose=True):
 
 def _update_set(myset,key):
 
-    if isnan(key):
+    if isnan(key, letters_only=True):
         return myset
 
-    if not re.search(r'[a-zA-Z]',str(key)):
-        return myset
+    #if not re.search(r'[a-zA-Z]',str(key)):
+    #    return myset
 
     else:
         myset.add(key)
@@ -120,7 +130,7 @@ def _strip_rawSciname(rawsciname):
 
     return rawsciname
 
-def get_uniqueRawSciname(gzfile_path, colname, store=False, overwrite=False, outputpath='./', outputfile=''):
+def get_uniqueRawSciname(gzfile_path, colname, resume=True, store=False, overwrite=False, outputpath='./', outputfile=''):
 
     print(f'            ** Retrieving unique raw scientific names from {gzfile_path}')
 
@@ -130,22 +140,20 @@ def get_uniqueRawSciname(gzfile_path, colname, store=False, overwrite=False, out
         outputfile=f'unique_{colname}.txt'
     outputfile = os.path.join(outputpath,outputfile)
 
-    if store and os.path.isfile(outputfile):
+    if overwrite:
+        resume=False
+        if os.path.isfile(outputfile):
+            print(f"               WARNING | {outputfile} exists but will not be used and will be overwritten (`overwrite`={overwrite})")
 
-        if overwrite:
-            print(f"               WARNING | {outputfile} already exists and will be overwritten (new values will be added to the file)")
-            unique_rawsciname = set(pd.read_csv(outputfile, sep='\t').values.flatten())
-
-        else:
-            print(f"               INFO | {outputfile} already exists and will be used")
-            unique_rawsciname = list(pd.read_csv(outputfile, sep='\t').values.flatten())
-            return unique_rawsciname
+    if resume and os.path.isfile(outputfile):
+        print(f'               INFO | {outputfile} already exists and will be used (`resume={resume})')
+        unique_rawsciname = set(pd.read_csv(outputfile, sep='\t').values.flatten())
 
     start=time.time()
 
     with gzip.open(gzfile_path,'r') as data:
 
-        header = data.readline().decode("utf8").strip('\n').split('\t')
+        header = data.readline().decode('utf8').strip('\n').split('\t')
         sciname_index = header.index(colname)
         count=len(unique_rawsciname)
 
@@ -154,7 +162,7 @@ def get_uniqueRawSciname(gzfile_path, colname, store=False, overwrite=False, out
             # Pre-process the raw scientific names
             # to avoid quotation problems with pandas
 
-            sciname = line.decode("utf8").strip('\n').split('\t')[sciname_index]
+            sciname = line.decode('utf8').strip('\n').split('\t')[sciname_index]
             sciname = _strip_rawSciname(sciname)
 
             # Update the set of unique raw scientific names
@@ -165,7 +173,7 @@ def get_uniqueRawSciname(gzfile_path, colname, store=False, overwrite=False, out
             # Display progress
 
             if ((idx+1)%1000000)==0:
-                print(f"               Processing | {idx + 1} lines done ({round(time.time()-start)}s), {len(unique_rawsciname)} unique raw scientific names")
+                print(f'               Processing | {idx + 1} lines done ({round(time.time()-start)}s), {len(unique_rawsciname)} unique raw scientific names')
 
             # Save progress
 
@@ -179,7 +187,7 @@ def get_uniqueRawSciname(gzfile_path, colname, store=False, overwrite=False, out
     if store:
         _store_uniqueRawSciname(unique_rawsciname, outputfile)
 
-    print(f"            TIME: {round(time.time()-start)}s")
+    print(f'            TIME: {round(time.time()-start)}s')
 
     return list(unique_rawsciname)
 
@@ -527,6 +535,7 @@ def _format_scinamesForWoRMS(raw_scinames, identification_level='species', min_l
 
     return wormsscinames
 
+
 ###########################################
 ############## WoRMS filters ##############
 ###########################################
@@ -541,14 +550,33 @@ def _resume(values2process, valuesprocessed):
 
     return list(values2process)
 
-def _resume_matchWoRMS(values2process, outputfile):
+def _resume_matchWoRMS(values2process, outputfile, columns, issciname):
 
-    Nsciname = len(values2process)
+    valuesprocessed=pd.read_csv(outputfile, sep='\t', dtype=object)
+    if not issciname:
+        valuesprocessed['group']=valuesprocessed['group'].astype('Float64').astype('Int64')
 
-    valuesprocessed = pd.read_csv(outputfile, sep='\t')
-    values2process = _resume(values2process, valuesprocessed['group'].convert_dtypes().tolist())
+    if len(set(columns)-set(valuesprocessed.columns))==0:
+        values2process=_resume(values2process, valuesprocessed['group'].tolist())
+    else:
+        valuesprocessed=None
 
     return values2process, valuesprocessed
+
+def astype_Int64(df, wormscall, issciname):
+
+    wormscallK=list(wormscall.keys())
+
+    if issciname:
+        ID_fields=[]
+    else:
+        ID_fields=['group']
+    ID_fields+=[wormscall[key] for key in wormscallK if ('ID' in key)]
+
+    for colname in ID_fields:
+        df[colname] = df[colname].astype('Float64').astype('Int64')
+
+    return df
 
 def _process_rank(worms_results, ismatchfilter, wormscall=WORMSCALL, species_only=True): #no NaN
 
@@ -601,14 +629,15 @@ def _process_rank(worms_results, ismatchfilter, wormscall=WORMSCALL, species_onl
 
 ### Match WoRMS by pre-processed scientific names ###
 
-def preprocess_quotationMarks(raw_scinames):
+def preprocess_quotationMarks(raw_scinames, unique_values=True):
 
     # Pre-process the raw scientific names
     # to avoid quotation mark problems with pandas
 
     raw_scinames=pd.Series(raw_scinames).str.replace('^["\s]+|["\s]+$','',regex=True)
     raw_scinames=raw_scinames.str.replace("^['\s]+|['\s]+$",'',regex=True)
-    raw_scinames=list(set(raw_scinames.tolist()))
+    if unique_values:
+        raw_scinames=raw_scinames.unique().tolist()
 
     return raw_scinames
 
@@ -661,7 +690,7 @@ def _match50_WoRMSBySciname(wormsscinames, wormscallK, wormscallV, species_only=
     if isinstance(wormsscinames,str):
         wormsscinames=[wormsscinames]
 
-    scinames["scientificname"] = wormsscinames
+    scinames['scientificname'] = wormsscinames
     worms_results=_connect_matchAphiaRecordsByNames(scinames)
 
     if len(worms_results)!=len(wormsscinames): #DEBUG
@@ -678,18 +707,13 @@ def _match50_WoRMSBySciname(wormsscinames, wormscallK, wormscallV, species_only=
     return classification
 
 
-def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level='species', min_length=3, doublecheck=True, store=True, overwrite=False, return_filename=False, outputpath='./', outputfile='worms_matchfilter.txt', verbose=True, parallel=False, version=None):
+def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level='species', min_length=3, doublecheck=True, resume=True, store=True, overwrite=False, return_filename=False, outputpath='./', outputfile='worms_matchfilter.txt', verbose=True, parallel=False, version=None):
 
+    # Parameters
 
     species_only=(identification_level=='species')
     init=True
     processed=False
-    if parallel:
-        store=True
-        verbose=False
-        return_filename=True
-        if version is not None:
-            outputfile=outputfile.split('.')[0]+f'{version}.txt'
 
     wormscallK = list(wormscall.keys())
     wormscallV = list(itemgetter(*wormscallK)(wormscall))
@@ -697,7 +721,49 @@ def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level
 
     outputfile = os.path.join(outputpath,outputfile)
 
-    if len(raw_scinames)==0:
+    if parallel:
+
+        store=True
+        verbose=False
+        return_filename=True
+
+        if version is not None:
+
+            outputfile=outputfile.split('.')[0]+f'{version}.txt'
+
+        else:
+
+            # Search for an unused file name
+
+            isfile=True
+            version=random.randint(0,1000)
+            left=outputfile.split('.')[0]
+            right=outputfile.split('.')[1]
+
+            while isfile:
+
+                outputfile = left + f'{version}.' + right
+
+                if not os.path.isfile(outputfile):
+                    isfile=False
+                else:
+                    version=random.randint(0,1000)
+
+    if overwrite:
+
+        resume=False
+
+        if os.path.isfile(outputfile):
+            print(f"               WARNING | {outputfile} exists but will not be used and will be overwritten (`overwrite`={overwrite})")
+
+    Nscinames = len(raw_scinames)
+
+    printv(f'            ** WoRMS filter (recognized marine taxa) | {Nscinames} unique scientific names', verbose=verbose)
+
+    if Nscinames==0:
+
+        # No raw scientific name to process
+
         if return_filename:
             return outputfile, pd.DataFrame([],columns=colnames)
         else:
@@ -706,52 +772,38 @@ def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level
     # Pre-process the raw scientific names
     # to avoid quotation mark problems with pandas
 
-    raw_scinames = preprocess_quotationMarks(raw_scinames)
+    raw_scinames = preprocess_quotationMarks(raw_scinames, unique_values=True)
 
-    Nsciname = len(raw_scinames)
+    if resume and os.path.isfile(outputfile):
 
-    printv(f'            ** WoRMS filter (recognized marine taxa) | {Nsciname} unique scientific names', verbose=verbose)
+        print(f'               INFO | {outputfile} already exists and will be used')
 
-    if ((not parallel) or (version is not None)) and os.path.isfile(outputfile):
+        # Remaining raw scientific names
 
-        if overwrite:
+        raw_scinames, previous_wormsmatch = _resume_matchWoRMS(raw_scinames, outputfile, columns=['wormssciname']+wormscallV, issciname=True)
 
-            print(f"               WARNING | {outputfile} already exists and will be overwritten")
+        if previous_wormsmatch is None:
+            previous_filename=outputfile
+            left=outputfile.split('.')[0]
+            right=outputfile.split('.')[1]
+            outputfile = left + f'{date.today().strftime("_%Y%m%d")}.' + right
+            print(f'               INFO | {previous_filename} lacks the required columns.')
+            print(f'                      Run from scratch and store in {outputfile}')
 
         else:
 
-            print(f"               INFO | {outputfile} already exists and will be used")
-
-            # Remaining raw scientific names
-
-            raw_scinames, previous_wormsmatch = _resume_matchWoRMS(raw_scinames, outputfile)
-
-            # Remaining raw scientific names
+            previous_wormsmatch = astype_Int64(previous_wormsmatch, wormscall, issciname=True)
 
             if len(raw_scinames)==0:
-                printv(f'               UPDATE | All scientific names processed')
+                printv(f'               UPDATE | All scientific names processed', verbose=verbose)
                 if return_filename:
                     return outputfile, previous_wormsmatch
                 else:
                     return previous_wormsmatch
 
             else:
-                printv(f'               UPDATE | {len(raw_scinames)}/{Nsciname} ({round(len(raw_scinames)/Nsciname*100,2)}%) scientific names remaining to process', verbose=verbose)
+                printv(f'               UPDATE | {len(raw_scinames)}/{Nscinames} ({round(len(raw_scinames)/Nscinames*100,2)}%) scientific names remaining to process', verbose=verbose)
                 init=False
-
-    elif parallel and (version is None):
-
-        # Search for an unused file name
-
-        isfile=True
-        version=random.randint(0,1000)
-        output=outputfile.split('.')[0]
-        while isfile:
-            outputfile=output+f'{version}.txt'
-            if not os.path.isfile(outputfile):
-                isfile=False
-            else:
-                version=random.randint(0,1000)
 
     # Pre-process scientific names for WoRMS queries
 
@@ -770,8 +822,9 @@ def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level
     raw2worms_scinames=pd.DataFrame(raw2worms_scinames,columns=['rawsciname','wormssciname'])
 
     unique_wormsscinames = raw2worms_scinames.loc[~pd.isnull(raw2worms_scinames['wormssciname']),'wormssciname'].unique().tolist()
+    Nwormsscinames=len(unique_wormsscinames)
 
-    if len(unique_wormsscinames)==0:
+    if Nwormsscinames==0:
 
         wormsmatch=raw2worms_scinames.copy()
         wormsmatch=wormsmatch.rename(columns={'rawsciname':'group'})
@@ -790,13 +843,48 @@ def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level
         else:
             tempfile=os.path.join(outputpath,'wormsmatch.temp')
 
-        if os.path.isfile(tempfile):
+        if resume:
 
-            ## Remaining pre-processed scientific names
+            ## If files with a `temp` extension exist and `resume` is True, use them
 
-            fullwormsmatch = pd.read_csv(tempfile,sep='\t')
-            unique_wormsscinames = _resume(unique_wormsscinames, fullwormsmatch['wormssciname'].tolist())
-            fullwormsmatch = fullwormsmatch.values.tolist()
+            previous_Nwormsscinames=Nwormsscinames
+            resume_files=[]
+
+            temp_files = sorted(glob.glob(os.path.join(outputpath,f'*.temp')), key=os.path.getmtime, reverse=True)
+            if os.path.isfile(tempfile):
+                del temp_files[temp_files.index(tempfile)]
+                temp_files.insert(0,tempfile)
+            print("temp_files:",temp_files) # DEBUG
+            for filename in temp_files:
+
+                tempdf=pd.read_csv(filename,sep='\t')
+                #tempdf=astype_Int64(tempdf, wormscall)
+
+                if len(set(wormscallV)-set(tempdf.columns))==0:
+
+                    if 'wormssciname' not in tempdf.columns: #DEBUG
+                        raise Exception() #DEBUG
+
+                    keep = list(set(unique_wormsscinames).intersection(tempdf['wormssciname'].astype('string').tolist()))
+                    tempdf = tempdf.set_index('wormssciname').loc[keep,:].reset_index()
+
+                    fullwormsmatch+=tempdf[['wormssciname'] + wormscallV].values.tolist()
+                    unique_wormsscinames = list(set(unique_wormsscinames) - set(keep))
+
+                    if (previous_Nwormsscinames-len(unique_wormsscinames)!=0):
+                        resume_files.append(filename.split('/')[-1])
+                        previous_Nwormsscinames=len(unique_wormsscinames)
+
+            if len(resume_files)!=0:
+
+                # Notify the user
+
+                if len(resume_files)==1:
+                    string_files = resume_files[0]
+                else:
+                    string_files = ', '.join(resume_files[:-1]) + f' and {resume_files[-1]}'
+                print(f"               INFO | {string_files} will be used (`resume`={resume})")
+                print(f"               UPDATE | {len(unique_wormsscinames)}/{Nwormsscinames} ({round(len(unique_wormsscinames)/Nwormsscinames*100,2)}%) scientific names remaining to process (`resume`={resume})")
 
         Nwormsscinames=len(unique_wormsscinames)
 
@@ -828,6 +916,7 @@ def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level
 
             if (((batch+1)%200)==0) or (end==Nwormsscinames):
                 store_fullwormsmatch = pd.DataFrame(fullwormsmatch, columns=['wormssciname']+wormscallV)
+                store_fullwormsmatch = astype_Int64(store_fullwormsmatch, wormscall, issciname=True)
                 write_dataframe2txtfile(store_fullwormsmatch, tempfile, init=True)
 
         fullwormsmatch = pd.DataFrame(fullwormsmatch, columns=['wormssciname']+wormscallV)
@@ -890,17 +979,21 @@ def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level
         wormsmatch=wormsmatch.rename(columns={'rawsciname':'group'})
         wormsmatch=wormsmatch[colnames].reset_index(drop=True)
 
+    wormsmatch = astype_Int64(wormsmatch, wormscall, issciname=True)
+    wormsmatch.loc[pd.isnull(wormsmatch[wormscall['match_type']]),wormscall['match_type']] = 'nomatch'
+
     # Store
 
     if store:
 
         printv(f'               -- Storing in {outputfile} --', verbose=verbose)
 
-        wormsmatch.loc[pd.isnull(wormsmatch[wormscall['match_type']]),wormscall['match_type']] = 'nomatch'
+        #wormsmatch.loc[pd.isnull(wormsmatch[wormscall['match_type']]),wormscall['match_type']] = 'nomatch'
+        #wormsmatch = astype_Int64(wormsmatch, wormscall)
 
-        IDfields = [wormscall[key] for key in wormscallK if 'ID' in key]
-        for colname in IDfields:
-            wormsmatch[colname] = wormsmatch[colname].astype('Int64')
+        #IDfields = [wormscall[key] for key in wormscallK if 'ID' in key]
+        #for colname in IDfields:
+        #    wormsmatch[colname] = wormsmatch[colname].astype('Float64').astype('Int64')
 
         #if 'valid_AphiaID' in wormscallK:
         #    wormsmatch[wormscall['valid_AphiaID']] = wormsmatch[wormscall['valid_AphiaID']].astype('Int64')
@@ -913,10 +1006,6 @@ def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level
 
     if not init:
         wormsmatch=pd.concat([previous_wormsmatch,wormsmatch],axis=0).reset_index(drop=True)
-
-    IDfields = [wormscall[key] for key in wormscallK if 'ID' in key]
-    for colname in IDfields:
-        wormsmatch[colname] = wormsmatch[colname].astype('Int64')
 
     if return_filename:
         return outputfile, wormsmatch
@@ -951,7 +1040,7 @@ def _match50_WoRMSByAcceptedSciname(valid_aphiaID, wormscallK, wormscallV, speci
     if isinstance(valid_aphiaID, int):
         valid_aphiaID=[valid_aphiaID]
 
-    aphiaID["aphiaids"] = valid_aphiaID
+    aphiaID['aphiaids'] = valid_aphiaID
     worms_results = _connect_getAphiaRecordsByIDs(aphiaID)
     classification = []
 
@@ -961,7 +1050,7 @@ def _match50_WoRMSByAcceptedSciname(valid_aphiaID, wormscallK, wormscallV, speci
         success=[]
 
     for idx,taxon in enumerate(worms_results):
-        #print(idx, taxon)
+
         taxon = _process_rank(taxon, ismatchfilter=False, species_only=species_only, wormscall=wormscall)
 
         if pd.isnull(taxon['scientificname']):
@@ -987,43 +1076,84 @@ def _match50_WoRMSByAcceptedSciname(valid_aphiaID, wormscallK, wormscallV, speci
 
 def match_WoRMSByAcceptedSciname(valid_aphiaID, wormscall=WORMSCALL, species_only=True, resume=True, store=True, overwrite=False, return_filename=False, outputpath='./', outputfile='worms_acceptedfilter.txt', verbose=True, indent='', parallel=False, version=None):
 
-    if parallel:
-        store=True
-        verbose=False
-        return_filename=True
-        if version is not None:
-            outputfile=outputfile.split('.')[0]+f'{version}.txt'
+    # Parameters
+
+    init=True
 
     wormscallK = list(wormscall.keys())
     wormscallV = list(itemgetter(*wormscallK)(wormscall))
     colnames = ['group'] + wormscallV
+
     outputfile = os.path.join(outputpath,outputfile)
 
-    init=True
+    if parallel:
+
+        store=True
+        verbose=False
+        return_filename=True
+
+        if version is not None:
+
+            outputfile=outputfile.split('.')[0]+f'{version}.txt'
+
+        else:
+
+            # Search for an unused file name
+
+            isfile=True
+            version=random.randint(0,1000)
+            output=outputfile.split('.')[0]
+
+            while isfile:
+
+                outputfile=output+f'{version}.txt'
+
+                if not os.path.isfile(outputfile):
+                    isfile=False
+                else:
+                    version=random.randint(0,1000)
+
+    if overwrite:
+
+        resume=False
+
+        if os.path.isfile(outputfile):
+            print(indent + f"               WARNING | {outputfile} exists but will not be used and will be overwritten (`overwrite`={overwrite})")
+
     NaphiaID = len(valid_aphiaID)
 
     printv(indent + f'            ** WoRMS filter (accepted marine taxa) | {NaphiaID} unique WoRMS identifiers',verbose=verbose)
 
     if NaphiaID==0:
+
+        # No WoRMS identifiers to process
+
         if return_filename:
             return outputfile, pd.DataFrame([],columns=colnames)
         else:
             return pd.DataFrame([],columns=colnames)
 
-    if (((not parallel) and resume) or (parallel and (version is not None))) and os.path.isfile(outputfile):
+    if resume and os.path.isfile(outputfile):
 
-        if overwrite:
+        print(indent + f'               INFO | {outputfile} already exists and will be used')
 
-            print(indent + f"               WARNING | {outputfile} already exists and will be overwritten")
+        valid_aphiaID, previous_wormsaccepted = _resume_matchWoRMS(valid_aphiaID, outputfile, columns=colnames, issciname=False)
+
+        if previous_wormsaccepted is None:
+
+            previous_filename=outputfile
+            left=outputfile.split('.')[0]
+            right=outputfile.split('.')[1]
+            outputfile = left + f'{date.today().strftime("_%Y%m%d")}.' + right
+            print(indent + f'               INFO | {previous_filename} lacks the required columns.')
+            print(indent + f'                      Run from scratch and store in {outputfile}')
 
         else:
 
-            print(indent + f"               INFO | {outputfile} already exists and will be used")
-
-            valid_aphiaID, previous_wormsaccepted = _resume_matchWoRMS(valid_aphiaID, outputfile)
+            previous_wormsaccepted = astype_Int64(previous_wormsaccepted, wormscall, issciname=False)
 
             if len(valid_aphiaID)==0:
-                printv(indent + '               UPDATE | All unaccepted taxa processed')
+                printv(indent + '               UPDATE | All unaccepted taxa processed', verbose=verbose)
                 if return_filename:
                     return outputfile, previous_wormsaccepted
                 else:
@@ -1033,21 +1163,50 @@ def match_WoRMSByAcceptedSciname(valid_aphiaID, wormscall=WORMSCALL, species_onl
                 init=False
                 NaphiaID = len(valid_aphiaID)
 
-    elif parallel and (version is None):
-
-        # Search for an unused file name
-
-        isfile=True
-        version=random.randint(0,1000)
-        output=outputfile.split('.')[0]
-        while isfile:
-            outputfile=output+f'{version}.txt'
-            if not os.path.isfile(outputfile):
-                isfile=False
-            else:
-                version=random.randint(0,1000)
-
     wormsaccepted=[]
+
+    if resume and parallel:
+
+        ## If accepted filter files from a previous run exist and `resume` is True, use them
+
+        resume_files=[]
+        previous_NaphiaID=NaphiaID
+
+        stored = glob.glob(outputfile.split(str(version))[0] + '*')
+        if not init:
+            # the file has already been accounted for above
+            del stored[outputfile]
+        stored = sorted([filename for filename in stored if re.search(r'[0-9]+',filename)], key=os.path.getmtime, reverse=True)
+
+        for filename in stored:
+
+            tempdf=pd.read_csv(filename,sep='\t')
+            tempdf=astype_Int64(tempdf, wormscall, issciname=False)
+
+            if len(set(colnames)-set(tempdf.columns))==0:
+
+                keep = list(set(valid_aphiaID).intersection(tempdf['group'].tolist())) #.astype('Float64').astype('Int64').tolist()))
+                tempdf = tempdf.set_index('group').loc[keep,:].reset_index()
+
+                wormsaccepted+=tempdf[colnames].values.tolist()
+                valid_aphiaID = list(set(valid_aphiaID) - set(keep))
+
+                if (previous_NaphiaID-len(valid_aphiaID)!=0):
+                    resume_files.append(filename.split('/')[-1])
+                    previous_NaphiaID=len(valid_aphiaID)
+
+        if len(resume_files)!=0:
+
+            # Notify the user
+
+            if len(resume_files)==1:
+                string_files = resume_files[0]
+            else:
+                string_files = ', '.join(resume_files[:-1]) + f' and {resume_files[-1]}'
+                print(indent + f"               INFO | {string_files} will be used (`resume`={resume})")
+                print(indent + f"               UPDATE | {len(valid_aphiaID)}/{NaphiaID} ({round(len(valid_aphiaID)/NaphiaID*100,2)}%) scientific names remaining to process (`resume`={resume})")
+
+    NaphiaID=len(valid_aphiaID)
 
     printv(indent + f'               -- WoRMS API call --',verbose=verbose)
     printv(indent + f'               {NaphiaID} WoRMS identifiers to retrieve',verbose=verbose)
@@ -1072,23 +1231,15 @@ def match_WoRMSByAcceptedSciname(valid_aphiaID, wormscall=WORMSCALL, species_onl
         ## Save progress
 
         if store and ((((batch+1)%200)==0) or (end==NaphiaID)):
+
             store_wormsaccepted=pd.DataFrame(wormsaccepted,columns=colnames)
-
-            IDfields = ['group']
-            IDfields += [wormscall[key] for key in wormscallK if 'ID' in key]
-            for colname in IDfields:
-                store_wormsaccepted[colname] = store_wormsaccepted[colname].astype('Int64')
-
+            astype_Int64(store_wormsaccepted, wormscall, issciname=False)
             write_dataframe2txtfile(store_wormsaccepted, outputfile, init=init)
 
     wormsaccepted=pd.DataFrame(wormsaccepted,columns=colnames)
+    wormsaccepted=astype_Int64(wormsaccepted, wormscall, issciname=False)
     if not init:
         wormsaccepted=pd.concat([previous_wormsaccepted,wormsaccepted],axis=0).reset_index(drop=True)
-
-    IDfields = ['group']
-    IDfields += [wormscall[key] for key in wormscallK if 'ID' in key]
-    for colname in IDfields:
-        wormsaccepted[colname] = wormsaccepted[colname].astype('Int64')
 
     if return_filename:
         return outputfile, wormsaccepted
@@ -1104,55 +1255,90 @@ def _retry_WoRMSmatch(func, future, tasks, executor, **params):
     # Retry a task that failed
 
     ## Get the associated data for the task
-    data = tasks[future]["data"]
-    id = tasks[future]["id"]
-    count = tasks[future]["count"]
+    data = tasks[future]['data']
+    id = tasks[future]['id']
+    count = tasks[future]['count']
 
     ## Submit the task again
     retry = executor.submit(func,data,version=id[1],**params)
 
     ## Store to track the retries
     tasks[retry] = {}
-    tasks[retry]["id"] = id
-    tasks[retry]["data"] = data
-    tasks[retry]["count"] = count+1
+    tasks[retry]['id'] = id
+    tasks[retry]['data'] = data
+    tasks[retry]['count'] = count+1
 
-    return tasks[future]["id"], tasks[retry]["count"]
+    return tasks[retry]['id'], tasks[retry]['count']
 
 
-def _parallel_WoRMSmatch(func_WoRMSmatch, data, cpu, max_attempt=3, indent='', outputfile='', outputpath='./', resume_parallel=True, store_parallel=True, overwrite_parallel=False, **params):
+def _parallel_WoRMSmatch(func_WoRMSmatch, data, wormscall, cpu, max_attempt=3, indent='', outputfile='', outputpath='./', resume_parallel=True, store_parallel=True, overwrite_parallel=False, **params):
+
+    # Parameters
+
+    if overwrite_parallel:
+        resume_parallel=False
 
     params['outputpath']=outputpath
     params['outputfile']=outputfile
 
     if len(outputfile)==0:
         outputfile=f'{func_WoRMSmatch}_results.txt'
-        resume_parallel=False
+        #resume_parallel=False
 
     outputfile = os.path.join(outputpath,outputfile)
+
+    preprocess=False
+    issciname=(func_WoRMSmatch.__name__=='match_WoRMSBySciname')
+
+    colnames=['group']+ list(wormscall.values())
+
+    Ndata=len(data)
+    previous_wormsmatch=None
+
+    if os.path.isfile(outputfile):
+
+            if resume_parallel:
+
+                print(indent + f'               INFO | {outputfile} already exists and will be used (`resume_parallel`={resume_parallel})')
+
+                if issciname:
+                    data = preprocess_quotationMarks(data)
+                    preprocess=True
+
+                data, previous_wormsmatch = _resume_matchWoRMS(data, outputfile, columns=colnames, issciname=issciname)
+
+                if previous_wormsmatch is None:
+
+                    previous_filename=outputfile
+                    left=outputfile.split('.')[0]
+                    right=outputfile.split('.')[1]
+                    outputfile = left + f'{date.today().strftime("_%Y%m%d")}.' + right
+                    print(indent + f'               INFO | {previous_filename} lacks the required columns.')
+                    print(indent + f'                      Run from scratch and store in {outputfile}')
+
+                else:
+
+                    print(indent + f"               UPDATE | {len(data)}/{Ndata} ({round(len(data)/Ndata*100,2)}%) lines remaining to process (`resume_parallel`={resume_parallel})")
+                    Ndata=len(data)
+                    previous_wormsmatch = astype_Int64(previous_wormsmatch, wormscall, issciname=issciname)
+
+            else:
+
+                print(indent + f"               INFO | {outputfile} already exists but won't be used (`resume_parallel`={resume_parallel})")
 
     results=[]
     tempfiles=[]
 
-    if os.path.isfile(outputfile):
-            if resume_parallel:
-                print(indent + f"               INFO | {outputfile} already exists and will be used (`resume_parallel`={resume_parallel})")
-                if func_WoRMSmatch.__name__=='match_WoRMSBySciname':
-                    data = preprocess_quotationMarks(data)
-                data, previous = _resume_matchWoRMS(data, outputfile)
-                results.append(previous)
-            else:
-                print(indent + f"               INFO | {outputfile} already exists but won't be used (`resume_parallel`={resume_parallel})")
-
-    Ndata=len(data)
-    index=list(range(Ndata))
-
     if Ndata!=0:
 
-        # Dispatch the scientific names to be processed
+        # Distribute the scientific names for processing
+
+        index=list(range(Ndata))
 
         length=math.ceil(Ndata/cpu)
         cpu_split=[subset for subset in zip(index[::length],index[length::length]+[len(index)])]
+
+        ## Notify the user
 
         print_slices=[f'slice n°{i+1}: {slice},' for i,slice in enumerate(cpu_split)]
         Nlines=math.ceil(len(print_slices)/3)
@@ -1160,9 +1346,10 @@ def _parallel_WoRMSmatch(func_WoRMSmatch, data, cpu, max_attempt=3, indent='', o
             string = indent + '               ' + ' '.join(print_slices[line*3:line*3+3])
             print(string[:-1])
 
-        completed=0
-
         # Create a process pool
+
+        completed=0
+        failure=[]
 
         with ProcessPoolExecutor(max_workers=cpu) as executor:
 
@@ -1180,27 +1367,41 @@ def _parallel_WoRMSmatch(func_WoRMSmatch, data, cpu, max_attempt=3, indent='', o
                for future in as_completed(tasks):
 
                    if future.exception():
+
                        id, count = _retry_WoRMSmatch(func_WoRMSmatch, future, tasks, executor, **params)
+
                        if count>max_attempt:
-                           print(indent + f'               Failure: More than {max_attempt} attempts, slice {id} will not be processed. Please try again later.')
-                           print(indent + f'               Exception: {future.exception()}')
+
                            cpu-=1
 
+                           print(indent + f'               FAILURE | More than {max_attempt} attempts, slice {id} will not be processed. Please try again later | TIME: {round(time.time()-start)}s')
+                           print(indent + f'               Exception: {future.exception()}')
+
                        else:
-                           print(indent + f'               Failure: Retrying slice {id} (attempt n°{count})')
+
+                           print(indent + f'               FAILURE | Retrying slice {id} (attempt n°{count}) | TIME: {round(time.time()-start)}s')
                            print(indent + f'               Exception: {future.exception()}')
 
                    else:
-                       end=time.time()
+
                        res=future.result()
                        tempfiles.append(res[0])
                        results.append(res[1])
-                       print(indent + f'               Success: slice {tasks[future]["id"]} completed ({tasks[future]["count"]} attempt(s)) | TIME: {round(end-start)}s')
                        completed+=1
 
+                       print(indent + f'               SUCCESS | slice {tasks[future]["id"]} completed ({tasks[future]["count"]} attempt(s)) | TIME: {round(time.time()-start)}s')
+
                    tasks.pop(future)
-    # MANQUE CAS RESULTS DATAFRAME VIDES OU VIDE
-    wormsmatch=pd.concat(results,axis=0).reset_index(drop=True)
+
+        print()
+
+        if len(results)!=0:
+            wormsmatch=pd.concat(results,axis=0).reset_index(drop=True)
+        else:
+            wormsmatch=pd.DataFrame([],columns=colnames)
+
+    else:
+        wormsmatch=pd.DataFrame([],columns=colnames)
 
     # Store
 
@@ -1224,16 +1425,26 @@ def _parallel_WoRMSmatch(func_WoRMSmatch, data, cpu, max_attempt=3, indent='', o
     for file in tempfiles:
         os.remove(file)
 
+    # Return
+
+    if (previous_wormsmatch is not None):
+
+        if len(wormsmatch)!=0:
+            wormsmatch=pd.concat([previous_wormsmatch,wormsmatch],axis=0).reset_index(drop=True)
+        else:
+            wormsmatch=previous_wormsmatch.copy()
+
     return outputfile, wormsmatch
 
 
-def parallel_match_WoRMSBySciname(raw_scinames, cpu, wormscall=WORMSCALL, identification_level='species', min_length=3, doublecheck=True, max_attempt=3, outputpath='./', outputfile='worms_matchfilter.txt', resume_parallel=True, overwrite=False, store_parallel=True, overwrite_parallel=False, **ignored):
+def parallel_match_WoRMSBySciname(raw_scinames, cpu, wormscall=WORMSCALL, identification_level='species', min_length=3, doublecheck=True, max_attempt=3, outputpath='./', outputfile='worms_matchfilter.txt', resume=True, overwrite=False, store_parallel=True, overwrite_parallel=False, resume_parallel=True, **ignored):
 
     params_match_WoRMSBySciname = {
                                    'wormscall':wormscall,
                                    'identification_level':identification_level,
                                    'min_length':min_length,
                                    'doublecheck':doublecheck,
+                                   'resume':resume,
                                    'store':True,
                                    'overwrite':overwrite,
                                    'verbose':False,
@@ -1259,11 +1470,12 @@ def parallel_match_WoRMSBySciname(raw_scinames, cpu, wormscall=WORMSCALL, identi
     return outputfile, wormsmatch
 
 
-def parallel_match_WoRMSByAcceptedSciname(valid_aphiaID, cpu, wormscall=WORMSCALL, species_only=True, max_attempt=3, outputpath='./', outputfile='worms_acceptedfilter.txt', resume_parallel=True, overwrite=False, store_parallel=True, overwrite_parallel=False, **ignored):
+def parallel_match_WoRMSByAcceptedSciname(valid_aphiaID, cpu, wormscall=WORMSCALL, species_only=True, max_attempt=3, outputpath='./', outputfile='worms_acceptedfilter.txt', resume=True, overwrite=False, store_parallel=True, overwrite_parallel=False, resume_parallel=True, **ignored):
 
     params_match_WoRMSByAcceptedSciname = {
                                            'wormscall':wormscall,
                                            'species_only':species_only,
+                                           'resume':resume,
                                            'store':True,
                                            'overwrite':overwrite,
                                            'verbose':False,
@@ -1289,39 +1501,48 @@ def parallel_match_WoRMSByAcceptedSciname(valid_aphiaID, cpu, wormscall=WORMSCAL
     return outputfile, wormsmatch
 
 
-def _process_subspecies(worms_acceptedfilter, parallel, wormscall=WORMSCALL, cpu=2, max_attempt=3, **params):
+### Retrieve classifications of accepted species counterparts for taxa below species rank ###
 
-    ## Find taxa identified at a rank lower than species
+
+def _process_subspecies(worms_acceptedfilter, parallel, wormscall=WORMSCALL, **params_dict):
+
+    if len(params_dict)!=0:
+        if 'parallel_args' in params_dict.keys():
+            params_parallel = params_dict['parallel_args'].copy()
+        if 'func_args' in params_dict.keys():
+            params = params_dict['func_args'].copy()
+
+    if 'wormscall' in params.keys():
+        wormscall=params['wormscall']
+
+    # Find taxa identified at a rank lower than species
 
     issubspecies = (worms_acceptedfilter[wormscall['status']].isin(['subspecies','process'])) & (~pd.isnull(worms_acceptedfilter[wormscall['valid_AphiaID']]))
-
-    temp=worms_acceptedfilter[(worms_acceptedfilter[wormscall['status']]=='subspecies') & (pd.isnull(worms_acceptedfilter[wormscall['valid_AphiaID']]))] #SUPPRESS
-    if len(temp)!=0: #DEBUG
-        print()
-        print("subspecies but no valid_aphiaID")
-        print(temp[['group','species','valid_aphiaID']])
-        print()
 
     if any(issubspecies):
 
         subspecies = worms_acceptedfilter.loc[issubspecies,[wormscall['valid_AphiaID']]].rename(columns={wormscall['valid_AphiaID']:'group'})
         parent_aphiaID = subspecies['group'].unique().tolist()
 
-        ## Retrieve the classification of parent taxa
-        ## (which may still be identified below species rank, e.g. forma -> subspecies)
+        # Retrieve the classification of parent taxa
+        # (which may still be identified below species rank, e.g. forma -> subspecies)
 
         print(f'            ** WoRMS filter (subspecies) | {len(parent_aphiaID)} taxa either below species rank or unaccepted')
 
         if parallel and (len(parent_aphiaID)>=1000):
+            params.update(params_parallel)
             params['verbose']=False
-            _, parent_classification = parallel_match_WoRMSByAcceptedSciname(parent_aphiaID, indent='   ', cpu=cpu, max_attempt=max_attempt, store_parallel=False, **params)
+            params['store_parallel']=False
+            params['cpu']=2
+            _, parent_classification = parallel_match_WoRMSByAcceptedSciname(parent_aphiaID, indent='   ', **params)
         else:
             params['verbose']=True
+            params['store']=False
             parent_classification = match_WoRMSByAcceptedSciname(parent_aphiaID, indent='   ', **params)
 
         subspecies = subspecies.reset_index().merge(parent_classification,how='inner',on='group').set_index('index')
 
-        ## Ensure consistency of identifiers
+        # Ensure consistency of identifiers
         # In most cases, equality is expected,
         # however, circularity between identifiers may occur
         #   e.g. for “Parastenhelia spinosa”:
@@ -1364,22 +1585,180 @@ def _process_subspecies(worms_acceptedfilter, parallel, wormscall=WORMSCALL, cpu
         temp=subspecies[isaphiaID & (subspecies[wormscall['status']]=='accepted') & (subspecies[wormscall['valid_AphiaID']]!=subspecies['group'])] #DEBUG
         if len(temp)!=0:
             print()
-            print("accepted but aphiaID goup and valid are different")
+            print('accepted but aphiaID goup and valid are different')
             print(temp[['group','species','valid_aphiaID']])
-            print()
+            print() #DEBUG
 
-        subspecies[wormscall['valid_AphiaID']]=subspecies[wormscall['valid_AphiaID']].astype('Int64')
-
+        #subspecies[wormscall['valid_AphiaID']]=subspecies[wormscall['valid_AphiaID']].astype('Float64').astype('Int64')
+        print('subspecies check types',subspecies.dtypes)
         return subspecies, cyclic_status, cyclic_valid_AphiaID
 
     else:
 
         return None, None, None
 
+
 ### Create WoRMS filters ###
 
 
-def create_WoRMSfilter(gzfile_path, colname, wormscall=WORMSCALL, identification_level='species', min_length=3, doublecheck=True, store=True, outputpath='./', overwrite=False, parallel=True, resume_parallel=True, max_attempt=3, store_parallel=True, overwrite_parallel=False):
+def create_WoRMSrecognizedfilter(unique_rawscinames, wormscall=WORMSCALL, identification_level='species', min_length=3, doublecheck=True, store=True, outputpath='./', outputfile='worms_matchfilter.txt', overwrite=False, resume=True, parallel=True, cpu=2, max_attempt=3, store_parallel=True, overwrite_parallel=False, resume_parallel=True):
+
+    if parallel:
+
+        if (store!=store_parallel):
+            raise ValueError(f'parallel={parallel} and store={store} but store_parallel={store_parallel}')
+
+        if (overwrite!=overwrite_parallel):
+            raise ValueError(f'parallel={parallel} and overwrite={overwrite} but overwrite_parallel={overwrite_parallel}')
+
+    params_func = {
+                   'wormscall':wormscall,
+                   'identification_level':identification_level,
+                   'min_length':min_length,
+                   'doublecheck':doublecheck,
+                   'resume':resume
+                  }
+
+    params_store = {
+                    'store':store,
+                    'outputpath':outputpath,
+                    'outputfile':outputfile,
+                    'overwrite':overwrite
+                  }
+
+    params_parallel = {
+                       'cpu':2,
+                       'max_attempt':max_attempt,
+                       'resume_parallel':resume_parallel,
+                       'store_parallel':store_parallel,
+                       'overwrite_parallel':overwrite_parallel
+                      }
+
+    params_func.update(params_store)
+
+    if parallel and (len(unique_rawscinames)>=1000):
+        print(f'            ** WoRMS filter (recognized marine taxa) | {len(unique_rawscinames)} unique scientific names')
+        params_func['verbose']=False
+        _, worms_matchfilter = parallel_match_WoRMSBySciname(unique_rawscinames, **params_parallel, **params_func)
+    else:
+        params_func['verbose']=True
+        worms_matchfilter = match_WoRMSBySciname(unique_rawscinames, **params_func)
+
+    worms_matchfilter = standardizenan.apply(worms_matchfilter)
+    worms_matchfilter = astype_Int64(worms_matchfilter, wormscall, issciname=True)
+
+    return worms_matchfilter
+
+def create_WoRMSacceptedfilter(unaccepted_aphiaID, wormscall=WORMSCALL, species_only=True, store=True, outputpath='./', outputfile='worms_acceptedfilter.txt', overwrite=False, resume=True, parallel=True, cpu=2, max_attempt=3, store_parallel=True, overwrite_parallel=False, resume_parallel=True):
+
+    if parallel:
+
+        if (store!=store_parallel):
+            raise ValueError(f'parallel={parallel} and store={store} but store_parallel={store_parallel}')
+
+        if (overwrite!=overwrite_parallel):
+            raise ValueError(f'parallel={parallel} and overwrite={overwrite} but overwrite_parallel={overwrite_parallel}')
+
+    params_func = {
+                   'wormscall':wormscall,
+                   'species_only':species_only,
+                   'return_filename':True,
+                   'resume':resume
+                  }
+
+    params_store = {
+                   'store':store,
+                   'outputpath':outputpath,
+                   'outputfile':outputfile,
+                   'overwrite':overwrite
+                  }
+
+    params_parallel = {
+                       'cpu':2,
+                       'max_attempt':max_attempt,
+                       'resume_parallel':resume_parallel,
+                       'store_parallel':store_parallel,
+                       'overwrite_parallel':overwrite_parallel
+                      }
+
+    params_func.update(params_store)
+
+    # Retrieve the classification of the scientifically accepted counterpart for each unaccepted taxa
+
+    if len(unaccepted_aphiaID)==0:
+        print(f'            ** WoRMS filter (accepted marine taxa) | {len(unaccepted_aphiaID)} unaccepted taxa')
+        return None
+
+    if parallel and (len(unaccepted_aphiaID)>=1000):
+        print(f'            ** WoRMS filter (accepted marine taxa) | {len(unaccepted_aphiaID)} unaccepted taxa')
+        params_func['verbose']=False
+        filename, worms_acceptedfilter = parallel_match_WoRMSByAcceptedSciname(unaccepted_aphiaID, **params_parallel, **params_func)
+    else:
+        params_func['verbose']=True
+        filename, worms_acceptedfilter = match_WoRMSByAcceptedSciname(unaccepted_aphiaID, **params_func)
+    print('check dtypes')
+    print(worms_acceptedfilter.dtypes)
+    #worms_acceptedfilter[wormscall['valid_AphiaID']] = worms_acceptedfilter[wormscall['valid_AphiaID']].astype('Float64').astype('Int64')
+
+    # Process taxa identified at a rank lower than species and any remaining unaccepted taxa
+
+    params_func['store']=False
+    params_func['return_filename']=False
+
+    params_dict = {}
+    params_dict['parallel_args']=params_parallel
+    params_dict['func_args']=params_func
+
+    ## Identify and replace any remaining unaccepted taxa with their accepted counterparts
+
+    isunaccepted = (worms_acceptedfilter[wormscall['status']]!='accepted') & (~pd.isnull(worms_acceptedfilter[wormscall['valid_AphiaID']])) & (worms_acceptedfilter[wormscall['valid_AphiaID']]!=worms_acceptedfilter['group'])
+    worms_acceptedfilter.loc[isunaccepted,wormscall['status']]='process'
+
+    ## Resolve cyclic dependencies between identifiers
+    ## when retrieving species classification for taxa below species rank
+
+    worms_acceptedfilter['cyclic_valid_AphiaID'] = worms_acceptedfilter[wormscall['valid_AphiaID']].values
+    worms_acceptedfilter['cyclic_status'] = worms_acceptedfilter[wormscall['status']].values
+
+    subspecies, cyclic_status, cyclic_valid_AphiaID = _process_subspecies(worms_acceptedfilter, parallel, **params_dict)
+
+    while subspecies is not None:
+
+        ## Replace taxa identified below species rank,
+        ## with their accepted parent classification in the WoRMS-accepted filter
+
+        index, columns = subspecies.index.tolist(), list(set(subspecies.columns) - set(['group']))
+        worms_acceptedfilter.loc[index, columns] = subspecies.loc[index, columns]
+        worms_acceptedfilter.loc[index,'cyclic_status'], worms_acceptedfilter.loc[index,'cyclic_valid_AphiaID'] = cyclic_status, cyclic_valid_AphiaID
+
+        subspecies, cyclic_status, cyclic_valid_AphiaID = _process_subspecies(worms_acceptedfilter, parallel, **params_dict)
+
+    worms_acceptedfilter = worms_acceptedfilter.drop(['cyclic_status','cyclic_valid_AphiaID'], axis=1)
+    worms_acceptedfilter = standardizenan.apply(worms_acceptedfilter)
+    #worms_acceptedfilter[wormscall['valid_AphiaID']] = worms_acceptedfilter[wormscall['valid_AphiaID']].astype('Float64').astype('Int64')
+    worms_acceptedfilter = astype_Int64(worms_acceptedfilter, wormscall, issciname=False)
+
+    # Store WoRMS-accepted filter
+
+    if store:
+        write_dataframe2txtfile(worms_acceptedfilter, filename, init=True, verbose=True)
+
+    return worms_acceptedfilter
+
+
+def create_WoRMSfilter(gzfile_path, colname, wormscall=WORMSCALL, identification_level='species', min_length=3, doublecheck=True, store=True, outputpath='./', overwrite=False, resume=True, parallel=True, max_attempt=3, store_parallel=True, overwrite_parallel=False, resume_parallel=True):
+
+    # Parameters
+
+    ## Global variables
+
+    mandatory_wormskeys = ['scientificname','match_type','status','valid_AphiaID','rank']
+
+    missing_keys = set(mandatory_wormskeys) - set(wormscall.keys())
+    if len(missing_keys)!=0:
+        raise Exception(f'{missing_keys} WoRMS keys are missing in `wormscall`')
+
+    ## Arguments
 
     if parallel:
 
@@ -1391,10 +1770,13 @@ def create_WoRMSfilter(gzfile_path, colname, wormscall=WORMSCALL, identification
         cpu=2
         print(f'               INFO | {cpu} CPUs will be used')
 
-        if parallel and (store!=store_parallel):
+        if (store!=store_parallel):
             raise ValueError(f'parallel={parallel} and store={store} but store_parallel={store_parallel}')
 
-    storeparams = {
+        if (overwrite!=overwrite_parallel):
+            raise ValueError(f'parallel={parallel} and overwrite={overwrite} but overwrite_parallel={overwrite_parallel}')
+
+    params_store = {
                    'store':store,
                    'outputpath':outputpath,
                    'overwrite':overwrite
@@ -1410,10 +1792,11 @@ def create_WoRMSfilter(gzfile_path, colname, wormscall=WORMSCALL, identification
 
     # Get unique species
 
-    unique_rawscinames = get_uniqueRawSciname(gzfile_path, colname=colname, **storeparams)
+    unique_rawscinames = get_uniqueRawSciname(gzfile_path, colname=colname, resume=resume, **params_store) #DEBUG
+    #unique_rawscinames = pd.read_csv('/data/smartbiodiv/eberhocoi/filters_all/unique_verbatimScientificName.txt',sep='\t')['raw_sciname'].tolist()
 
     if len(unique_rawscinames)==0:
-        print(f'               No scientific name. Is {gzfile_path} empty?')
+        print(f'               WARNING | No scientific name. Is {gzfile_path} empty?')
         return None, None
 
     # Get WoRMS-recognized classifications
@@ -1422,89 +1805,34 @@ def create_WoRMSfilter(gzfile_path, colname, wormscall=WORMSCALL, identification
                    'wormscall':wormscall,
                    'identification_level':identification_level,
                    'min_length':min_length,
-                   'doublecheck':doublecheck
+                   'doublecheck':doublecheck,
+                   'resume':resume
                   }
 
-    params_func.update(storeparams)
+    params_func.update(params_store)
 
     ## Match taxa with the WoRMS database and retrieve their classification if a match is found
 
-    if parallel and (len(unique_rawscinames)>=1000):
-        print(f'            ** WoRMS filter (recognized marine taxa) | {len(unique_rawscinames)} unique scientific names')
-        params_func['verbose']=False
-        _, worms_matchfilter = parallel_match_WoRMSBySciname(unique_rawscinames, **params_parallel, **params_func)
-    else:
-        params_func['verbose']=True
-        worms_matchfilter = match_WoRMSBySciname(unique_rawscinames, **params_func)
-
-    worms_matchfilter[wormscall['valid_AphiaID']] = worms_matchfilter[wormscall['valid_AphiaID']].astype('Int64')
+    worms_matchfilter = create_WoRMSrecognizedfilter(unique_rawscinames, parallel=parallel, **params_parallel, **params_func)
 
     # Get WoRMS-accepted classifications
 
     params_func = {
                    'wormscall':wormscall,
                    'species_only':(identification_level=='species'),
-                   'return_filename':True,
+                   'resume':resume
                   }
 
-    params_func.update(storeparams)
+    params_func.update(params_store)
 
     ## Identify unaccepted taxa classifications
 
     isunaccepted = (worms_matchfilter[wormscall['status']]!='accepted') & (~pd.isnull(worms_matchfilter[wormscall['valid_AphiaID']]))
     unaccepted_aphiaID = worms_matchfilter.loc[isunaccepted, wormscall['valid_AphiaID']].unique().tolist()
 
-    ## Retrieve the classification of their scientifically accepted counterparts
+    ## Retrieve the classification of their scientifically accepted species counterparts
 
-    if len(unaccepted_aphiaID)==0:
-        print(f'            ** WoRMS filter (accepted marine taxa) | {len(unaccepted_aphiaID)} unaccepted taxa')
-        return worms_matchfilter, None
-
-    if parallel and (len(unaccepted_aphiaID)>=1000):
-        print(f'            ** WoRMS filter (accepted marine taxa) | {len(unaccepted_aphiaID)} unaccepted taxa')
-        params_func['verbose']=False
-        filename, worms_acceptedfilter = parallel_match_WoRMSByAcceptedSciname(unaccepted_aphiaID, **params_parallel, **params_func)
-    else:
-        params_func['verbose']=True
-        filename, worms_acceptedfilter = match_WoRMSByAcceptedSciname(unaccepted_aphiaID, **params_func)
-
-    worms_acceptedfilter[wormscall['valid_AphiaID']] = worms_acceptedfilter[wormscall['valid_AphiaID']].astype('Int64')
-
-    # Process taxa identified at a rank lower than species and any remaining unaccepted taxa
-
-    params_func['store']=False
-    params_func['return_filename']=False
-
-    # identify and replace any remaining unaccepted taxa with their accepted counterparts
-
-    isunaccepted = (worms_acceptedfilter[wormscall['status']]!='accepted') & (~pd.isnull(worms_acceptedfilter[wormscall['valid_AphiaID']])) & (worms_acceptedfilter[wormscall['valid_AphiaID']]!=worms_acceptedfilter['group'])
-    worms_acceptedfilter.loc[isunaccepted,wormscall['status']]='process'
-
-    # resolve cyclic dependencies between identifiers
-    # when retrieving species classification for taxa below species rank
-
-    worms_acceptedfilter['cyclic_valid_AphiaID'] = worms_acceptedfilter[wormscall['valid_AphiaID']].values
-    worms_acceptedfilter['cyclic_status'] = worms_acceptedfilter[wormscall['status']].values
-
-    subspecies, cyclic_status, cyclic_valid_AphiaID = _process_subspecies(worms_acceptedfilter, parallel, cpu=cpu, max_attempt=max_attempt, **params_func)
-
-    while subspecies is not None:
-
-        # replace taxa identified below species rank,
-        # with their accepted parent classification in the WoRMS-accepted filter
-
-        index, columns = subspecies.index.tolist(), list(set(subspecies.columns) - set(['group']))
-        worms_acceptedfilter.loc[index, columns] = subspecies.loc[index, columns]
-        worms_acceptedfilter.loc[index,'cyclic_status'], worms_acceptedfilter.loc[index,'cyclic_valid_AphiaID'] = cyclic_status, cyclic_valid_AphiaID
-
-        subspecies, cyclic_status, cyclic_valid_AphiaID = _process_subspecies(worms_acceptedfilter, parallel, cpu=cpu, max_attempt=max_attempt, **params_func)
-
-    worms_acceptedfilter = worms_acceptedfilter.drop(['cyclic_status','cyclic_valid_AphiaID'], axis=1)
-
-    # Store WoRMS-accepted filter
-
-    if store:
-        write_dataframe2txtfile(worms_acceptedfilter, filename, init=True, verbose=True)
+    worms_acceptedfilter = create_WoRMSacceptedfilter(unaccepted_aphiaID, parallel=parallel, **params_func, **params_parallel)
 
     return worms_matchfilter, worms_acceptedfilter
 
@@ -1517,16 +1845,17 @@ if __name__ == '__main__':
     parser.add_argument('colname', type=str, help='column containing raw scientific names')
     parser.add_argument('--wormscall', type=json.loads, help='dictionary containing the WoRMS variables to keep and the names under which to store them', default=json.dumps(WORMSCALL))
     parser.add_argument('--identification_level', type=str, help="should be 'best', 'species' or 'first'", default='species')
-    parser.add_argument('--min_length', type=int, help='minimum length of the terms comprising the scientific name', default=3)
+    parser.add_argument('--min_length', type=int, help='minimum length of the words comprising the scientific name', default=3)
     parser.add_argument('--doublecheck', action=argparse.BooleanOptionalAction, help='double-check or not three-word scientific names by querying only the first two words', default=True)
     parser.add_argument('--store', action=argparse.BooleanOptionalAction, help='whether to store the filters', default=True)
     parser.add_argument('--outputpath', type=str, help='path to folder where files will be stored', default='./')
     parser.add_argument('--overwrite', action=argparse.BooleanOptionalAction, help='overwrite existing filters', default=False)
+    parser.add_argument('--resume', action=argparse.BooleanOptionalAction, help='use stored filters and temporary files', default=True)
     parser.add_argument('--parallel', action=argparse.BooleanOptionalAction, help='parallelize requests (maximum 2 CPUs)', default=False)
-    parser.add_argument('--resume_parallel', action=argparse.BooleanOptionalAction, help='reuse existing filters in parallelized mode', default=True)
     parser.add_argument('--max_attempt', type=int, help='maximum number of retries in case of errors when running in parallelized mode', default=3)
     parser.add_argument('--store_parallel', action=argparse.BooleanOptionalAction, help='whether to store the filters in parallelized mode', default=True)
     parser.add_argument('--overwrite_parallel', action=argparse.BooleanOptionalAction, help='overwrite existing filters in parallelized mode', default=False)
+    parser.add_argument('--resume_parallel', action=argparse.BooleanOptionalAction, help='reuse existing filters in parallelized mode', default=True)
 
     args = parser.parse_args()
     params = {
@@ -1534,13 +1863,14 @@ if __name__ == '__main__':
               'identification_level': args.identification_level,
               'min_length': args.min_length,
               'doublecheck': args.doublecheck,
+              'resume' : args.resume,
               'store': args.store,
-              'outputpath': args.outputpath,
-              'resume_parallel': args.resume_parallel,
               'overwrite': args.overwrite,
+              'outputpath': args.outputpath,
               'parallel': args.parallel,
               #'cpu': args.cpu,
               'max_attempt': args.max_attempt,
+              'resume_parallel': args.resume_parallel,
               'store_parallel': args.store_parallel,
               'overwrite_parallel': args.overwrite_parallel
              }
