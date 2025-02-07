@@ -13,6 +13,7 @@ import filters
 import filters.createwormsfilters as cwf
 import utils.standardizenan as stdnan
 import utils.convertdatetype as cvtdate
+from marinedb.utils import writedataframe
 
 TYPE = {
         'int':'Int64',
@@ -129,15 +130,15 @@ def processing_data(df2clean, config, columns2keep, init=False):
     return df2clean, config, columns2keep
 
 
-def write_tsvfile(df, tsv_filename, init=False):
+#def write_tsvfile(df, tsv_filename, init=False):
+#
+#    print(f'Storing in {tsv_filename} | {len(df)} observations')
+#    if init:
+#        df.to_csv(tsv_filename, mode='w', index=False, header=True, sep='\t')
+#    else:
+#        df.to_csv(tsv_filename, mode='a', index=False, header=False, sep='\t')
 
-    print(f'Storing in {tsv_filename} | {len(df)} observations')
-    if init:
-        df.to_csv(tsv_filename, mode='w', index=False, header=True, sep='\t')
-    else:
-        df.to_csv(tsv_filename, mode='a', index=False, header=False, sep='\t')
-
-    return True
+#    return True
 
 
 if __name__ == '__main__':
@@ -216,7 +217,8 @@ if __name__ == '__main__':
                 df2clean, config, columns2keep = processing_data(df2clean, config, columns2keep, init=init, worms=worms)
 
                 # Store data
-                write_tsvfile(df2clean, output_file, init=init)
+                #write_tsvfile(df2clean, output_file, init=init)
+                writedataframe.to_txt(df2clean, output_file, init=init, verbose=True)
 
                 end=time.time()
                 print()
@@ -237,7 +239,8 @@ if __name__ == '__main__':
         df2clean, config, columns2keep = processing_data(df2clean, config, columns2keep)
 
         # Store data
-        write_tsvfile(df2clean, output_file)
+        #write_tsvfile(df2clean, output_file)
+        writedataframe.to_txt(df2clean, output_file, init=False, verbose=True)
 
     print()
     print(f'----- End cleaning: {config["gbif_gz_file"]} -----')
