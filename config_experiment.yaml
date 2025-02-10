@@ -1,6 +1,6 @@
 data:
 
-  gbif_gz_file: "/mnt/smartbiodiv/gbif_building/gbif_ocean_full.txt.gz"
+  gzfile_path: "/mnt/smartbiodiv/gbif_building/gbif_ocean_full.txt.gz"
 
   input_path: "/data/smartbiodiv/eberhocoi/source3/"
 
@@ -9,8 +9,7 @@ data:
   output_file: "gbif_ocean_clean.tsv"
 
 
-  #filters
-  filters:
+  processing:
     #- taxonRank:
     #    - isin: #also drop NaN
     #        values: ['FORM','VARIETY','SUBSPECIES','SPECIES'] #'FORM',
@@ -64,12 +63,12 @@ data:
         - isboundedby: #also drop NaN
             operator: '<='
             value: 180
-    - filter:
+    - tool:
         - doeslateqlon:
             keylat: 'decimalLatitude'
             keylon: 'decimalLongitude'
             flag: True
-    - filter:
+    - tool:
         - minlatlonprecision:
             keylat: 'decimalLatitude'
             keylon: 'decimalLongitude'
