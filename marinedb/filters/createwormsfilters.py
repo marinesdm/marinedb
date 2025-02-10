@@ -28,8 +28,9 @@ import http
 
 # Internal import
 
-from marinedb.filters import subsetranks
+from marinedb.tools import subsetranks
 from marinedb.utils import regexstrip
+from marinedb.utils import preprocessquotationmark
 from marinedb.utils import standardizenan
 from marinedb.utils.standardizenan import isnan
 from marinedb.utils import writedataframe
@@ -123,12 +124,12 @@ def _store_uniqueRawSciname(unique_rawsciname, outputfile):
     with open(outputfile, 'w') as f:
         f.writelines('\n'.join(['raw_sciname'] + list(unique_rawsciname)))
 
-def _strip_rawSciname(rawsciname):
+#def _strip_rawSciname(rawsciname):
 
-    rawsciname = regexstrip.apply(rawsciname, pattern=r'["\s]+')
-    rawsciname = regexstrip.apply(rawsciname, pattern=r"['\s]+")
+#    rawsciname = regexstrip.apply(rawsciname, pattern=r'["\s]+')
+#    rawsciname = regexstrip.apply(rawsciname, pattern=r"['\s]+")
 
-    return rawsciname
+#    return rawsciname
 
 def get_uniqueRawSciname(gzfile_path, colname, resume=True, store=False, overwrite=False, outputpath='./', outputfile=''):
 
@@ -163,7 +164,8 @@ def get_uniqueRawSciname(gzfile_path, colname, resume=True, store=False, overwri
             # to avoid quotation problems with pandas
 
             sciname = line.decode('utf8').strip('\n').split('\t')[sciname_index]
-            sciname = _strip_rawSciname(sciname)
+            #sciname = _strip_rawSciname(sciname)
+            sciname = preprocessquotationmark.apply(sciname)
 
             # Update the set of unique raw scientific names
 
@@ -638,17 +640,17 @@ def _process_rank(worms_results, ismatchfilter):
 
 ### Match WoRMS by pre-processed scientific names ###
 
-def preprocess_quotationMarks(raw_scinames, unique_values=True):
+#def preprocess_quotationMarks(raw_scinames, unique_values=True):
 
     # Pre-process the raw scientific names
     # to avoid quotation mark problems with pandas
 
-    raw_scinames=pd.Series(raw_scinames).str.replace('^["\s]+|["\s]+$','',regex=True)
-    raw_scinames=raw_scinames.str.replace("^['\s]+|['\s]+$",'',regex=True)
-    if unique_values:
-        raw_scinames=raw_scinames.unique().tolist()
+#    raw_scinames=pd.Series(raw_scinames).str.replace('^["\s]+|["\s]+$','',regex=True)
+#    raw_scinames=raw_scinames.str.replace("^['\s]+|['\s]+$",'',regex=True)
+#    if unique_values:
+#        raw_scinames=raw_scinames.unique().tolist()
 
-    return raw_scinames
+#    return raw_scinames
 
 def _connect_matchAphiaRecordsByNames(wormsscinames, max_attempt=10, pause_duration=5):
 
@@ -778,7 +780,9 @@ def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level
     # Pre-process the raw scientific names
     # to avoid quotation mark problems with pandas
 
-    raw_scinames = preprocess_quotationMarks(raw_scinames, unique_values=True)
+    #raw_scinames = preprocess_quotationMarks(raw_scinames, unique_values=True)
+    raw_scinames = preprocessquotationmark.apply(raw_scinames)
+    raw_scinames = raw_scinames.unique().tolist()
 
     if resume and os.path.isfile(outputfile):
 
@@ -1314,7 +1318,8 @@ def _parallel_WoRMSmatch(func_WoRMSmatch, data, wormscall, cpu, max_attempt=3, i
                 print(indent + f'               INFO | {outputfile} already exists and will be used (`resume_parallel`={resume_parallel})')
 
                 if issciname:
-                    data = preprocess_quotationMarks(data)
+                    #data = preprocess_quotationMarks(data)
+                    data = preprocessquotationmark.apply(data)
                     preprocess=True
 
                 data, previous_wormsmatch = _resume_matchWoRMS(data, outputfile, columns=colnames, issciname=issciname)
