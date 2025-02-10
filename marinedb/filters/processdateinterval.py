@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-import utils.convertdatetype as convertdatetype
+import tools.convertdatetype as convertdatetype
 
 
 def apply(df, key, drop=False, inplace=False, flag=False, maxinterval_number=1, maxinterval_level='years', interval_delimiter='/'): 

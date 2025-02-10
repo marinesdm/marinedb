@@ -1,4 +1,4 @@
-from marinedb.filters import minfloatprecision as mfp
+from marinedb.tools import minfloatprecision as mfp
 import numpy as np
 
 def apply(df, keylat, keylon, value, flag=False):
