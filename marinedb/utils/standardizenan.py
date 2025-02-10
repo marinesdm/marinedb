@@ -60,6 +60,10 @@ def apply(df, key=None, nan_values=None, letters_only=False):
         # Convert all missing values in the dataset to pd.NA
         df = pd.DataFrame(np.where(visnan(df, nan_values=nan_values, letters_only=letters_only), pd.NA, df),columns=df.columns)
 
+    elif len(key)==0: # empty list or ''
+
+        return df
+
     else:
         # Convert all missing values in `key` columns to pd.NA
         df[key]=np.where(visnan(df[key], nan_values=nan_values, letters_only=letters_only), pd.NA, df[key])
