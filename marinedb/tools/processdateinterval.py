@@ -4,7 +4,7 @@ import numpy as np
 import tools.convertdatetype as convertdatetype
 
 
-def apply(df, key, drop=False, inplace=False, flag=False, maxinterval_number=1, maxinterval_level='years', interval_delimiter='/'): 
+def apply(df, key, drop=False, inplace=False, flag=False, maxinterval_number=1, maxinterval_level='years', interval_delimiter='/'):
 
     #maxinterval_number=-1 keep the start date for all intervals
     #start date : a different strategy could be implemented (e.g. take the median date)
@@ -14,9 +14,9 @@ def apply(df, key, drop=False, inplace=False, flag=False, maxinterval_number=1, 
     maxinterval_number=int(maxinterval_number)
 
     if maxinterval_number<-1:
-        raise ValueError("`processdateinterval.py` | `maxinterval_number` must be > -1")
+        raise ValueError(f"`processdateinterval.py` | `maxinterval_number` must be > -1, not {maxinterval_number}")
     if maxinterval_level not in ['years','months','days']:
-        raise ValueError("`processdateinterval.py` | `maxinterval_level` must be 'years', 'months' or 'days'")
+        raise ValueError(f"`processdateinterval.py` | `maxinterval_level` must be 'years', 'months' or 'days', not {maxinterval_level}")
 
     if inplace:
         colname=key
@@ -29,7 +29,7 @@ def apply(df, key, drop=False, inplace=False, flag=False, maxinterval_number=1, 
 
     ## Find intervals
 
-    print(f'            * processdateinterval | find date intervals')
+    print(f'            ** processdateinterval | find date intervals')
 
     delimiter_index=df[key].astype('string').str.find(interval_delimiter).astype('Int64') # interval format: YYYY[-MM[-DD...]]/YYYY[-MM[-DD...]]
     interval_index=list(np.where((~pd.isnull(delimiter_index)) & (delimiter_index>0))[0])
@@ -39,7 +39,7 @@ def apply(df, key, drop=False, inplace=False, flag=False, maxinterval_number=1, 
 
         ## Delete intervals
 
-        print(f'            * processdateinterval | delete date intervals')
+        print(f'            ** processdateinterval | delete date intervals')
 
         df = df[~df[flagname]].reset_index(drop=True)
         df.drop(columns=[flagname], inplace=True)
@@ -50,7 +50,7 @@ def apply(df, key, drop=False, inplace=False, flag=False, maxinterval_number=1, 
 
         ## Flag intervals for later deletion or processing
 
-        print(f'            * processdateinterval | flag date intervals')
+        print(f'            ** processdateinterval | flag date intervals')
 
         df.drop(columns=colname, inplace=True)
         return df
@@ -59,7 +59,7 @@ def apply(df, key, drop=False, inplace=False, flag=False, maxinterval_number=1, 
 
         ## Convert intervals to date
 
-        print(f'            * processdateinterval | replace date intervals with start date')
+        print(f'            ** processdateinterval | replace date intervals with start date')
 
         tempdf = pd.DataFrame(df.loc[df[flagname],key].astype('string').str.split('/').tolist(), columns=['start','end'], index=df[df[flagname]].index)
         tempdf = convertdatetype.apply(tempdf,'start')

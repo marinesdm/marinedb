@@ -8,7 +8,7 @@ from marinedb.tools import processdateinterval
 def _processdateinterval(df, key, drop):
 
     if f'flag_{key}_interval' not in df.columns: #flag_{key}_interval column does not yet exist
-        print(f'            * splitdate | processdateinterval (default parameters)')
+        print(f'            ** splitdate | processdateinterval (default parameters)')
         df = processdateinterval.apply(df, key, drop=drop, flag=True, inplace=False)
 
     if drop:
@@ -105,7 +105,7 @@ def apply(df, key, split_type='all', drop_interval=False, overwrite=False, flag=
 
     # Convert to datetime & UTC
 
-    print(f'            * splitdate | convertdatetype')
+    print(f'            ** splitdate | convertdatetype')
 
     tempcol = f'{key}_processing'
     df[tempcol] = df[key2process].copy()
@@ -113,7 +113,7 @@ def apply(df, key, split_type='all', drop_interval=False, overwrite=False, flag=
 
     # Split date into year, month & day
 
-    print(f'            * splitdate | split into year/month/day when known')
+    print(f'            ** splitdate | split into year/month/day when known')
 
     df.loc[process,colnames['year']]=df.loc[process,tempcol].dt.year
     df.loc[process,colnames['month']]=df.loc[process,tempcol].dt.month
