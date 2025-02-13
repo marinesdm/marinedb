@@ -2,6 +2,7 @@
 # Local imports
 
 from . import *
+from .temporal import *
 
 def apply(df, config_dict):
 
@@ -9,7 +10,6 @@ def apply(df, config_dict):
 
         colname = list(procstep.keys())[0]
 
-        print(f'    * {colname}')
         for proc in procstep[colname]:
 
             columns_before = set(df.columns)
@@ -24,15 +24,23 @@ def apply(df, config_dict):
             length_before=len(df)
 
             if colname=='tool':
+                colname = [key for key in proc_params.keys() if 'key' in key]
+                if len(colname)!=0:
+                    print(f'    * {", ".join(colname)}')
+                else:
+                    print(f'    * dataframe')
+                #print(f'      ** {proc_name}')
                 df = eval(f"{proc_name}.apply(df, **proc_params)")
             else:
+                print(f'    * {colname}')
+                #print(f'      ** {proc_name}')
                 df = eval(f"{proc_name}.apply(df, colname, **proc_params)")
 
-            print(f'        {proc_name} | before: {length_before}, after: {len(df)}')
+            print(f'      {proc_name} | before: {length_before}, after: {len(df)}')
 
             columns_after = set(df.columns)
             new_columns = columns_after - columns_before
             if len(new_columns)!=0:
-                print(f'        {proc_name} | new columns: {list(new_columns)}')
+                print(f'      {proc_name} | new columns: {list(new_columns)}')
 
     return df
