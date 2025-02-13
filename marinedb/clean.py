@@ -112,7 +112,8 @@ def processing_data(df2clean, config, columns2keep, init=False):
 
     # Apply several filters to filter the columns or the observations
 
-    print(f'    ** standardizenan')
+    print(f'    * dataframe')
+    print(f'        ** standardizenan')
     df = standardizenan.apply(df, key=None, letters_only=False)
 
     columns_before = set(df.columns)
@@ -120,7 +121,12 @@ def processing_data(df2clean, config, columns2keep, init=False):
     columns_after = set(df.columns)
     new_columns = list(columns_after - columns_before)
 
-    if init:
+    isvariable = ("variable" in config.keys())
+
+    if not isvariable:
+        print('    INFO | No "variable" section found. Column selection, type conversion, and renaming will not be performed')
+
+    if init and isvariable:
         columns2keep = create_columns2keep(config)
         if len(new_columns)!=0:
             for col in new_columns:
@@ -128,20 +134,25 @@ def processing_data(df2clean, config, columns2keep, init=False):
 
     # Select the columns
 
-    print(f'    ** columnselection')
-    print(f'     {list(columns2keep.keys())}')
-    df2clean = df2clean[list(columns2keep.keys())]
+    if isvariable:
+        print(f'    * dataframe')
+        print(f'        ** columnselection')
+        print(f'        {list(columns2keep.keys())}')
+        df2clean = df2clean[list(columns2keep.keys())]
 
     # Apply dtype conversion
 
-    print(f'    ** dtypeconversion')
-    df2clean = dtypeconversion(df2clean, config["variables"])
-
+    if isvariable:
+        print(f'    * dataframe')
+        print(f'        ** dtypeconversion')
+        df2clean = dtypeconversion(df2clean, config["variables"])
 
     # Rename the columns
 
-    print(f'    ** columnrenaming')
-    df2clean = df2clean.rename(columns=columns2keep)
+    if isvariable:
+        print(f'    * dataframe')
+        print(f'        ** columnrenaming')
+        df2clean = df2clean.rename(columns=columns2keep)
 
     return df2clean, config, columns2keep
 
@@ -159,11 +170,28 @@ def processing_data(df2clean, config, columns2keep, init=False):
 
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser(description='Clean gzip file from GBIF.')
+    parser = argparse.ArgumentParser(description='Curate marine data.')
     parser.add_argument('config_file', type=str, help='path to the yaml configuration file')
     args = parser.parse_args()
 
-    config = yaml.safe_load(open(args.config_file,'r'))["data"]
+    config = yaml.safe_load(open(args.config_file,'r'))
+
+    if ("data" not in config.keys()):
+        raise KeyError('The configuration file must include a "data" section')
+
+    config = config["data"]
+
+    if ("gzfile_path" not in config.keys()):
+        raise KeyError('The configuration file must include a "gzfile_path" section')
+    if ("input_path" not in config.keys()):
+        raise KeyError('The configuration file must include a "input_path" section')
+    if ("output_path" not in config.keys()):
+        raise KeyError('The configuration file must include a "output_path" section')
+    if ("output_file" not in config.keys()):
+        raise KeyError('The configuration file must include a "output_file" section')
+    if ("processing" not in config.keys()):
+        raise KeyError('The configuration file must include a "processing" section')
+
     outputfile = config["output_path"] + config["output_file"]
 
     print(f'----- Start cleaning: {config["gbif_gz_file"]} -----')
@@ -204,8 +232,10 @@ if __name__ == '__main__':
         ## Load existing filters or generate new ones if none are found
 
         #print('Initialization | Prepare for standardization using WoRMS')
-        print('* Initialization')
-        print('    ** createwormsfilters')
+        print('Initialization')
+        print('--------------')
+        print(f'    * {isinworms_column}')
+        print('        ** createwormsfilters')
 
         worms_matchfilter, worms_acceptedfilter = cwf.create_WoRMSfilter(**createwormsfilters_params)
 
@@ -221,7 +251,8 @@ if __name__ == '__main__':
 
     # Read the gzip text data file
 
-    print('* Processing')
+    print('Processing')
+    print('----------')
 
     with gzip.open(config['gzfile_path'],'r') as gbif_data:
 
@@ -257,6 +288,7 @@ if __name__ == '__main__':
                 df2clean = pd.DataFrame(data2clean,columns=header)
 
                 # Process data
+
                 print()
                 print(f'Processing | {idx+1} lines done')
                 df2clean, config, columns2keep = processing_data(df2clean, config, columns2keep, init=init, worms=worms)
@@ -279,6 +311,7 @@ if __name__ == '__main__':
         df2clean = pd.DataFrame(data2clean,columns=header)
 
         # Process data
+
         print()
         print(f'Processing | {idx+1} lines done (end of file)')
         df2clean, config, columns2keep = processing_data(df2clean, config, columns2keep)
