@@ -1,5 +1,7 @@
 # coding: utf-8
 
+# External import
+
 import sys
 import subprocess
 import pandas as pd
@@ -8,8 +10,16 @@ from joblib import Parallel, delayed
 import math
 import re
 import itertools
+from tqdm import tqdm
 
 import time #DEBUG
+
+# Internal import
+
+from marinedb.utils import tqdmjoblib
+from marinedb.tools.temporal.convertdatetype import astype_Int64
+
+# Global variables
 
 PATH = os.path.dirname(os.path.abspath(__file__))
 JAR_PATH = os.path.join(PATH,'gbif-date-parser-20250214.jar')
@@ -114,15 +124,15 @@ def create_javaarg(datesstr_list, format=None):
 
     if format is None:
         format=''
-    if isinstance(format,list):
+    if isinstance(format, list):
         if (len(datesstr_list)!=len(format)):
             raise ValueError(f'`datesstr_list` and `format` must have the same length')
         for fmt in format:
             validate_format(fmt)
-    if isinstance(format,str):
+    if isinstance(format, str):
         validate_format(format)
         format = [format]*len(datesstr_list)
-    if not isinstance(format,str | list):
+    if not isinstance(format, str | list):
         raise TypeError(f'`format` must be a string or a list, not a {type(format).__name__}')
 
     multiple_datestr = list(zip(datesstr_list,format))
@@ -131,15 +141,15 @@ def create_javaarg(datesstr_list, format=None):
 
     return multiple_datestr
 
-def gbif_parse_date(df, key, index, format=None):
+def gbif_parse_date(df, datekey, index, format=None):
 
-    multiple_datesstr = df.loc[index,key].tolist()
+    multiple_datesstr = df.loc[index,datekey].tolist()
     multiple_datestr = create_javaarg(multiple_datesstr, format=format)
     result = parse_java(multiple_datestr)
 
     return result
 
-def parallel_parse_date(df, key, datestr_index, cpu, format=None):
+def parallel_parse_date(df, datekey, datestr_index, cpu, format=None):
 
     ndates = len(datestr_index)
     batch_size=1000
@@ -147,74 +157,102 @@ def parallel_parse_date(df, key, datestr_index, cpu, format=None):
     index_end = list(range(batch_size,ndates))[::batch_size] + [ndates]
     index_slides = list(zip(index_start,index_end))
 
-    with Parallel(n_jobs=cpu, prefer='threads', verbose=10) as parallel:
-        results = parallel(delayed(gbif_parse_date)(df, key, datestr_index[start:end], format=format) for start,end in index_slides) # order of the outputs = order of submission
+    nbatch = len(index_slides)
+    print(f'        ** parsedate | {ndates} dates to process ({nbatch} batches)')
+    print(f'        INFO | {cpu} CPUs will be used')
+    with tqdmjoblib.apply(tqdm(desc='        Progress', total=nbatch)) as progress_bar:
+        parallel = Parallel(n_jobs=cpu, prefer='threads')
+        results = parallel(delayed(gbif_parse_date)(df, datekey, datestr_index[start:end], format=format) for start,end in index_slides) # order of the outputs = order of submission
 
     results = list(itertools.chain(*results))
 
     return results
 
-def apply(df, key, format=None, inplace=False, parallel=False, cpu=None):
+def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, format=None, inplace=False, parallel=False, cpu=None):
+
+    if (yearkey is None) and (monthkey is not None):
+        raise Exception(f'`monthkey`={monthkey} but `yearkey` is None')
+    if (monthkey is None) and (daykey is not None):
+        raise Exception(f'`daykey`={daykey} but `monthkey` is None')
 
     if parallel and cpu is None:
         cpu=len(os.sched_getaffinity(0))
     if not parallel:
         cpu=1
 
-    print(f'        INFO | {cpu} CPUs will be used')
-
     if inplace:
-        colname=key
+        colname=datekey
     else:
-        colname=f'{key}_processedby_parsedate'
+        colname=f'{datekey}_processedby_parsedate'
 
-    df[key] = df[key].astype('string')
-    isdate = (~pd.isnull(df[key]))
+    df[datekey] = df[datekey].astype('string')
+
+    # Parse dates
+
+    isdate = (~pd.isnull(df[datekey]))
     datestr_index = list(isdate[isdate].index)
-
-    time_start=time.time() #DEBUG
-
-#    ndates = len(datestr2process)
-#    print(ndates) #DEBUG
-#    batch_size=1000
-#    nbatch = math.ceil(ndates/batch_size)
-#    print(nbatch) #DEBUG
-#    for batch in range(nbatch):
-
-#        start = batch*batch_size
-#        if batch==(nbatch-1):
-#            end = ndates
-#        else:
-#            end = start + batch_size
-
-#        index = datestr2process[start:end]
-#        multiple_datesstr = df.loc[index,key].tolist()
-#        multiple_datestr = create_javaarg(multiple_datesstr, format=format)
-
-#        df.loc[index,[colname,'issue_parsedate']] = parse_java(multiple_datestr)
-#        time_end=time.time() #DEBUG
-#        print(f'TIME: {round(time_end - time_start,0)}s for {end} lines')
-
-    df.loc[datestr_index,[colname,'issue_parsedate']] = parallel_parse_date(df, key, datestr_index, format=format, cpu=cpu)
+    df.loc[datestr_index,[colname,'issue_parsedate']] = parallel_parse_date(df, datekey, datestr_index, format=format, cpu=cpu)
 
     condition = pd.isnull(df.loc[isdate,[colname,'issue_parsedate']]).all(axis=1)
     if condition.any():
         error_index = list(df[condition].index)
         raise Exception(f'unexpected output: both stderr and stdout are empty for line(s) {error_index}')
 
+    # If no concatenated date is present or parsing fails,
+    # construct the date from available year, month and day columns
+
+    if (yearkey is not None):
+
+        isissue = (pd.isnull(df[colname])) & (df['issue_parsedate']!='RECORDED_DATE_UNLIKELY')
+
+        ## Process year strings
+
+        tempcol = ['year_temp']
+        df['year_temp'] = df[yearkey].values
+        df = astype_Int64(df, 'year_temp')
+        df['year_temp'] = df['year_temp'].astype('string')
+        isissue = isissue & (~pd.isnull(df['year_temp']))
+
+        if (monthkey is not None):
+
+            ## Process month strings
+
+            tempcol += ['month_temp']
+            joincol = ['month_temp']
+            df['month_temp'] = df[monthkey].values
+            df = astype_Int64(df, 'month_temp')
+            df['month_temp'] = df['month_temp'].astype('string')
+
+            if (daykey is not None):
+
+                ## Process day strings
+
+                tempcol += ['day_temp']
+                joincol += ['day_temp']
+                df['day_temp'] = df[daykey].values
+                df = astype_Int64(df, 'day_temp')
+                df['day_temp'] = df['day_temp'].astype('string')
+                df.loc[(~pd.isnull(df['day_temp'])) & pd.isnull(df['month_temp']), 'day_temp'] = pd.NA
+
+            ## Assemble the date following the ISO 8601 standard
+
+            df.loc[isissue, colname] = df.loc[isissue, 'year_temp'].str.cat(df.loc[isissue, joincol], sep='-', na_rep='')
+            df.loc[isissue, colname] = df.loc[isissue, colname].str.strip('- ')
+
+        else:
+
+            df.loc[isissue, colname] = df.loc[isissue, 'year_temp'].values
+
+        isassembled = isissue & (~pd.isnull(df[colname]))
+        df.loc[isassembled, 'issue_parsedate'] += ';DATE_ASSEMBLED'
+
+        ## Clean columns
+
+        if 'issue_convertdatetype' in df.columns:
+            tempcol += ['issue_convertdatetype']
+        df = df.drop(tempcol, axis=1)
+
     df['issue_parsedate'] = df['issue_parsedate'].astype('string')
     df[colname] = df[colname].astype('string')
 
     return df
-
-
-if __name__ == '__main__':
-
-    if len(sys.argv) not in [2, 3]:
-        print('Usage: python parse.py <date> [format]')
-        sys.exit(1)
-
-    if len(sys.argv) == 3:
-        parse_java(sys.argv[1], sys.argv[2])
-    else:
-        parse_java(sys.argv[1])
