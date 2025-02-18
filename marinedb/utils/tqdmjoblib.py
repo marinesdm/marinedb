@@ -6,7 +6,9 @@ from tqdm import tqdm
 
 @contextlib.contextmanager
 def apply(tqdm_object):
+
     """Context manager to patch joblib, enabling progress reporting in the provided tqdm progress bar"""
+
     class TqdmBatchCompletionCallback(joblib.parallel.BatchCompletionCallBack):
         def __call__(self, *args, **kwargs):
             tqdm_object.update(n=self.batch_size)

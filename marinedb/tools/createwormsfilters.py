@@ -156,7 +156,7 @@ def get_uniqueRawSciname(gzfile_path, colname, resume=True, store=False, overwri
 
         header = data.readline().decode('utf8').strip('\n').split('\t')
         sciname_index = header.index(colname)
-        count=len(unique_rawsciname)
+        count = len(unique_rawsciname)
 
         for idx, line in enumerate(data):
 

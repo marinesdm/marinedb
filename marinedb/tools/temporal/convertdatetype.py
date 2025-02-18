@@ -24,8 +24,9 @@ def astype_Int64(df, key):
     # Convert to integers
 
     df[key] = df[key].astype('Float64').astype('Int64')
+
     if pd.isnull(df['issue_convertdatetype']).all():
-        df = df.drop('issue_convertdatetype', axis=1)
+        df.drop(columns='issue_convertdatetype', inplace=True)
     else:
         df['issue_convertdatetype'] = df['issue_convertdatetype'].astype('string')
 
