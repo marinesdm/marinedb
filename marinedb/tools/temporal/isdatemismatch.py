@@ -1,8 +1,15 @@
 
 import re
 from operator import itemgetter
+import pandas as pd
+from joblib import Parallel, delayed
+import os
+from tqdm import tqdm
+import itertools
+
 from marinedb.utils import standardizenan
-from marinedb.tools.temporal import splitdate
+from marinedb.utils import tqdmjoblib
+from marinedb.tools.temporal import parsedatecomponent as pdc
 
 def _isempty(string):
 
@@ -22,7 +29,7 @@ def _isyearmismatch(datestr, yearstr):
         if len(yearstr) == 2:
             return datestr, True
 
-        mismatch = re.sub(yearstr[-2:], '', datestr)
+        mismatch = re.sub(yearstr[-2:], '', datestr, count=1)
         if len(mismatch) == len(datestr):
             return datestr, True
 
@@ -38,8 +45,7 @@ def _ismonthmismatch(datestr, monthstr):
 
     mismatch = re.sub(monthstr, '', datestr)
     if len(mismatch) == len(datestr):
-
-        mismatch = re.sub(mismatch[-1:], '', datestr)
+        mismatch = re.sub(monthstr[-1:], '', datestr, count=1)
         if len(mismatch) == len(datestr):
             return datestr, True
 
@@ -55,8 +61,7 @@ def _isdaymismatch(datestr, daystr):
 
     mismatch = re.sub(daystr, '', datestr)
     if len(mismatch) == len(datestr):
-
-        mismatch = re.sub(mismatch[-1:], '', datestr)
+        mismatch = re.sub(daystr[-1:], '', datestr, count=1)
         if len(mismatch) == len(datestr):
             return datestr, True
 
@@ -84,77 +89,122 @@ def ismismatch_str(datestr, yearstr=None, monthstr=None, daystr=None):
 
     return False
 
-def ismismatch_raw(df, paramsK, paramsV):
+def _get_mismatchissue(df, batch, paramsK, paramsV, verbose=False):
 
-    isdate = list(df[~pd.isnull(df[datekey])].index)
+    result = []
+    if verbose:
+        process = tqdm(batch, desc='        Progress')
+    else:
+        process = batch
 
-    for idx in isdate:
-        tempparams = dict(zip(paramsK, df.loc[idx,paramsV].tolist()))
-        doesmismatch = ismismatch_str(**tempparams)
+    for idx in process:
+        params = dict(zip(paramsK, df.loc[idx,paramsV].astype('string').tolist()))
+        doesmismatch = ismismatch_str(**params)
         if doesmismatch:
-            df.loc[idx,'issue_isdatemismatch'] = 'RECORDED_DATE_MISMATCH'
+            result.append('RECORDED_DATE_MISMATCH')
+        else:
+            result.append(pd.NA)
 
-    return df
+    return result
 
-def ismismatch_ISO(df, paramsK, paramsV):
+def _create_args(df, idx, paramsK, paramsV):
+    params = dict(zip(paramsK, df.loc[idx,paramsV].astype('string').tolist()))
+    return params
 
-    columns = df.columns
-    datekey = paramsV[paramsK.index('datestr')]
-    isdate = (~pd.isnull(df[datekey]))
-    subset = df[isdate].copy()
+def apply(df, datekey, yearkey, monthkey=None, daykey=None, stdnan=True, cvttype=True, parallel=False, cpu=None):
+    bli=df
+    if parallel and cpu is None:
+        cpu = len(os.sched_getaffinity(0))
+    if not parallel:
+        cpu = 1
 
-    subset = splitdate.apply(subset, datekey, split_type='all', drop_interval=True, inplace=False, flag=True)
-    diffcolumns = list(set(subset.columns) - set(columns))
+    if cpu == 1:
+        parallel = False
 
-    yearkey = paramsV[paramsK.index('yearstr')]
-    isyear = (~pd.isnull(subset[yearkey])) & (~pd.isnull(subset['year_processedby_splitdate']))
-    doesmismatch = (subset.loc[isyear,yearkey] != subset.loc[isyear,'year_processedby_splitdate'])
-    doesmismatch = doesmismatch[doesmismatch].index
-    subset.loc[doesmismatch,'issue_isdatemismatch'] = 'RECORDED_DATE_MISMATCH'
+    tempcol = []
+    if stdnan or cvttype:
 
-    if 'monthstr' in paramsK:
+        # Create temporary columns to preserve the original year, month, and day values
 
-        monthkey = paramsV[paramsK.index('monthstr')]
-        ismonth = pd.isnull(subset['issue_isdatemismatch']) & (~pd.isnull(subset[monthkey])) & (~pd.isnull(subset['month_processedby_splitdate']))
-        doesmismatch = (subset.loc[ismonth,monthkey] != subset.loc[ismonth,'month_processedby_splitdate'])
-        doesmismatch = doesmismatch[doesmismatch].index
-        subset.loc[doesmismatch,'issue_isdatemismatch'] = 'RECORDED_DATE_MISMATCH'
-
-    if 'daystr' in paramsK:
-
-        daykey = paramsV[paramsK.index('daystr')]
-        isday = pd.isnull(subset['issue_isdatemismatch']) & (~pd.isnull(subset[daykey])) & (~pd.isnull(subset['day_processedby_splitdate']))
-        doesmismatch = (subset.loc[isday,daykey] != subset.loc[isday,'day_processedby_splitdate'])
-        doesmismatch = doesmismatch[doesmismatch].index
-        subset.loc[doesmismatch,'issue_isdatemismatch'] = 'RECORDED_DATE_MISMATCH'
-
-    subset.drop(columns=diffcolumns, inplace=True)
-
-    df.loc[isdate,list(subset.columns)] = subset.values
-    #QUE FAIRE INTERVALLES ? 
-    return df
-
-def apply(df, datekey, yearkey, monthkey=None, daykey=None, ISOformat=False, stdnan=True, cvttype=True):
-
+        tempcol += ['year_temp']
+        df['year_temp'] = df[yearkey].copy()
+        yearkey = 'year_temp'
+        if monthkey is not None:
+            tempcol += ['month_temp']
+            df['month_temp'] = df[monthkey].copy()
+            monthkey = 'month_temp'
+        if daykey is not None:
+            tempcol += ['day_temp']
+            df['day_temp'] = df[daykey].copy()
+            dayket = 'day_temp'
+    print("checkreference:",bli is df)
     params = {"datestr" : datekey, "yearstr" : yearkey, "monthstr" : monthkey, "daystr" : daykey}
     params = {key : value for key, value in params.items() if value is not None}
     paramsK = list(params.keys())
     paramsV = list(itemgetter(*paramsK)(params))
 
     if stdnan:
+        print('        ** isdatemismatch | standardizenan')
         df = standardizenan.apply(df, key=paramsV)
-
+    print("checkreference:",bli is df)
     if cvttype:
+        print('        ** isdatemismatch | parsedatecomponent')
         df = pdc.parse_year(df, yearkey)
         if monthkey is not None:
             df = pdc.parse_month(df, monthkey)
         if daykey is not None:
             df = pdc.parse_day(df, daykey)
+        print("'issue_convertdatetype':",'issue_convertdatetype' in df.columns)
+    print("checkreference:",bli is df)
 
-    if ISOformat: #JE NE SUIS PAS SÛRE QUE CE SOIT PERTINENT ... OU BIEN VÉRIFIER SI DATE SLIT EXISTE DÉJÀ 
-        df = ismismatch_ISO(df, paramsK, paramsV)
+#    if ('issue_isdatemismatch' not in df.columns):
+#        df['issue_isdatemismatch'] = pd.NA
+#        df['issue_isdatemismatch'] = df['issue_isdatemismatch'].astype('string')
+
+    isdate = list(df[~pd.isnull(df[datekey])].index)
+    ndates = len(isdate)
+
+    batch_size = 5000
+    if ndates <= batch_size:
+        parallel=False
+
+    if parallel:
+
+        index_start = list(range(ndates))[::batch_size]
+        batches = [isdate[start : start + batch_size] for start in index_start]
+        nbatch = len(batches)
+        cpu = min(cpu, nbatch)
+
+        print(f'        ** isdatemismatch | {ndates} lines to process ({nbatch} batches)')
+        print(f'        INFO | {cpu} CPUs will be used')
+
+        with tqdmjoblib.apply(tqdm(desc='        Progress', total=nbatch)) as progress_bar:
+            results = Parallel(n_jobs=cpu)(delayed(_get_mismatchissue)(df, batch, paramsK, paramsV, verbose=False) for batch in batches)
+#        with parallel_config(backend="loky", inner_max_num_threads=2):
+#            results = Parallel(n_jobs=cpu)(delayed(get_mismatchissue)(_create_args(df, idx, paramsK, paramsV)) for idx in isdate)
+        results = list(itertools.chain(*results))
+        df.loc[isdate,'issue_isdatemismatch'] = results
+
     else:
-        df = ismismatch_raw(df, paramsK, paramsV)
+
+        df.loc[isdate,'issue_isdatemismatch'] = _get_mismatchissue(df, isdate, paramsK, paramsV, parallel=parallel, verbose=True)
+
+    if ('issue_convertdatetype' in df.columns):
+        tempcol += ['issue_convertdatetype']
+        isissue = (~pd.isnull(df['issue_convertdatetype']))
+        df.loc[isissue,'issue_convertdatetype'] = df.loc[isissue,'issue_convertdatetype'].str.replace('_TEMP','')
+        df.loc[isissue,'issue_isdatemismatch'] = df.loc[isissue,'issue_isdatemismatch'].str.cat(df.loc[isissue,'issue_convertdatetype'], sep=';', na_rep='')
+        df.loc[isissue,'issue_isdatemismatch'] = df.loc[isissue,'issue_isdatemismatch'].str.strip(' ;')
+
+    # Clean columns
+
+    df.drop(columns=tempcol, inplace=True)
+
+#    for idx in tqdm(isdate, desc='        Progress'):
+#        tempparams = dict(zip(paramsK, df.loc[idx,paramsV].astype('string').tolist()))
+#        doesmismatch = ismismatch_str(**tempparams)
+#        if doesmismatch:
+#            df.loc[idx,'issue_isdatemismatch'] = 'RECORDED_DATE_MISMATCH'
 
     return df
 
