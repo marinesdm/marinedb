@@ -1,0 +1,125 @@
+month_mapping:
+
+  # https://github.com/gbif/parsers/blob/dev/src/main/resources/dictionaries/parse/month.tsv
+  # bias toward European countries
+
+  january: 1
+  jan: 1
+  ja: 1
+  enero: 1 #spanish
+  ene: 1 #spanish
+  janvier: 1 #french
+  janv: 1 #french
+  januar: 1 #german
+  gennaio: 1 #italian
+  gen: 1 #italian
+  janeiro: 1 #portuguese
+  januar: 1 #danish
+
+  february: 2
+  feb: 2
+  fe: 2
+  f: 2
+  febrero: 2 #spanish
+  fevrier: 2 #french
+  fevr: 2 #french
+  fev: 2 #french, portuguese
+  februar: 2 #german, danish
+  febbraio: 2 #italian
+  fevereiro: 2 #portuguese
+
+  march: 3
+  mar: 3
+  mars: 3 #french, swedish
+  marz: 3 #german
+  mrt: 3 #dutch
+  marzo: 3 #spanish, italian
+  marco: 3 #portuguese
+  marts: 3 #danish
+
+  april: 4
+  apr: 4
+  ap: 4
+  abril: 4 #spanish, portuguese
+  abr: 4 #spanish, italian
+  avril: 4 #french
+  avr: 4 #french
+  aprile: 4 #italian
+
+  may: 5
+  mai: 5 #french, german
+  mayo: 5 #spanish
+  maggio: 5 #italian
+  mag: 5 #italian
+  maio: 5 #portuguese
+  mei: 5 #dutch
+  maj: 5 #danish, swedish
+
+  june: 6
+  jun: 6
+  junio: 6 #spanish
+  juni: 6 #german, swedish, danish
+  juin: 6 #french
+  giugno: 6 #italian
+  giu: 6 #italian
+  junho: 6 #portuguese
+
+  july: 7
+  jul: 7
+  julio: 7 #spanish
+  juli: 7 #german, swedish, danish
+  luglio: 7 #italian
+  lug: 7 #italian
+  juillet: 7 #french
+  julho: 7 #portuguese
+
+  august: 8
+  aug: 8
+  au: 8
+  agosto: 8 #spanish, italian, portuguese
+  ago: 8 #spanish, italian, portuguese
+  aout: 8 #french
+
+  september: 9
+  sept: 9
+  sep: 9
+  s: 9
+  settembre: 9 #italian
+  setembro: 9 #portuguese
+  set: 9 #common misspelling, italian, portuguese
+  septiembre: 9 #spanish
+  septembre: 9 #french
+
+  october: 10
+  oct: 10
+  oc: 10
+  o: 10
+  oktober: 10 #german, danish
+  okt: 10 #german, dutch, danish, swedish
+  ottobre: 10 #italian
+  ott: 10 #italian
+  outubro: 10 #portuguese
+  out: 10 #portuguese
+  octubre: 10 #spanish
+  octobre: 10 #french
+
+  november: 11
+  novermber: 11
+  nov: 11
+  no: 11
+  n: 11
+  noviembre: 11 #spanish
+  novembre: 11 #french, italian
+  novembro: 11 #portuguese
+
+  december: 12
+  dec: 12
+  de: 12
+  d: 12
+  diciembre: 12 #spanish
+  dicembre: 12 #italian
+  dic: 12 #spanish, italian
+  dezember: 12 #german
+  dezembro: 12 #portuguese
+  dez: 12 #german, portuguese
+  decembre: 12 #french
