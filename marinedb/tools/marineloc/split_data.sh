@@ -48,6 +48,7 @@ if [[ -z ${columns+x} ]]; then
     exit 1
 fi
 
+echo "* Parameters"
 DIR="$(dirname "${filename}")"
 mkdir "${DIR}/split/"
 if [[ -z ${outputname+x} ]]; then
@@ -59,7 +60,8 @@ else
 fi
 
 if [[ -z ${delimiter+x} ]] || [[ ${delimiter} == '\t' ]]; then
-    delimiter=$'\t'
+    #delimiter=$'\t'
+    delimiter="	"
     echo "-d ${delimiter} will be the delimiter of the output file"
 fi
 
@@ -68,31 +70,32 @@ fi
 #- delimiter: tabulation, use default -d for cut
 #- latitude / longitude: columns 22-23 of GBIF file
 
-echo "Extract column(s) ${columns}"
-cut -d "${delimiter}" -f "${columns}" "${filename}" > "${outputname}2split.tsv"
+echo "* Extract column(s) ${columns}"
+cut -d "${delimiter}" -f "${columns}" "${filename}" > "${outputname}2split.txt"
 
 # Delete header & Add indexes
 # -b a : number all lines, including empty lines
 # -v 0 : first line number = 0
 # -w 1 : column for line numbers = 1
 
-echo "Temporary remove the header & Add a column with row indices"
-sed 1d "${outputname}2split.tsv" | nl -w1 -b a -v 0 > "${outputname}2split_idx.tsv" 
+echo "* Temporary remove the header & Add a column with row indices"
+sed 1d "${outputname}2split.txt" | nl -w1 -b a -v 0 > "${outputname}2split_idx.txt"
 
 # Split into ${lines}-line files
 
-echo "Split into ${lines}-line(s) files"
-split -l "${lines}" --numeric-suffixes --verbose -a 4 "${outputname}2split_idx.tsv" "${outputname}_split"
-rm "${outputname}2split_idx.tsv"
+echo "* Split into ${lines}-line(s) files"
+split -l "${lines}" --numeric-suffixes --verbose -a 4 "${outputname}2split_idx.txt" "${outputname}_split"
+rm "${outputname}2split_idx.txt"
 
 # Add a header to all new files
 
-echo "Add the header to all new files"
-header="index\t$(head -n 1 ${outputname}2split.tsv)"
+echo "* Add the header to all new files"
+header="index	$(head -n 1 ${outputname}2split.txt)"
 sed -i "1i$header" "${outputname}"_split*
-rm "${outputname}2split.tsv"
+rm "${outputname}2split.txt"
 
 if [[ ${delimiter} != '\t' ]]; then
     # Convert to ${delimiter}-separated value file
-    sed -i "s/\t\+/${delimiter}/g" "${outputname}"_split* 
+    sed -i "s/\t/${delimiter}/g" "${outputname}"_split*
+    # or see tr command
 fi
