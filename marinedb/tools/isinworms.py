@@ -688,11 +688,11 @@ def _match_TaxaByAuthorship(verbatim, candidates, verbatimauthorshiponly=False, 
             verbatim_authorship = verbatim[:start] + verbatim[end:]
 
             more = ''.join(speciesmatch.groups())
-            more=re.sub(r'[^a-zA-Z0-9]+','',more)
+            more = re.sub(r'[^a-zA-Z0-9]+','',more)
             if len(more)>1:
-                ismore=True
+                ismore = True
             else:
-                ismore=False
+                ismore = False
 
         else: # species name not found
             print('ERROR ERROR ERROR ERROR')
@@ -700,7 +700,7 @@ def _match_TaxaByAuthorship(verbatim, candidates, verbatimauthorshiponly=False, 
 
             #candidates["match"]=False
             #candidates[["sensu_conflict","datematch_diff","datematch","authormatch_ratio","authormatch"]]=pd.NA
-            ismore=True
+            ismore = True
             verbatim_authorship = verbatim
 
     if len(verbatim_authorship)==0:
@@ -763,11 +763,12 @@ def _match_TaxaByAuthorship(verbatim, candidates, verbatimauthorshiponly=False, 
             # but no candidate contains "sensu"
             # no match
 
-            _ , _ , more = split_authorship(verbatim_authorship[0])
+            _ , _ , more1 = split_authorship(verbatim_authorship[0])
             if len(verbatim_authorship)!=1:
-                _ , _ , moretemp = split_authorship(verbatim_authorship[1])
-                more += moretemp
-            if len(more)>0:
+                _ , _ , more2 = split_authorship(verbatim_authorship[1])
+            condition1 = (not pd.isnull(more1)) and (len(more1) > 0)
+            condition2 = (not pd.isnull(more2)) and (len(more2) > 0)
+            if condition1 or condition2:
                 ismore=True
 
         else:
@@ -2022,7 +2023,7 @@ def drop(df, drop_conditions):
 
     return df
 
-def apply(df, *ignored_args, wormscall=None, rank_mapping=None, worms_dtypes=None, matchfilter=None, acceptedfilter=None, check_ambiguity=True, fuzzy=True, fixed_allowedMismatch=False, fixed_allowedMismatch_withNaN=1, fixed_allowedMismatch_withoutNaN=2, verbatimcolumn=None, verbatimauthorshiponly=None, keep_fossil=False, min_length=3, doublecheck=True, resume=True, store=True, overwrite=True, outputpath='./', outputfile='', parallel=True, max_attempt=3, store_parallel=True, overwrite_parallel=False, resume_parallel=True, drop_conditions=None, isinworms_overwrite=False): #DEBUG suppress isinworms_overwrite
+def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, worms_dtypes=None, matchfilter=None, acceptedfilter=None, check_ambiguity=True, fuzzy=True, fixed_allowedMismatch=False, fixed_allowedMismatch_withNaN=1, fixed_allowedMismatch_withoutNaN=2, verbatimcolumn=None, verbatimauthorshiponly=None, keep_fossil=False, min_length=3, doublecheck=True, inplace=False, resume=True, store=True, overwrite=True, outputpath='./', outputfile='', parallel=True, max_attempt=3, store_parallel=True, overwrite_parallel=False, resume_parallel=True, drop_conditions=None, isinworms_overwrite=False): #DEBUG suppress isinworms_overwrite
 
     Nobs = len(df)
 
@@ -2075,10 +2076,6 @@ def apply(df, *ignored_args, wormscall=None, rank_mapping=None, worms_dtypes=Non
     if (not keep_fossil) and ('isExtinct' not in WORMSCALL):
         raise Exception(f"`keep_fossil`={keep_fossil} but 'isExtinct' not in `WORMSCALL`")
 
-    #if keep_fossil and ('isExtinct' in WORMSCALL):
-    #    # do not delete fossil occurrences
-    #    del WORMSCALL[WORMSCALL.index('isExtinct')]
-
     if (drop_conditions is not None) and (not isinstance(drop_conditions, dict)):
         raise TypeError(f'`drop_conditions` must be a dictionary')
 
@@ -2117,7 +2114,7 @@ def apply(df, *ignored_args, wormscall=None, rank_mapping=None, worms_dtypes=Non
     rankcolumns = list(RANK_MAPPING.values())
     wormscolumns = list(set(WORMSCALL) - set(RANK_MAPPING.keys()))
 
-    if overwrite:
+    if inplace:
         print(f'            WARNING | {rankcolumns} columns already exists and will be overwritten')
         rankcolumns_mapping = {rank : rank for rank in rankcolumns}
     else:
@@ -2165,10 +2162,11 @@ def apply(df, *ignored_args, wormscall=None, rank_mapping=None, worms_dtypes=Non
 
     # Convert all missing values in `columns` columns to pd.NA
 
-    df = standardizenan.apply(df, key=rankcolumns, letters_only=True)
-    if verbatimcolumn is not None:
-        coldiff = list(set(verbatimcolumn) - set(rankcolumns))
-        df = standardizenan.apply(df, key=coldiff, letters_only=False)
+    if stdnan:
+        df = standardizenan.apply(df, key=rankcolumns, letters_only=True)
+        if verbatimcolumn is not None:
+            coldiff = list(set(verbatimcolumn) - set(rankcolumns))
+            df = standardizenan.apply(df, key=coldiff, letters_only=False)
 
     # Pre-process the raw scientific names
     # to avoid quotation mark problems with pandas
@@ -2217,7 +2215,7 @@ def apply(df, *ignored_args, wormscall=None, rank_mapping=None, worms_dtypes=Non
     df[wormscolumns] = df[wormscolumns].astype(WORMS_DTYPES)
 
     rankcolumns = list(rankcolumns_mapping.values())
-    if not overwrite:
+    if not inplace:
         df[rankcolumns]=pd.NA
     df[rankcolumns] = df[rankcolumns].astype('string')
 
@@ -2302,21 +2300,26 @@ def apply(df, *ignored_args, wormscall=None, rank_mapping=None, worms_dtypes=Non
 def applyTOgz(gzfile,idcol,**params):
 
     outputfile = os.path.join(params['outputpath'],params['outputfile'])
-
+    init=True #DEBUG
     idprocessed=[]
     if os.path.isfile(outputfile):
 
         print(f'INFO | {outputfile} exists and will be used')
 
-        with open(outputfile,'r') as processed_data:
+#        with open(outputfile,'r') as processed_data:
 
-            header = processed_data.readline().strip('\n').split('\t')
-            id_index = header.index(idcol)
+#            header = processed_data.readline().strip('\n').split('\t')
+#            id_index = header.index(idcol)
 
-            for line in processed_data:
-                line = line.strip('\n').split('\t')
-                idprocessed.append(int(line[id_index]))
-
+#            for line in processed_data:
+#                line = line.strip('\n').split('\t')
+#                idprocessed.append(int(line[id_index]))
+#                last = int(line[id_index])
+#            init=False #DEBUG
+#            print("last:",last) #DEBUG
+        last = 1624092725
+        init=False
+        print("last:",last)
     print('INFO | Number of lines processed:',len(idprocessed))
 
     BATCH_SIZE=100000
@@ -2329,13 +2332,14 @@ def applyTOgz(gzfile,idcol,**params):
 
         batch = 0
         data2clean = []
-        init=True
+        #init=True DEBUG
         error = 0
-
+        docontinue = True #DEBUG
         start=time.time()
 
-        for idx, line in enumerate(gbif_data):
-
+        for idx, line in tqdm(enumerate(gbif_data),total=208875756):
+            if idx<174650000:
+                continue
             # Add observations
 
             obs = line.decode("utf8").strip('\n').split('\t')
@@ -2344,20 +2348,25 @@ def applyTOgz(gzfile,idcol,**params):
 
             if len(obs)==header_length:
 
-                if (len(idprocessed)!=0):
+#                if (len(idprocessed)!=0):
+                 if docontinue:
                     id = int(obs[id_index])
-                    try:
-                        del idprocessed[idprocessed.index(id)]
-                        init=False
-                        if (idx+1)%100000==0:
-                            print(f'Processing | {idx+1} lines done (processed={len(idprocessed)}, data2clean={len(data2clean)})')
-                        continue
-                    except ValueError:
-                        data2clean.append(obs)
-                        batch += 1
-                else:
-                    data2clean.append(obs)
-                    batch += 1
+#                    try:
+#                        del idprocessed[idprocessed.index(id)]
+#                        init=False
+                    if id==last:
+                        docontinue=False
+#                        if (idx+1)%100000==0:
+#                            print(f'Processing | {idx+1} lines done (processed={len(idprocessed)}, data2clean={len(data2clean)})')
+#                        continue
+#                    except ValueError:
+#                        data2clean.append(obs)
+#                        batch += 1
+                    if (idx+1)%100000==0:
+                        print(f'Processing | {idx+1} lines done (processed={len(idprocessed)}, data2clean={len(data2clean)})')
+                 else:
+                     data2clean.append(obs)
+                     batch += 1
 
             else:
 
@@ -2485,7 +2494,8 @@ if __name__ == "__main__":
               'resume_parallel': args.resume_parallel,
               'store_parallel': args.store_parallel,
               'overwrite_parallel': args.overwrite_parallel,
-              'drop_conditions':args.drop_conditions
+              'drop_conditions':args.drop_conditions,
+              'inplace': False
              }
 
 
