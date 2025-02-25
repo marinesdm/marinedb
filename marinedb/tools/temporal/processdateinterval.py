@@ -26,25 +26,25 @@ def apply_strategy(df, key, index, strategy):
         start_split = df.loc[index,'start_str'].str.split('-')
         end_split =  df.loc[index,'end_str'].str.split('-')
 
-        year_start = start_split.str[0] #.astype('Int64')
-        month_start = start_split.str[1] #.astype('Int64')
-        day_start = start_split.str[2] #.astype('Int64')
+        year_start = start_split.str[0]
+        month_start = start_split.str[1]
+        day_start = start_split.str[2]
 
-        year_end = end_split.str[0] #.astype('Int64')
-        month_end = end_split.str[1] #.astype('Int64')
-        day_end = end_split.str[2] #.astype('Int64')
+        year_end = end_split.str[0]
+        month_end = end_split.str[1]
+        day_end = end_split.str[2]
 
+        ## Year overlap
         isyearmatch = (~pd.isnull(year_start)) & (~pd.isnull(year_end)) & (year_start == year_end)
         match_index = isyearmatch[isyearmatch].index
         df.loc[match_index, key] = year_start[match_index].astype('str')
 
+        ## Month overlap
         ismonthmatch = isyearmatch & (~pd.isnull(month_start)) & (~pd.isnull(month_end)) & (month_start == month_end)
         match_index = ismonthmatch[ismonthmatch].index
-#        month_start = month_start.astype('str')
-#        isonedigit = (month_start.str.len()==1)
-#        month_start[isonedigit] = '0' + month_start[isonedigit]
         df.loc[match_index, key] = df.loc[match_index, key] + '-' + month_start[match_index]
 
+        ## Day overlap
         isdaymatch = isyearmatch & ismonthmatch & (~pd.isnull(day_start)) & (~pd.isnull(day_end)) & (day_start == day_end)
         match_index = isdaymatch[isdaymatch].index
         df.loc[match_index, key] = df.loc[match_index, key] + '-' + day_start[match_index]
@@ -63,6 +63,10 @@ def apply(df, key, drop=False, inplace=False, flag=False, strategy='overlap', ma
     # drop=True : drop date intervals (flag=False: delete ; flag=True: flag)
     # drop=False : process date intervals (flag=True/False: whether or not to keep the date interval flag column)
 
+    # Verifications
+
+    ## Parameters
+
     if strategy not in ['start','end', 'overlap']:
         raise ValueError(f"`processdateinterval.py` | `strategy` must be 'start', 'end' or 'overlap'")
 
@@ -80,8 +84,6 @@ def apply(df, key, drop=False, inplace=False, flag=False, strategy='overlap', ma
 
     if (strategy == 'overlap'):
         print(f'            INFO | If strategy={strategy}, maxinterval_number={maxinterval_number} will not be considered')
-#        print(f'            WARNING | If strategy={strategy} and the day, month, or year difference exceeds')
-#        print(f'            1 that unit is dropped, i.e maxinterval_number={maxinterval_number} will not be considered')
 
     if inplace:
         colname = key
@@ -89,12 +91,8 @@ def apply(df, key, drop=False, inplace=False, flag=False, strategy='overlap', ma
         colname = f'{key}_processedby_processdateinterval'
         df[colname] = df[key].values.copy()
 
-#    if interval_delimiter != '/':
-#        df[colname] = df[colname].str.replace(str(interval_delimiter), '/')
-#    if date_delimiter != '-':
-#        df[colname] = df[colname].str.replace(str(date_delimiter), '-')
+    ## Date format
 
-#    pattern = r'[0-9]{4}(-[0-9]{2}){0,2}(/[0-9]{4}(-[0-9]{2}){0,2})?'
     pattern = r'([0-9]{4}(?:-[0-9]{2}){0,2})(?:/([0-9]{4}(?:-[0-9]{2}){0,2}))?'
     isformatrecognized = df[key].str.fullmatch(pattern)
     if not isformatrecognized.all():
@@ -152,13 +150,6 @@ def apply(df, key, drop=False, inplace=False, flag=False, strategy='overlap', ma
         # Note: if the month or day is unknown, it is replaced with '01'
         # i.e., the first day of the month or January
 
-#        splitdf = pd.DataFrame(df.loc[df[flagname],key].astype('string').str.split('/').tolist(), columns=['start','end'], index=df[df[flagname]].index)
-#        splitdf = convertdatetype.apply(splitdf, 'start', format='ISO8601')
-#        splitdf = convertdatetype.apply(splitdf, 'end', format='ISO8601')
-#        # fix reversed start and end dates, if any
-#        isstartendreversed = (splitdf['end'] < splitdf['start'])
-#        splitdf.loc[isstartendreversed,['start','end']] = splitdf.loc[isstartendreversed, ['end','start']].values
-
         if maxinterval_number == 0:
             # assumption: equivalent to less than 1 maxinterval_level
             maxinterval_number = 1
@@ -188,6 +179,8 @@ def apply(df, key, drop=False, inplace=False, flag=False, strategy='overlap', ma
 
         if flag:
 
+            # Date interval length in days
+
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", FutureWarning)
                 df[f'{key}_dateinterval_indays'] = pd.NA
@@ -195,11 +188,15 @@ def apply(df, key, drop=False, inplace=False, flag=False, strategy='overlap', ma
                 df.loc[df[flagname],f'{key}_dateinterval_indays'] = df.loc[df[flagname],f'{key}_dateinterval_indays'].apply(lambda width: width.days)
                 df[f'{key}_dateinterval_indays'] = df[f'{key}_dateinterval_indays'].astype('Int64')
 
+            # Clean
+
             df.drop(columns=tempcol, inplace=True)
 
             return df
 
         else:
+
+            # Clean
 
             tempcol += [flagname]
             df.drop(columns=tempcol, inplace=True)
