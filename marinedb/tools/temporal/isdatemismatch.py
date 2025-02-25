@@ -36,7 +36,7 @@ def _isyearmismatch(datestr, yearstr):
     if not ((len(yearstr) == 2) or (len(yearstr) == 4)):
         return datestr, 'YEAR_INVALID'
 
-    # STEP N°1: Does `datestr` contain 4-character substrings, i.e, year substrings?
+    # STEP N°1: Does `datestr` contain 4-character substrings, i.e, year-like substrings?
 
     yearmatchiter = re.finditer(r'(^|(?<=[^0-9]))([1-2][0-9]{3})(?=[^0-9]|$)', datestr)
     cut = [0]
@@ -44,7 +44,7 @@ def _isyearmismatch(datestr, yearstr):
         if len(cut) != 1:
             # assumption: if one 4-character substring is a year,
             # then all 4-character substrings are years
-            # remove them from the string to prevent false matches,
+            # remove them from the string to prevent false matches
             # as only month and day remain to be checked
             cut += [match.start(), match.end()]
         if (yearstr in match.group()) and (int(match.group())<=YEAR_NOW):
@@ -90,7 +90,6 @@ def _isyearmismatch(datestr, yearstr):
                             # as the 4-digit `yearstr` match failed,
                             # the 2-digit match is likely a false positive
                             # e.g. '03' from '2003' incorrectly matching '03' from '1903'
-                            print('error!!')
                             return datestr, 'RECORDED_DATE_MISMATCH'
                     else:
                         mismatch = mismatch[:start] + mismatch[end:]
@@ -171,7 +170,7 @@ def _isdaymismatch(datestr, daystr):
     return mismatch, ''
 
 def ismismatch_str(datestr, yearstr=None, monthstr=None, daystr=None):
-    print('key:',datestr,yearstr,monthstr,daystr)
+
     # WARNING:
     # This code detects mismatches between a date string and year, month, and/or day values.
     # However, the absence of mismatches does not guarantee a correct match,
@@ -203,7 +202,7 @@ def ismismatch_str(datestr, yearstr=None, monthstr=None, daystr=None):
                 datestr = datestr[:match.start()] + str(nummonth) + datestr[match.end():]
                 processed = True
             except KeyError:
-                # text that is not a recognized month name
+                # not a recognized month name
                 # (e.g. unsupported language or incorrect spelling)
                 match = next(matchiter, -1)
         # remove any alphabetic characters and commas
@@ -216,10 +215,8 @@ def ismismatch_str(datestr, yearstr=None, monthstr=None, daystr=None):
     # Remove time details and second date from date intervals to prevent false matches
 
     if len(datestr) > 10:
-        print('uncertain',datestr)
         prefix = 'UNCERTAIN_'
     else:
-        print('no')
         prefix = ''
     datestr = datestr[:10]
 
@@ -232,7 +229,6 @@ def ismismatch_str(datestr, yearstr=None, monthstr=None, daystr=None):
     if (yearstr is not None) and (not pd.isnull(yearstr)):
         mismatch, doesmismatch = _isyearmismatch(datestr, yearstr)
         mismatch = re.sub('\s+',' ',mismatch).strip()
-        print('mismatch:',mismatch,doesmismatch)
         if (len(doesmismatch) != 0):
             return prefix + doesmismatch
         if _isempty(mismatch):
@@ -242,22 +238,15 @@ def ismismatch_str(datestr, yearstr=None, monthstr=None, daystr=None):
     if (monthstr is not None) and (not pd.isnull(monthstr)):
         mismatch, doesmismatch = _ismonthmismatch(mismatch, monthstr)
         mismatch = re.sub('\s+',' ',mismatch).strip()
-        print('mismatch:',mismatch,doesmismatch)
-#        if (len(doesmismatch) != 0) or _isempty(mismatch):
-#            return prefix + doesmismatch
         if (len(doesmismatch) != 0):
             return prefix + doesmismatch
         if _isempty(mismatch):
             return doesmismatch
 
-
     ## Day mismatch
     if (daystr is not None) and (not pd.isnull(daystr)):
         mismatch, doesmismatch = _isdaymismatch(mismatch, daystr)
         mismatch = re.sub('\s+',' ',mismatch).strip()
-        print('mismatch:',mismatch,doesmismatch)
-#        if (len(doesmismatch) != 0) or _isempty(mismatch):
-#            return prefix + doesmismatch
         if (len(doesmismatch) != 0):
             return prefix + doesmismatch
         if _isempty(mismatch):
@@ -278,7 +267,7 @@ def _get_mismatchissue(df, batch, paramsK, paramsV, verbose=False):
 
     result = []
     if verbose:
-        process = tqdm(batch, desc='        Progress')
+        process = tqdm(batch, desc='          Progress')
     else:
         process = batch
 
@@ -299,9 +288,10 @@ def apply(df, datekey, yearkey, monthkey=None, daykey=None, stdnan=True, cvttype
 
     # WARNING:
     # This code detects mismatches between a date string and year, month, and/or day values.
-    # However, the absence of mismatches does not guarantee a correct match,
-    # and some mismatches may also result from an unrecognized month names (e.g. unsupported language),
-    # an unhandled date format (e.g. Unix timestamp, week based), or other limitations in the code
+    # However:
+    # - the absence of mismatches does not guarantee a correct match (e.g. "2025-01-02" & "2025-02-01" both match "2025"/"02"/"01"),
+    # - some mismatches may also result from an unrecognized month names (e.g. unsupported language),
+    #   an unhandled date format (e.g. Unix timestamp, week based), or other limitations in the code
     # Thus, the output of this code should be interpreted as a weak signal of a mismatch
 
     if parallel and cpu is None:
@@ -330,24 +320,21 @@ def apply(df, datekey, yearkey, monthkey=None, daykey=None, stdnan=True, cvttype
             daykey = f'{daykey}_temp'
 
     params = {"datestr" : datekey, "yearstr" : yearkey, "monthstr" : monthkey, "daystr" : daykey}
-    #print(params)
     params = {key : value for key, value in params.items() if value is not None}
     paramsK = list(params.keys())
     paramsV = list(itemgetter(*paramsK)(params))
 
     if stdnan:
-        print('        ** isdatemismatch | standardizenan')
+        print('          ** isdatemismatch | standardizenan')
         df = standardizenan.apply(df, key=paramsV)
 
     if cvttype:
-        print('        ** isdatemismatch | parsedatecomponent')
+        print('          ** isdatemismatch | parsedatecomponent')
         df = pdc.parse_year(df, yearkey)
-        #print(df)
         if monthkey is not None:
             df = pdc.parse_month(df, monthkey)
         if daykey is not None:
             df = pdc.parse_day(df, daykey)
-        #print(df)
 
     isdate = list(df[~pd.isnull(df[datekey])].index)
     ndates = len(isdate)
@@ -362,10 +349,10 @@ def apply(df, datekey, yearkey, monthkey=None, daykey=None, stdnan=True, cvttype
         nbatch = len(batches)
         cpu = min(cpu, nbatch)
 
-        print(f'        ** isdatemismatch | {ndates} lines to process ({nbatch} batches)')
-        print(f'        INFO | {cpu} CPUs will be used')
+        print(f'          ** isdatemismatch | {ndates} lines to process ({nbatch} batches)')
+        print(f'          INFO | {cpu} CPUs will be used')
 
-        with tqdmjoblib.apply(tqdm(desc='        Progress', total=nbatch)) as progress_bar:
+        with tqdmjoblib.apply(tqdm(desc='          Progress', total=nbatch)) as progress_bar:
             results = Parallel(n_jobs=cpu)(delayed(_get_mismatchissue)(df, batch, paramsK, paramsV, verbose=False) for batch in batches)
         results = list(itertools.chain(*results))
 
