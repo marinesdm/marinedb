@@ -36,11 +36,11 @@ def apply(df, config_dict):
                 #print(f'      ** {proc_name}')
                 df = eval(f"{proc_name}.apply(df, colname, **proc_params)")
 
-            print(f'      {proc_name} | before: {length_before}, after: {len(df)}')
+            print(f'    {proc_name} | before: {length_before}, after: {len(df)}')
 
             columns_after = set(df.columns)
             new_columns = columns_after - columns_before
             if len(new_columns)!=0:
-                print(f'      {proc_name} | new columns: {list(new_columns)}')
+                print(f'    {proc_name} | new columns: {list(new_columns)}')
 
     return df
