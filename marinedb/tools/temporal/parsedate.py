@@ -12,8 +12,6 @@ import re
 import itertools
 from tqdm import tqdm
 
-import time #DEBUG
-
 # Internal import
 
 from marinedb.utils import tqdmjoblib
@@ -51,7 +49,7 @@ def _execute_java(multiple_datestr):
             single_ordering = re.search(r'ORDERING=(.*)$',line).group(1)
             keys.append((single_datestr,single_ordering))
         else:
-            raise Exception(f'unexpected output: more than two equality signs in {line}')
+            raise Exception(f'`parsedate.py` | unexpected output: more than two equality signs in {line}')
 
     stderr = []
     for line in a.stderr:
@@ -73,8 +71,9 @@ def _parse_javastdout(single_stdout, single_request):
         datestr_processed = datestr_processed.split()
 
         if len(datestr_processed)!=2:
-            raise Exception(f'unexpected output for {single_request}: stdout={single_stdout}')
+            raise Exception(f'`parsedate.py` | unexpected output for {single_request}: stdout={single_stdout}')
 
+        datestr_processed = [d[:10] for d in datestr_processed] # remove time details
         datestr_processed = sorted(list(set(datestr_processed)))
         datestr_processed = '/'.join(datestr_processed)
 
@@ -95,7 +94,11 @@ def parse_java(multiple_datestr):
 
         single_stderr = single_stderr.split('=')
 
-        if len(single_stderr[1])!=0:
+        if len(single_stderr) != 2:
+            single_stderr = [err for err in single_stderr if err not in ['ERROR','RAISE']]
+            raise Exception('{keys[i]}: ' + '='.join(single_stderr))
+
+        elif len(single_stderr[1]) != 0:
 
             stderr_type = single_stderr[0]
             stderr_message = single_stderr[1]
@@ -106,7 +109,7 @@ def parse_java(multiple_datestr):
                 # java code flaw
                 stderr_message = re.sub('RECORDED_DATE_MISMATCH','',stderr_message).strip()
             if len(stderr_message.split()) > 1:
-                # (never encountered during testing)
+                # Note: never encountered during testing
                 stderr_message = ';'.join(stderr_message.split())
             stderr[i]=stderr_message
 
@@ -123,16 +126,21 @@ def parse_java(multiple_datestr):
 
 def validate_format(format):
 
-    # Validate the ordering format
+    # Validate the ordering preference string (`format`)
 
     _, _, stderr = _execute_java(f"('2003-06-02', '{format}')")
     stderr = stderr[0].split('=')
+
+    if len(stderr) != 2:
+        stderr = [err for err in stderr if err not in ['ERROR','RAISE']]
+        raise Exception('='.join(stderr))
+
     if stderr[0] == 'RAISE':
         raise Exception(stderr[1])
 
 def create_javaarg(datesstr_list, format=None):
 
-    # Validate the ordering format
+    # Validate the ordering preference string (`format`)
 
     if format is None:
         format=''
@@ -145,7 +153,7 @@ def create_javaarg(datesstr_list, format=None):
         validate_format(format)
         format = [format]*len(datesstr_list)
     if not isinstance(format, str | list):
-        raise TypeError(f'`format` must be a string or a list, not a {type(format).__name__}')
+        raise TypeError(f'`parsedate.py` | `format` must be a string or a list, not a {type(format).__name__}')
 
     # Remove any character that holds structural significance in the Java command
 
@@ -161,7 +169,7 @@ def create_javaarg(datesstr_list, format=None):
 
     return multiple_datestr
 
-def gbif_parse_date(df, datekey, index, format=None):
+def gbif_dateparser(df, datekey, index, format=None):
 
     multiple_datesstr = df.loc[index,datekey].tolist()
     multiple_datestr = create_javaarg(multiple_datesstr, format=format)
@@ -169,7 +177,7 @@ def gbif_parse_date(df, datekey, index, format=None):
 
     return result
 
-def parallel_parse_date(df, datekey, datestr_index, cpu, format=None):
+def parallel_dateparser(df, datekey, datestr_index, cpu, format=None):
 
     ndates = len(datestr_index)
     batch_size = 1000
@@ -179,20 +187,20 @@ def parallel_parse_date(df, datekey, datestr_index, cpu, format=None):
 
     nbatch = len(index_slides)
     cpu = min(cpu, nbatch)
-    print(f'        ** parsedate | {ndates} dates to process ({nbatch} batches)')
-    print(f'        INFO | {cpu} CPUs will be used')
+    print(f'          ** parsedate | {ndates} dates to process ({nbatch} batches)')
+    print(f'          INFO | {cpu} CPUs will be used')
 
     if cpu != 1:
-        with tqdmjoblib.apply(tqdm(desc='        Progress', total=nbatch)) as progress_bar:
+        with tqdmjoblib.apply(tqdm(desc='          Progress', total=nbatch)) as progress_bar:
             parallel = Parallel(n_jobs=cpu, prefer='threads')
-             # the outputs are returned in the same order as the submissions
-            results = parallel(delayed(gbif_parse_date)(df, datekey, datestr_index[start:end], format=format) for start,end in index_slides)
+            # the outputs are returned in the same order as the submissions
+            results = parallel(delayed(gbif_dateparser)(df, datekey, datestr_index[start:end], format=format) for start,end in index_slides)
         results = list(itertools.chain(*results))
 
     if cpu == 1:
         results = []
         for start,end in tqdm(index_slides):
-            results += gbif_parse_date(df, datekey, datestr_index[start:end], format=format)
+            results += gbif_dateparser(df, datekey, datestr_index[start:end], format=format)
 
     return results
 
@@ -205,53 +213,60 @@ def assemble_date(df, datekey, storekey, yearkey=None, monthkey=None, daykey=Non
 
     # Process year strings
 
-    tempcol = ['year_temp']
+    tempcol = [f'{yearkey}_temp']
     joincol = []
-    df['year_temp'] = df[yearkey].values
+    df[f'{yearkey}_temp'] = df[yearkey].values
 
-    df = pdc.parse_year(df, yearkey='year_temp', drop_ambiguous=False)
-    df['year_temp'] = df['year_temp'].astype('string')
+    df = pdc.parse_year(df, yearkey=f'{yearkey}_temp', drop_ambiguous=False)
+    df[f'{yearkey}_temp'] = df[f'{yearkey}_temp'].astype('string')
 
-    isincomplete = (~pd.isnull(df[yearkey])) & (df[yearkey].astype('string').str.len()<4)
-    date2process = date2process & (~isincomplete)
+    isincomplete = (~pd.isnull(df[yearkey])) & (df[yearkey].astype('string').str.len()<4) # ambiguous year strings
+    date2process = date2process & (~pd.isnull(df[f'{yearkey}_temp'])) & (~isincomplete)
 
     if (monthkey is not None):
 
         # Process month strings
 
-        tempcol += ['month_temp']
-        joincol = ['month_temp']
-        df['month_temp'] = df[monthkey].values
-        df = pdc.parse_month(df, 'month_temp')
-        df['month_temp'] = df['month_temp'].astype('string')
+        tempcol += [f'{monthkey}_temp']
+        joincol = [f'{monthkey}_temp']
+        df[f'{monthkey}_temp'] = df[monthkey].values
+        df = pdc.parse_month(df, f'{monthkey}_temp')
+        df[f'{monthkey}_temp'] = df[f'{monthkey}_temp'].astype('string')
+        isonedigit = (df[f'{monthkey}_temp'].fillna('_MISSING_').str.len()==1)
+        df.loc[isonedigit, f'{monthkey}_temp'] = '0' + df.loc[isonedigit, f'{monthkey}_temp']
 
         if (daykey is not None):
 
             # Process day strings
 
-            tempcol += ['day_temp']
-            joincol += ['day_temp']
-            df['day_temp'] = df[daykey].values
-            df = pdc.parse_day(df, 'day_temp')
-            df['day_temp'] = df['day_temp'].astype('string')
-            df.loc[(~pd.isnull(df['day_temp'])) & pd.isnull(df['month_temp']), 'day_temp'] = pd.NA
+            tempcol += [f'{daykey}_temp']
+            joincol += [f'{daykey}_temp']
+            df[f'{daykey}_temp'] = df[daykey].values
+            df = pdc.parse_day(df, f'{daykey}_temp')
+            df[f'{daykey}_temp'] = df[f'{daykey}_temp'].astype('string')
+            df.loc[(~pd.isnull(df[f'{daykey}_temp'])) & pd.isnull(df[f'{monthkey}_temp']), f'{daykey}_temp'] = pd.NA
+            isonedigit = (df[f'{daykey}_temp'].fillna('_MISSING_').str.len()==1)
+            df.loc[isonedigit, f'{daykey}_temp'] = '0' + df.loc[isonedigit, f'{daykey}_temp']
+
 
     # Assemble the date following the ISO 8601 standard
 
     ## Exclude lines where date and year/month/day values mismatch
 
     tempcol += ['issue_isdatemismatch']
-    df = isdatemismatch.apply(df, datekey, 'year_temp', *joincol, stdnan=stdnan, cvttype=False, parallel=parallel, cpu=cpu)
-    print()
-    print(df)
-    print()
+    df = isdatemismatch.apply(df, datekey, f'{yearkey}_temp', *joincol, stdnan=stdnan, cvttype=False, parallel=parallel, cpu=cpu)
     isissue = (~pd.isnull(df['issue_isdatemismatch']))
     df.loc[isissue,'issue_parsedate'] = df.loc[isissue,'issue_parsedate'].str.cat(df.loc[isissue,'issue_isdatemismatch'], sep=';', na_rep='')
     df.loc[isissue,'issue_parsedate'] = df.loc[isissue,'issue_parsedate'].str.strip(' ;')
 
     date2process = date2process & (pd.isnull(df['issue_isdatemismatch']) | (~df['issue_isdatemismatch'].str.contains('RECORDED_DATE_MISMATCH')))
 
-    df.loc[date2process, storekey] = df.loc[date2process, 'year_temp'].str.cat(df.loc[date2process, joincol], sep='-', na_rep='')
+    ## Build the date from available year, month, and day values
+
+    print_colnames = [yearkey, monthkey, daykey]
+    print_colnames = [col for col in colnames if col is not None]
+    print(f'          ** parsedate | date construction from {", ".join(print_colnames)} columns')
+    df.loc[date2process, storekey] = df.loc[date2process, f'{yearkey}_temp'].str.cat(df.loc[date2process, joincol], sep='-', na_rep='')
     df.loc[date2process, storekey] = df.loc[date2process, storekey].str.strip('- ')
 
     isassembled = date2process & (~pd.isnull(df[storekey]))
@@ -270,9 +285,9 @@ def assemble_date(df, datekey, storekey, yearkey=None, monthkey=None, daykey=Non
 def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, format=None, inplace=False, stdnan=True, parallel=False, cpu=None):
 
     if (yearkey is None) and (monthkey is not None):
-        raise Exception(f'`monthkey`={monthkey} but `yearkey` is None')
+        raise Exception(f'`parsedate.py` | `monthkey`={monthkey} but `yearkey` is None')
     if (monthkey is None) and (daykey is not None):
-        raise Exception(f'`daykey`={daykey} but `monthkey` is None')
+        raise Exception(f'`parsedate.py` | `daykey`={daykey} but `monthkey` is None')
 
     if parallel and cpu is None:
         cpu=len(os.sched_getaffinity(0))
@@ -290,12 +305,11 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, format=None, in
 
     isdate = (~pd.isnull(df[datekey]))
     datestr_index = list(isdate[isdate].index)
-    df.loc[datestr_index,[colname,'issue_parsedate']] = parallel_parse_date(df, datekey, datestr_index, format=format, cpu=cpu)
-    print(df.loc[datestr_index,'issue_parsedate'].value_counts())
+    df.loc[datestr_index,[colname,'issue_parsedate']] = parallel_dateparser(df, datekey, datestr_index, format=format, cpu=cpu)
     condition = pd.isnull(df.loc[isdate,[colname,'issue_parsedate']]).all(axis=1)
     if condition.any():
         error_index = list(df[condition].index)
-        raise Exception(f'unexpected output: both stderr and stdout are empty for line(s) {error_index}')
+        raise Exception(f'`parsedate.py` | unexpected output: both stderr and stdout are empty for line(s) {error_index}')
 
     # If no concatenated date is present or parsing fails,
     # construct the date from available year, month and day columns
