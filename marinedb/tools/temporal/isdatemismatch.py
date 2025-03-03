@@ -12,7 +12,7 @@ from datetime import datetime
 
 from marinedb.utils import standardizenan
 from marinedb.utils import tqdmjoblib
-from marinedb.tools.temporal import parsedatecomponent as pdc
+from marinedb.tools.temporal import convertdatetype
 
 PATH = os.path.dirname(os.path.abspath(__file__))
 with open(os.path.join(PATH,'month.yaml'),'r') as f:
@@ -28,13 +28,13 @@ def _isempty(string):
 
     return doesnotcontaindigit
 
-def _isyearmismatch(datestr, yearstr):
+def _isyearmismatch(datestr, yearstr, datekey, yearkey):
 
     if len(yearstr) == 1:
         yearstr = '0' + yearstr
 
     if not ((len(yearstr) == 2) or (len(yearstr) == 4)):
-        return datestr, 'YEAR_INVALID'
+        return datestr, f'{yearkey.upper()}_INVALID'
 
     # STEP N°1: Does `datestr` contain 4-character substrings, i.e, year-like substrings?
 
@@ -90,18 +90,18 @@ def _isyearmismatch(datestr, yearstr):
                             # as the 4-digit `yearstr` match failed,
                             # the 2-digit match is likely a false positive
                             # e.g. '03' from '2003' incorrectly matching '03' from '1903'
-                            return datestr, 'RECORDED_DATE_MISMATCH'
+                            return datestr, f'{datekey.upper()}_{yearkey.upper()}_MISMATCH'
                     else:
                         mismatch = mismatch[:start] + mismatch[end:]
                 else:
-                    return datestr, 'RECORDED_DATE_MISMATCH'
+                    return datestr, f'{datekey.upper()}_{yearkey.upper()}_MISMATCH'
 
     return mismatch, ''
 
-def _ismonthmismatch(datestr, monthstr):
+def _ismonthmismatch(datestr, monthstr, datekey, monthkey):
 
     if not ((len(monthstr) == 1) or (len(monthstr) == 2)):
-        return datestr, 'MONTH_INVALID'
+        return datestr, f'{monthkey.upper()}_INVALID'
 
     # STEP N°1: Does `datestr` contain the 2-digit `monthstr`?
 
@@ -126,17 +126,17 @@ def _ismonthmismatch(datestr, monthstr):
 
                 mismatch = re.sub(monthstr, ' ', datestr, count=1)
                 if mismatch == datestr:
-                    return datestr, 'RECORDED_DATE_MISMATCH'
+                    return datestr, f'{datekey.upper()}_{monthkey.upper()}_MISMATCH'
 
         else:
-            return datestr, 'RECORDED_DATE_MISMATCH'
+            return datestr, f'{datekey.upper()}_{monthkey.upper()}_MISMATCH'
 
     return mismatch, ''
 
-def _isdaymismatch(datestr, daystr):
+def _isdaymismatch(datestr, daystr, datekey, daykey):
 
     if not ((len(daystr) == 1) or (len(daystr) == 2)):
-        return datestr, 'DAY_INVALID'
+        return datestr, f'{daykey.upper()}_INVALID'
 
     # STEP N°1: Does `datestr` contain the 2-digit `daystr`?
 
@@ -162,14 +162,14 @@ def _isdaymismatch(datestr, daystr):
 
                 mismatch = re.sub(daystr[-1], ' ', datestr, count=1)
                 if mismatch == datestr:
-                    return datestr, 'RECORDED_DATE_MISMATCH'
+                    return datestr, f'{datekey.upper()}_{daykey.upper()}_MISMATCH'
 
         else:
-            return datestr, 'RECORDED_DATE_MISMATCH'
+            return datestr, f'{datekey.upper()}_{daykey.upper()}_MISMATCH'
 
     return mismatch, ''
 
-def ismismatch_str(datestr, yearstr=None, monthstr=None, daystr=None):
+def ismismatch_str(datestr, datekey, yearstr=None, yearkey=None, monthstr=None, monthkey=None, daystr=None, daykey=None):
 
     # WARNING:
     # This code detects mismatches between a date string and year, month, and/or day values.
@@ -180,6 +180,26 @@ def ismismatch_str(datestr, yearstr=None, monthstr=None, daystr=None):
     # - if the date string contains a month, it also includes a year
     # - if it contains a day, it also includes both a month and a year
     # (this assumption leads to failures when the month name is unrecognized)
+
+    if ((yearstr is not None) and (yearkey is None)) or ((yearstr is None) and (yearkey is not None)):
+        raise Exception(f'`isdatemismatch.py` | Either `yearstr` or `yearkey` is None, while the other is not.')
+    if ((monthstr is not None) and (monthkey is None)) or ((monthstr is None) and (monthkey is not None)):
+        raise Exception(f'`isdatemismatch.py` | Either `monthstr` or `monthkey` is None, while the other is not.')
+    if ((daystr is not None) and (daykey is None)) or ((daystr is None) and (daykey is not None)):
+        raise Exception(f'`isdatemismatch.py` | Either `daystr` or `daykey` is None, while the other is not.')
+
+    basedatekey = datekey.split('_processedby_')[0].upper()
+    basekeys = []
+    if yearkey is not None:
+        baseyearkey = yearkey.split('_processedby_')[0].upper()
+        basekeys.append(yearkey)
+    if yearkey is not None:
+        basemonthkey = monthkey.split('_processedby_')[0].upper()
+        basekeys.append(monthkey)
+    if daykey is not None:
+        basedaykey = daykey.split('_processedby_')[0].upper()
+        basekeys.append(daykey)
+    basekeys = '_'.join(keys)
 
     # Process text-based date format
     # e.g. Month DD, YYYY
@@ -227,7 +247,7 @@ def ismismatch_str(datestr, yearstr=None, monthstr=None, daystr=None):
 
     ## Year mismatch
     if (yearstr is not None) and (not pd.isnull(yearstr)):
-        mismatch, doesmismatch = _isyearmismatch(datestr, yearstr)
+        mismatch, doesmismatch = _isyearmismatch(datestr, yearstr, basedatekey, baseyearkey)
         mismatch = re.sub('\s+',' ',mismatch).strip()
         if (len(doesmismatch) != 0):
             return prefix + doesmismatch
@@ -236,7 +256,7 @@ def ismismatch_str(datestr, yearstr=None, monthstr=None, daystr=None):
 
     ## Month mismatch
     if (monthstr is not None) and (not pd.isnull(monthstr)):
-        mismatch, doesmismatch = _ismonthmismatch(mismatch, monthstr)
+        mismatch, doesmismatch = _ismonthmismatch(mismatch, monthstr, basedatekey, basemonthkey)
         mismatch = re.sub('\s+',' ',mismatch).strip()
         if (len(doesmismatch) != 0):
             return prefix + doesmismatch
@@ -245,7 +265,7 @@ def ismismatch_str(datestr, yearstr=None, monthstr=None, daystr=None):
 
     ## Day mismatch
     if (daystr is not None) and (not pd.isnull(daystr)):
-        mismatch, doesmismatch = _isdaymismatch(mismatch, daystr)
+        mismatch, doesmismatch = _isdaymismatch(mismatch, daystr, basedatekey, basedaykey)
         mismatch = re.sub('\s+',' ',mismatch).strip()
         if (len(doesmismatch) != 0):
             return prefix + doesmismatch
@@ -259,11 +279,19 @@ def ismismatch_str(datestr, yearstr=None, monthstr=None, daystr=None):
         if junkmatch and (junkmatch.end() == len(datestr)):
             # likely time details and additional date information
             return ''
-        return 'UNCERTAIN_RECORDED_DATE_MATCH'
+        return 'UNCERTAIN_{basedatekey}_{basekeys}_MATCH'
 
     return ''
 
 def _get_mismatchissue(df, batch, paramsK, paramsV, verbose=False):
+
+    paramsmap = {"datestr" : "datekey", "yearstr" : "yearkey", "monthstr" : "monthkey", "daystr" : "daykey"}
+    paramskey = itemgetter(*paramsK)(paramsmap)
+    if isinstance(paramskey,tuple):
+        paramskey = list(paramskey)
+    else:
+        paramskey = [paramskey]
+    paramskey = dict(zip(paramskey,paramsV))
 
     result = []
     if verbose:
@@ -273,7 +301,7 @@ def _get_mismatchissue(df, batch, paramsK, paramsV, verbose=False):
 
     for idx in process:
         params = dict(zip(paramsK, df.loc[idx,paramsV].astype('string').tolist()))
-        doesmismatch = ismismatch_str(**params)
+        doesmismatch = ismismatch_str(**params, **paramskey)
         if len(doesmismatch)==0:
             doesmismatch = pd.NA
         result.append(doesmismatch)
@@ -284,7 +312,7 @@ def _create_args(df, idx, paramsK, paramsV):
     params = dict(zip(paramsK, df.loc[idx,paramsV].astype('string').tolist()))
     return params
 
-def apply(df, datekey, yearkey, monthkey=None, daykey=None, stdnan=True, cvttype=True, parallel=False, cpu=None):
+def apply(df, datekey, yearkey, monthkey=None, daykey=None, stdnan=True, cvttype=True, parallel=False, cpu=None, drop_empty=True):
 
     # WARNING:
     # This code detects mismatches between a date string and year, month, and/or day values.
@@ -307,35 +335,40 @@ def apply(df, datekey, yearkey, monthkey=None, daykey=None, stdnan=True, cvttype
 
         # Create temporary columns to preserve the original year, month, and day values
 
-        tempcol += [f'{yearkey}_temp']
-        df[f'{yearkey}_temp'] = df[yearkey].copy()
-        yearkey = f'{yearkey}_temp'
+        tempcol += [f'TEMPORARY_{yearkey}']
+        df[f'TEMPORARY_{yearkey}'] = df[yearkey].copy()
+        yearkey = f'TEMPORARY_{yearkey}'
         if monthkey is not None:
-            tempcol += [f'{monthkey}_temp']
-            df[f'{monthkey}_temp'] = df[monthkey].copy()
-            monthkey = f'{monthkey}_temp'
+            tempcol += [f'TEMPORARY_{monthkey}']
+            df[f'TEMPORARY_{monthkey}'] = df[monthkey].copy()
+            monthkey = f'TEMPORARY_{monthkey}'
         if daykey is not None:
-            tempcol += [f'{daykey}_temp']
-            df[f'{daykey}_temp'] = df[daykey].copy()
-            daykey = f'{daykey}_temp'
+            tempcol += [f'TEMPORARY_{daykey}']
+            df[f'TEMPORARY_{daykey}'] = df[daykey].copy()
+            daykey = f'TEMPORARY_{daykey}'
 
     params = {"datestr" : datekey, "yearstr" : yearkey, "monthstr" : monthkey, "daystr" : daykey}
     params = {key : value for key, value in params.items() if value is not None}
     paramsK = list(params.keys())
-    paramsV = list(itemgetter(*paramsK)(params))
+    paramsV = itemgetter(*paramsK)(params)
+    if isinstance(paramsV, tuple):
+        paramsV = list(paramsV)
+    else:
+        paramsV = [paramsV]
 
     if stdnan:
         print('          ** isdatemismatch | standardizenan')
         df = standardizenan.apply(df, key=paramsV)
 
     if cvttype:
-        print('          ** isdatemismatch | parsedatecomponent')
-        df = pdc.parse_year(df, yearkey)
+        print('          ** isdatemismatch | convertdatetype')
+        df = convertdatetype.convert_year(df, yearkey, drop_empty=drop_empty)
         if monthkey is not None:
-            df = pdc.parse_month(df, monthkey)
+            df = convertdatetype.convert_month(df, monthkey, drop_empty=drop_empty)
         if daykey is not None:
-            df = pdc.parse_day(df, daykey)
+            df = convertdatetype.convert_day(df, daykey, drop_empty=drop_empty)
 
+    df['issue_isdatemismatch'] = pd.NA
     isdate = list(df[~pd.isnull(df[datekey])].index)
     ndates = len(isdate)
     batch_size = 5000
@@ -364,9 +397,11 @@ def apply(df, datekey, yearkey, monthkey=None, daykey=None, stdnan=True, cvttype
     if ('issue_convertdatetype' in df.columns):
         tempcol += ['issue_convertdatetype']
         isissue = (~pd.isnull(df['issue_convertdatetype']))
-        df.loc[isissue,'issue_convertdatetype'] = df.loc[isissue,'issue_convertdatetype'].str.replace('_TEMP','')
+#        df.loc[isissue,'issue_convertdatetype'] = df.loc[isissue,'issue_convertdatetype'].str.replace('_TEMP','')
         df.loc[isissue,'issue_isdatemismatch'] = df.loc[isissue,'issue_isdatemismatch'].str.cat(df.loc[isissue,'issue_convertdatetype'], sep=';', na_rep='')
         df.loc[isissue,'issue_isdatemismatch'] = df.loc[isissue,'issue_isdatemismatch'].str.strip(' ;')
+
+    df.loc[isissue,'issue_isdatemismatch'] = df.loc[isissue,'issue_isdatemismatch'].str.replace('TEMPORARY_','',n=1,case=True)
 
     # Clean columns
 
