@@ -1,6 +1,7 @@
 month_mapping:
 
   # https://github.com/gbif/parsers/blob/dev/src/main/resources/dictionaries/parse/month.tsv
+  # Chat-GPT4
   # bias toward European countries
 
   january: 1
