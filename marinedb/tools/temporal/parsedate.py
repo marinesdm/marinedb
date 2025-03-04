@@ -15,7 +15,7 @@ from tqdm import tqdm
 # Internal import
 
 from marinedb.utils import tqdmjoblib
-from marinedb.tools.temporal import parsedatecomponent as pdc
+from marinedb.tools.temporal import convertdatetype
 from marinedb.tools.temporal import isdatemismatch
 
 # Global variables
@@ -79,7 +79,9 @@ def _parse_javastdout(single_stdout, single_request):
 
     return datestr_processed
 
-def parse_java(multiple_datestr):
+def parse_java(multiple_datestr, datekey):
+
+    basedatekey = datekey.split('_processedby_')[0].upper()
 
     # Execute the java command
 
@@ -102,7 +104,7 @@ def parse_java(multiple_datestr):
 
             stderr_type = single_stderr[0]
             stderr_message = single_stderr[1]
-            if stderr_type=='RAISE':
+            if stderr_type == 'RAISE':
                 raise Exception(f'{keys[i]}: ' + stderr_message)
             # multiple error messages detected
             if len(stderr_message.split()) > 1:
@@ -111,16 +113,16 @@ def parse_java(multiple_datestr):
             if len(stderr_message.split()) > 1:
                 # Note: never encountered during testing
                 stderr_message = ';'.join(stderr_message.split())
-            stderr[i]=stderr_message
+            stderr[i] = re.sub('RECORDED_DATE',f'{basedatekey}',stderr_message)
 
         else:
-            stderr[i]=pd.NA
+            stderr[i] = pd.NA
 
     ## Extract the two parsed dates
 
     for i,single_stdout in enumerate(stdout):
 
-        stdout[i]=_parse_javastdout(single_stdout, keys[i])
+        stdout[i] = _parse_javastdout(single_stdout, keys[i])
 
     return list(zip(stdout,stderr))
 
@@ -173,7 +175,7 @@ def gbif_dateparser(df, datekey, index, format=None):
 
     multiple_datesstr = df.loc[index,datekey].tolist()
     multiple_datestr = create_javaarg(multiple_datesstr, format=format)
-    result = parse_java(multiple_datestr)
+    result = parse_java(multiple_datestr, datekey)
 
     return result
 
@@ -204,49 +206,51 @@ def parallel_dateparser(df, datekey, datestr_index, cpu, format=None):
 
     return results
 
-def assemble_date(df, datekey, storekey, yearkey=None, monthkey=None, daykey=None, stdnan=True, parallel=False, cpu=None):
+def assemble_date(df, datekey, outputkey, yearkey=None, monthkey=None, daykey=None, stdnan=True, parallel=False, cpu=None):
 
     if (yearkey is None):
         return df
 
-    date2process = (pd.isnull(df[storekey])) & (df['issue_parsedate']!='RECORDED_DATE_UNLIKELY')
+    basedatekey = datekey.split('_processedby_')[0].upper()
+
+    date2process = (pd.isnull(df[outputkey])) & (df['issue_parsedate']!=f'{basedatekey}_UNLIKELY')
 
     # Process year strings
 
-    tempcol = [f'{yearkey}_temp']
+    tempcol = [f'TEMPORARY_{yearkey}']
     joincol = []
-    df[f'{yearkey}_temp'] = df[yearkey].values
+    df[f'TEMPORARY_{yearkey}'] = df[yearkey].values
 
-    df = pdc.parse_year(df, yearkey=f'{yearkey}_temp', drop_ambiguous=False)
-    df[f'{yearkey}_temp'] = df[f'{yearkey}_temp'].astype('string')
+    df = convertdatetype.convert_year(df, yearkey=f'TEMPORARY_{yearkey}', drop_ambiguous=False, drop_empty=True)
+    df[f'TEMPORARY_{yearkey}'] = df[f'TEMPORARY_{yearkey}'].astype('string')
 
     isincomplete = (~pd.isnull(df[yearkey])) & (df[yearkey].astype('string').str.len()<4) # ambiguous year strings
-    date2process = date2process & (~pd.isnull(df[f'{yearkey}_temp'])) & (~isincomplete)
+    date2process = date2process & (~pd.isnull(df[f'TEMPORARY_{yearkey}'])) & (~isincomplete)
 
     if (monthkey is not None):
 
         # Process month strings
 
-        tempcol += [f'{monthkey}_temp']
-        joincol = [f'{monthkey}_temp']
-        df[f'{monthkey}_temp'] = df[monthkey].values
-        df = pdc.parse_month(df, f'{monthkey}_temp')
-        df[f'{monthkey}_temp'] = df[f'{monthkey}_temp'].astype('string')
-        isonedigit = (df[f'{monthkey}_temp'].fillna('_MISSING_').str.len()==1)
-        df.loc[isonedigit, f'{monthkey}_temp'] = '0' + df.loc[isonedigit, f'{monthkey}_temp']
+        tempcol += [f'TEMPORARY_{monthkey}']
+        joincol = [f'TEMPORARY_{monthkey}']
+        df[f'TEMPORARY_{monthkey}'] = df[monthkey].values
+        df = convertdatetype.convert_month(df, f'TEMPORARY_{monthkey}', drop_empty=True)
+        df[f'TEMPORARY_{monthkey}'] = df[f'TEMPORARY_{monthkey}'].astype('string')
+        isonedigit = (df[f'TEMPORARY_{monthkey}'].fillna('_MISSING_').str.len()==1)
+        df.loc[isonedigit, f'TEMPORARY_{monthkey}'] = '0' + df.loc[isonedigit, f'TEMPORARY_{monthkey}']
 
         if (daykey is not None):
 
             # Process day strings
 
-            tempcol += [f'{daykey}_temp']
-            joincol += [f'{daykey}_temp']
-            df[f'{daykey}_temp'] = df[daykey].values
-            df = pdc.parse_day(df, f'{daykey}_temp')
-            df[f'{daykey}_temp'] = df[f'{daykey}_temp'].astype('string')
-            df.loc[(~pd.isnull(df[f'{daykey}_temp'])) & pd.isnull(df[f'{monthkey}_temp']), f'{daykey}_temp'] = pd.NA
-            isonedigit = (df[f'{daykey}_temp'].fillna('_MISSING_').str.len()==1)
-            df.loc[isonedigit, f'{daykey}_temp'] = '0' + df.loc[isonedigit, f'{daykey}_temp']
+            tempcol += [f'TEMPORARY_{daykey}']
+            joincol += [f'TEMPORARY_{daykey}']
+            df[f'TEMPORARY_{daykey}'] = df[daykey].values
+            df = convertdatetype.convert_day(df, f'TEMPORARY_{daykey}', drop_empty=True)
+            df[f'TEMPORARY_{daykey}'] = df[f'TEMPORARY_{daykey}'].astype('string')
+            df.loc[(~pd.isnull(df[f'TEMPORARY_{daykey}'])) & pd.isnull(df[f'TEMPORARY_{monthkey}']), f'TEMPORARY_{daykey}'] = pd.NA
+            isonedigit = (df[f'TEMPORARY_{daykey}'].fillna('_MISSING_').str.len()==1)
+            df.loc[isonedigit, f'TEMPORARY_{daykey}'] = '0' + df.loc[isonedigit, f'TEMPORARY_{daykey}']
 
 
     # Assemble the date following the ISO 8601 standard
@@ -254,23 +258,24 @@ def assemble_date(df, datekey, storekey, yearkey=None, monthkey=None, daykey=Non
     ## Exclude lines where date and year/month/day values mismatch
 
     tempcol += ['issue_isdatemismatch']
-    df = isdatemismatch.apply(df, datekey, f'{yearkey}_temp', *joincol, stdnan=stdnan, cvttype=False, parallel=parallel, cpu=cpu)
+    df = isdatemismatch.apply(df, datekey, f'TEMPORARY_{yearkey}', *joincol, stdnan=stdnan, cvttype=False, parallel=parallel, cpu=cpu)
     isissue = (~pd.isnull(df['issue_isdatemismatch']))
     df.loc[isissue,'issue_parsedate'] = df.loc[isissue,'issue_parsedate'].str.cat(df.loc[isissue,'issue_isdatemismatch'], sep=';', na_rep='')
     df.loc[isissue,'issue_parsedate'] = df.loc[isissue,'issue_parsedate'].str.strip(' ;')
+    df.loc[isissue,'issue_parsedate'] = df.loc[isissue,'issue_parsedate'].str.replace('TEMPORARY_','',n=1,case=True)
 
-    date2process = date2process & (pd.isnull(df['issue_isdatemismatch']) | (~df['issue_isdatemismatch'].str.contains('RECORDED_DATE_MISMATCH')))
+    date2process = date2process & (pd.isnull(df['issue_isdatemismatch']) | (~df['issue_isdatemismatch'].str.contains('MISMATCH')))
 
     ## Build the date from available year, month, and day values
 
     print_colnames = [yearkey, monthkey, daykey]
     print_colnames = [col for col in colnames if col is not None]
     print(f'          ** parsedate | date construction from {", ".join(print_colnames)} columns')
-    df.loc[date2process, storekey] = df.loc[date2process, f'{yearkey}_temp'].str.cat(df.loc[date2process, joincol], sep='-', na_rep='')
-    df.loc[date2process, storekey] = df.loc[date2process, storekey].str.strip('- ')
+    df.loc[date2process, outputkey] = df.loc[date2process, f'TEMPORARY_{yearkey}'].str.cat(df.loc[date2process, joincol], sep='-', na_rep='')
+    df.loc[date2process, outputkey] = df.loc[date2process, outputkey].str.strip('- ')
 
-    isassembled = date2process & (~pd.isnull(df[storekey]))
-    df.loc[isassembled, 'issue_parsedate'] = df.loc[isassembled, 'issue_parsedate'].fillna('') + ';DATE_ASSEMBLED'
+    isassembled = date2process & (~pd.isnull(df[outputkey]))
+    df.loc[isassembled, 'issue_parsedate'] = df.loc[isassembled, 'issue_parsedate'].fillna('') + f';{basedatekey}_ASSEMBLED'
     df.loc[isassembled, 'issue_parsedate'] = df.loc[isassembled, 'issue_parsedate'].str.strip(' ;')
 
     ## Clean columns
@@ -294,19 +299,22 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, format=None, in
     if not parallel:
         cpu=1
 
-    if inplace:
-        colname=datekey
-    else:
-        colname=f'{datekey}_processedby_parsedate'
+    df, datekey, outputkey = getcolumnname.apply(df, datekey, 'parsedate', inplace=inplace)
+
+#    if inplace:
+#        colname=datekey
+#    else:
+#        colname=f'{datekey}_processedby_parsedate'
 
     df[datekey] = df[datekey].astype('string')
+    df['issue_parsedate'] = pd.NA
 
     # Parse dates
 
     isdate = (~pd.isnull(df[datekey]))
     datestr_index = list(isdate[isdate].index)
-    df.loc[datestr_index,[colname,'issue_parsedate']] = parallel_dateparser(df, datekey, datestr_index, format=format, cpu=cpu)
-    condition = pd.isnull(df.loc[isdate,[colname,'issue_parsedate']]).all(axis=1)
+    df.loc[datestr_index,[outputkey,'issue_parsedate']] = parallel_dateparser(df, datekey, datestr_index, format=format, cpu=cpu)
+    condition = pd.isnull(df.loc[isdate,[outputkey,'issue_parsedate']]).all(axis=1)
     if condition.any():
         error_index = list(df[condition].index)
         raise Exception(f'`parsedate.py` | unexpected output: both stderr and stdout are empty for line(s) {error_index}')
@@ -314,9 +322,9 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, format=None, in
     # If no concatenated date is present or parsing fails,
     # construct the date from available year, month and day columns
 
-    df = assemble_date(df, datekey, storekey=colname, yearkey=yearkey, monthkey=monthkey, daykey=daykey, stdnan=stdnan, parallel=parallel, cpu=cpu)
+    df = assemble_date(df, datekey, outputkey=outputkey, yearkey=yearkey, monthkey=monthkey, daykey=daykey, stdnan=stdnan, parallel=parallel, cpu=cpu)
 
     df['issue_parsedate'] = df['issue_parsedate'].astype('string')
-    df[colname] = df[colname].astype('string')
+    df[outputkey] = df[outputkey].astype('string')
 
     return df
