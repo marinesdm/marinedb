@@ -15,6 +15,7 @@ from tqdm import tqdm
 # Internal import
 
 from marinedb.utils import tqdmjoblib
+from marinedb.tools import getcolumnname
 from marinedb.tools.temporal import convertdatetype
 from marinedb.tools.temporal import isdatemismatch
 
@@ -22,6 +23,7 @@ from marinedb.tools.temporal import isdatemismatch
 
 PATH = os.path.dirname(os.path.abspath(__file__))
 JAR_PATH = os.path.join(PATH,'gbif-date-parser-20250214.jar')
+SCRIPT_NAME = os.path.basename(__file__)[:-3]
 
 def _execute_java(multiple_datestr):
 
@@ -201,12 +203,12 @@ def parallel_dateparser(df, datekey, datestr_index, cpu, format=None):
 
     if cpu == 1:
         results = []
-        for start,end in tqdm(index_slides):
+        for start,end in tqdm(index_slides,desc='          Progress'):
             results += gbif_dateparser(df, datekey, datestr_index[start:end], format=format)
 
     return results
 
-def assemble_date(df, datekey, outputkey, yearkey=None, monthkey=None, daykey=None, stdnan=True, parallel=False, cpu=None):
+def assemble_date_v1(df, datekey, outputkey, yearkey=None, monthkey=None, daykey=None, stdnan=True, parallel=False, cpu=None):
 
     if (yearkey is None):
         return df
@@ -216,7 +218,7 @@ def assemble_date(df, datekey, outputkey, yearkey=None, monthkey=None, daykey=No
     date2process = (pd.isnull(df[outputkey])) & (df['issue_parsedate']!=f'{basedatekey}_UNLIKELY')
 
     # Process year strings
-
+#EST-CE QU'ON PEUT PAS TOUT FAIRE EN UN ET STORE DANS JOIN APRÈS ??
     tempcol = [f'TEMPORARY_{yearkey}']
     joincol = []
     df[f'TEMPORARY_{yearkey}'] = df[yearkey].values
@@ -286,6 +288,89 @@ def assemble_date(df, datekey, outputkey, yearkey=None, monthkey=None, daykey=No
 
     return df
 
+def assemble_date(df, datekey, outputkey, yearkey=None, monthkey=None, daykey=None, stdnan=True, parallel=False, cpu=None):
+
+    if (yearkey is None):
+        return df
+
+    basedatekey = datekey.split('_processedby_')[0].upper()
+
+    print_colnames = [yearkey, monthkey, daykey]
+    print_colnames = [col for col in print_colnames if col is not None]
+
+    # Exclude lines with a missing or unlikely year value
+
+    date2process = (pd.isnull(df[outputkey])) & (df['issue_parsedate']!=f'{basedatekey}_UNLIKELY')
+
+    baseyearkey = yearkey.split('_processedby_')[0].upper()
+    df[f'TEMPORARYPARSEDATE_{yearkey}'] = df[yearkey].values
+    yearkey = f'TEMPORARYPARSEDATE_{yearkey}'
+    tempcol = [yearkey]
+    joincol = []
+    if (monthkey is not None):
+        basemonthkey = monthkey.split('_processedby_')[0].upper()
+        df[f'TEMPORARYPARSEDATE_{monthkey}'] = df[monthkey].values
+        monthkey = f'TEMPORARYPARSEDATE_{monthkey}'
+        tempcol.append(monthkey)
+        joincol.append(monthkey)
+    if (daykey is not None):
+        basedaykey = daykey.split('_processedby_')[0].upper()
+        df[f'TEMPORARYPARSEDATE_{daykey}'] = df[daykey].values
+        daykey = f'TEMPORARYPARSEDATE_{daykey}'
+        tempcol.append(daykey)
+        joincol.append(daykey)
+
+    df = convertdatetype.apply(df, yearkey=yearkey, monthkey=monthkey, daykey=daykey, drop_inconsistent=False, drop_ambiguous=False, drop_empty=False)
+    df[tempcol] = df[tempcol].astype('string')
+    if (monthkey is not None):
+        isonedigit = (df[monthkey].fillna('_MISSING_').str.len()==1)
+        df.loc[isonedigit,monthkey] = '0' + df.loc[isonedigit,monthkey]
+    if (daykey is not None):
+        isonedigit = (df[daykey].fillna('_MISSING_').str.len()==1)
+        df.loc[isonedigit,daykey] = '0' + df.loc[isonedigit,daykey]
+
+    # Exclude lines where date and year/month/day values mismatch
+
+    tempcol.append('issue_isdatemismatch')
+    df = isdatemismatch.apply(df, datekey, yearkey, *joincol, stdnan=stdnan, cvttype=False, parallel=parallel, cpu=cpu, drop_empty=False)
+    isissue = (~pd.isnull(df['issue_isdatemismatch']))
+    df.loc[isissue,'issue_isdatemismatch'] = df.loc[isissue,'issue_isdatemismatch'].str.replace('TEMPORARYPARSEDATE_','',case=True)
+    df.loc[isissue,'issue_parsedate'] = df.loc[isissue,'issue_parsedate'].str.cat(df.loc[isissue,'issue_isdatemismatch'], sep=';', na_rep='')
+    df.loc[isissue,'issue_parsedate'] = df.loc[isissue,'issue_parsedate'].str.strip(' ;')
+
+    date2process = date2process & (pd.isnull(df['issue_isdatemismatch']) | (~df['issue_isdatemismatch'].str.contains(r'MISMATCH|' + f'COMBINATION_INVALID', regex=True)))
+
+    # Exclude lines with a missing or incomplete year value
+
+    isincomplete = (~pd.isnull(df[yearkey])) & (df[yearkey].str.len() < 4) # ambiguous year strings
+    date2process = date2process & (~pd.isnull(df[yearkey])) & (~isincomplete)
+
+    if (daykey is not None):
+
+        # Exclude the lines where the day is specified but the month is missing
+
+        df.loc[(~pd.isnull(df[daykey])) & pd.isnull(df[monthkey]), daykey] = pd.NA
+
+    # Assemble the date following the ISO 8601 standard
+
+    ## Build the date from available year, month, and day values
+
+    print(f'          ** parsedate | date construction from {", ".join(print_colnames)} columns')
+    df.loc[date2process, outputkey] = df.loc[date2process, yearkey].str.cat(df.loc[date2process, joincol], sep='-', na_rep='')
+    df.loc[date2process, outputkey] = df.loc[date2process, outputkey].str.strip('- ')
+
+    isassembled = date2process & (~pd.isnull(df[outputkey]))
+    df.loc[isassembled, 'issue_parsedate'] = df.loc[isassembled, 'issue_parsedate'].fillna('') + f';{basedatekey}_ASSEMBLED'
+    df.loc[isassembled, 'issue_parsedate'] = df.loc[isassembled, 'issue_parsedate'].str.strip(' ;')
+
+    ## Clean columns
+
+#    if 'issue_convertdatetype' in df.columns:
+#        tempcol += ['issue_convertdatetype']
+    df.drop(columns=tempcol, inplace=True)
+
+    return df
+
 
 def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, format=None, inplace=False, stdnan=True, parallel=False, cpu=None):
 
@@ -299,7 +384,7 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, format=None, in
     if not parallel:
         cpu=1
 
-    df, datekey, outputkey = getcolumnname.apply(df, datekey, 'parsedate', inplace=inplace)
+    df, datekey, outputkey = getcolumnname.apply(df, datekey, SCRIPT_NAME, inplace=inplace)
 
 #    if inplace:
 #        colname=datekey
