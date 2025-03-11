@@ -1,51 +1,12 @@
 # coding: utf-8
 
 #External import
+
 import pandas as pd
 
-def create_issue_convertdatetype(df):
+# Internal import
 
-    if ('issue_convertdatetype' not in df.columns):
-        df['issue_convertdatetype'] = pd.NA
-        df['issue_convertdatetype'] = df['issue_convertdatetype'].astype('string')
-
-    return df
-
-#def modify_issue_convertdatetype(dfser, subset=None, issue=None):
-
-#    if (issue is None):
-#        raise Exception('`convertdatetype.py` | Please specify a value for `issue`')
-
-#    if (subset is None):
-#        print(f'            INFO | modify_issue_convertdatetype() will be applied to all rows (`subset`={subset})')
-#        subset = list(dfser.index)
-
-#    if isinstance(dfser,pd.DataFrame):
-#        issueSeries = dfser['issue_convertdatetype']
-#    elif isinstance(dfser,pd.Series):
-#        issueSeries = dfser
-#    else:
-#        raise Exception(f'`convertdatetype.py` | Only DataFrame and Series types are supported')
-
-#    issueSeries[subset] = issueSeries[subset].fillna('') + f';{issue}'
-#    issueSeries[subset] = issueSeries[subset].str.strip(';')
-#    issueSeries = issueSeries.astype('string')
-
-# shallow copy, souldn't be necessary:
-#    if isinstance(dfser,pd.DataFrame):
-#        df.loc[subset, 'issue_convertdatetype'] = issueSeries[subset]
-
-def modify_issue_convertdatetype(df, issue, subset=None):
-
-    if (subset is None):
-#        print(f'            INFO | modify_issue_convertdatetype() will be applied to all rows (`subset`={subset})')
-        subset = list(df.index)
-
-    df.loc[subset, 'issue_convertdatetype'] = df.loc[subset, 'issue_convertdatetype'].fillna('') + f';{issue}'
-    df.loc[subset, 'issue_convertdatetype'] = df.loc[subset, 'issue_convertdatetype'].str.strip(';')
-    df['issue_convertdatetype'] = df['issue_convertdatetype'].astype('string')
-
-    return df
+from marinedb.tools import modifyissuecolumn
 
 def drop_emptygeneratedcolumn(df, gencolumn):
 
@@ -67,8 +28,7 @@ def astype_Int64(df, key, drop_empty=True):
 
     notonlynumbers = df[key].str.contains(r'[^.0-9]', regex=True)
     df.loc[notonlynumbers, key] = pd.NA
-    df = create_issue_convertdatetype(df)
-    df = modify_issue_convertdatetype(df, f'{basekey}_INVALID', notonlynumbers)
+    df = modifyissuecolumn.apply(df, issuekey='issue_convertdatetype', issuemsg=f'{basekey}_INVALID', subset=notonlynumbers)
 
     # Convert to integers
 
@@ -95,8 +55,7 @@ def convert_year(df, yearkey, drop_ambiguous=False, drop_empty=True):
     yearlength = df[yearkey].astype('string').str.len()
     invalidyear =  (~ismissing) & ((yearlength == 3) | (yearlength > 4))
     df.loc[invalidyear, yearkey] = pd.NA
-    df = create_issue_convertdatetype(df)
-    df = modify_issue_convertdatetype(df, f'{baseyearkey}_INVALID', invalidyear)
+    df = modifyissuecolumn.apply(df, issuekey='issue_convertdatetype', issuemsg=f'{baseyearkey}_INVALID', subset=invalidyear)
 
     # Ambiguous year string
     # e.g. does "20" represent 1720, 1820, 1920, or 2020?
@@ -104,7 +63,7 @@ def convert_year(df, yearkey, drop_ambiguous=False, drop_empty=True):
     ismissing = pd.isnull(df[yearkey])
     yearlength = df[yearkey].astype('string').str.len()
     isincomplete = (~ismissing) & (yearlength < 4)
-    df = modify_issue_convertdatetype(df, f'{baseyearkey}_AMBIGUOUS', isincomplete)
+    df = modifyissuecolumn.apply(df, issuekey='issue_convertdatetype', issuemsg=f'{baseyearkey}_AMBIGUOUS', subset=isincomplete)
     if drop_ambiguous:
         df.loc[isincomplete, yearkey] = pd.NA
 
@@ -124,11 +83,11 @@ def convert_month(df, monthkey, drop_empty=True):
     # Invalid months
 
     ismissing = pd.isnull(df[monthkey])
-    monthlength = df[monthkey].astype('string').str.len()
-    invalidmonth = (~ismissing) & (monthlength > 2)
+    isinvalid = (df[monthkey] > 12) | (df[monthkey] < 1)
+#    monthlength = df[monthkey].astype('string').str.len()
+    invalidmonth = (~ismissing) & isinvalid
     df.loc[invalidmonth, monthkey] = pd.NA
-    df = create_issue_convertdatetype(df)
-    df = modify_issue_convertdatetype(df, f'{basemonthkey}_INVALID', invalidmonth)
+    df = modifyissuecolumn.apply(df, issuekey='issue_convertdatetype', issuemsg=f'{basemonthkey}_INVALID', subset=invalidmonth)
     if drop_empty:
         df = drop_emptygeneratedcolumn(df, 'issue_convertdatetype')
 
@@ -145,60 +104,40 @@ def convert_day(df, daykey, drop_empty=True):
     # Invalid days
 
     ismissing = pd.isnull(df[daykey])
-    daylength = df[daykey].astype('string').str.len()
-    invalidday = (~ismissing) & (daylength > 2)
+    isinvalid = (df[daykey] > 31) | (df[daykey] < 1)
+#    daylength = df[daykey].astype('string').str.len()
+    invalidday = (~ismissing) & isinvalid
     df.loc[invalidday, daykey] = pd.NA
-    df = create_issue_convertdatetype(df)
-    df = modify_issue_convertdatetype(df, f'{basedaykey}_INVALID', invalidday)
+    df = modifyissuecolumn.apply(df, issuekey='issue_convertdatetype', issuemsg=f'{basedaykey}_INVALID', subset=invalidday)
     if drop_empty:
         df = drop_emptygeneratedcolumn(df, 'issue_convertdatetype')
 
     return df
 
-#def update_issue_convertdatetype_isinconsistent(issue_yearkey=None, issue_monthkey=None, issue_daykey=None, year=None, month=None, day=None, issue_convertdatetype=None):
+def isvaliddate(df, yearkey, monthkey, daykey):
 
-#    if (month is None) and (day is None):
-#        return None, None, None, None
+    baseyearkey = yearkey.split('_processedby_')[0].upper()
+    basemonthkey = monthkey.split('_processedby_')[0].upper()
+    basedaykey = daykey.split('_processedby_')[0].upper()
 
-#    Nyear = len(year)
-#    if (month is not None) and (len(month) != Nyear):
-#        raise Exception(f'`convertdatetype.py` | `year` and `month` must have the same length (`year`:{Nyear}, `month`:{len(month)})')
-#    if (month is None) and (day is not None):
-#        raise Exception(f"`convertdatetype.py` | `day` is not None, but `month` is. Please either assign a value to `month` or set `day` to None.")
-#    if (day is not None) and (len(day) != Nyear):
-#        raise Exception(f'`convertdatetype.py` | `year`, `month` and `day` must have the same length (`year`:{Nyear}, `month`:{len(month)}, `day`:{len(day)})')
-#    if (year is not None) and (issue_yearkey is None):
-#        raise Exception('`convertdatetype.py` | Please specify a value for `issue_yearkey`')
-#    if (month is not None) and (issue_monthkey is None):
-#        raise Exception('`convertdatetype.py` | Please specify a value for `issue_monthkey`')
-#    if (day is not None) and (issue_daykey is None):
-#        raise Exception('`convertdatetype.py` | Please specify a value for `issue_daykey`')
+    maxdaybymonth = pd.Series([0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31])
+#    maxdaybymonth_leapyear = pd.Series([0, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31])
+    ismissing = (pd.isnull(df[daykey]) | pd.isnull(df[monthkey]) | pd.isnull(df[daykey]))
+    isvaliddate = ismissing
+    isvaliddate[~ismissing] = (df.loc[~ismissing,daykey] <= maxdaybymonth[df.loc[~ismissing,monthkey]].set_axis(df.loc[~ismissing,:].index))
+    isleapyear = (df[yearkey]%4 == 0) & ((df[yearkey]%100 != 0) | (df[yearkey]%400 == 0))
+    isvaliddate[isleapyear & (~ismissing) & (df[monthkey] == 2)] = (df.loc[isleapyear & (~ismissing) & (df[monthkey] == 2),daykey] <= 29)
+#    df.loc[isleapyear,'isvaliddate'] = (df.loc[isleapyear,daykey] <= maxdaybymonth_leapyear[df.loc[isleapyear,monthkey]])
+#    df.loc[~isleapyear,'isvaliddate'] = (df.loc[~isleapyear,daykey] <= maxdaybymonth[df.loc[~isleapyear,monthkey]])
 
-#    if (issue_convertdatetype is None):
-#        issue_convertdatetype = pd.Series([pd.NA]*len(year))
+    df = modifyissuecolumn.apply(df, issuekey='issue_convertdatetype', issuemsg=f'{baseyearkey}_{basemonthkey}_{basedaykey}_COMBINATION_INVALID', subset=(~isvaliddate))
 
-#    if month is not None:
-#        yearmonth_inconsistency = pd.isnull(year) & (~pd.isnull(month))
-#        month[yearmonth_inconsistency] = pd.NA
-#        issue_convertdatetype = modify_issue_convertdatetype(issue_convertdatetype, subset=yearmonth_inconsistency, issue=f'{issue_yearkey.upper()}_{issue_monthkey.upper()}_INCONSISTENT')
+    return df
 
-#    if day is not None:
-#        yearday_inconsistency = pd.isnull(year) & (~pd.isnull(day))
-#        monthday_inconsistency = pd.isnull(month) & (~pd.isnull(day))
-#        day[yearday_inconsistency] = pd.NA
-#        day[monthday_inconsistency] = pd.NA
-#        issue_convertdatetype = modify_issue_convertdatetype(issue_convertdatetype, yearday_inconsistency, f'{issue_yearkey.upper()}_{issue_daykey.upper()}_INCONSISTENT')
-#        issue_convertdatetype = modify_issue_convertdatetype(issue_convertdatetype, monthday_inconsistency, f'{issue_monthkey.upper()}_{issue_daykey.upper()}_INCONSISTENT')
-
-#    issue_convertdatetype = issue_convertdatetype.astype('string')
-
-#    return month, day, issue_convertdatetype
-
-def apply(df, datekey=None, yearkey=None, monthkey=None, daykey=None, format='ISO8601', drop_inconsistent=True, drop_ambiguous=False, drop_empty=False):
+def apply(df, datekey=None, yearkey=None, monthkey=None, daykey=None, format='ISO8601', drop_inconsistent=False, drop_ambiguous=False, drop_empty=False):
 
     if (datekey is None) and (yearkey is None) and (monthkey is None) and (daykey is None):
         print('            INFO | No column specified, the dataframe is returned as is.')
-        # VÉRIFIER CRÉATION COLONNES !!
         return df
 
     if (yearkey is None) and (monthkey is not None):
@@ -225,44 +164,9 @@ def apply(df, datekey=None, yearkey=None, monthkey=None, daykey=None, format='IS
 
         df[datekey]=df[datekey].dt.tz_localize(None) # remove the time zone information (and preserve local time)
 
-#    # Store available year, month, and day values
-
-#    if yearkey is not None:
-#        year = df[yearkey].copy()
-#    if monthkey is not None:
-#        month = df[monthkey].copy()
-#    if daykey is not None:
-#        day = df[daykey].copy()
-#    else:
-#        day = None
-
     # Verify hierarchical consistency:
     # - if the month is present, the year must also be present
     # - if the day is present, both year and month must be present
-
-#    if (monthkey is not None):
-
-#        params = {
-#                  'issue_yearkey' : yearkey,
-#                  'issue_monthkey' : monthkey,
-#                  'issue_daykey' : daykey,
-#                  'year' : year.copy(),
-#                  'month' : month.copy(),
-#                  'day': day.copy(),
-#                 }
-
-#        if (daykey is None):
-#            df[monthkey], _, df['issue_convertdatetype'] = update_issue_convertdatetype_isinconsistent(**params)
-#        else:
-#            df[monthkey], df[daykey], df['issue_convertdatetype'] = update_issue_convertdatetype_isinconsistent(**params)
-
-#    drop_columns = []
-#    if yearkey is not None:
-#        df[f'{yearkey}_temp'] = df[yearkey].copy()
-#        dropcolumns.append(f'{yearkey}_temp')
-#    if monthkey is not None:
-#        df[f'{monthkey}_temp'] = df[monthkey].copy()
-#        dropcolumns.append(f'{monthkey}_temp')
 
     if yearkey is not None:
         df['issue_convertdatetype'] = pd.NA
@@ -277,29 +181,19 @@ def apply(df, datekey=None, yearkey=None, monthkey=None, daykey=None, format='IS
 
     if monthkey is not None:
         yearmonth_inconsistency = pd.isnull(df[yearkey]) & (~pd.isnull(df[monthkey]))
-#        yearmonth_inconsistency = pd.isnull(df[f'{yearkey}_temp']) & (~pd.isnull(df[f'{monthkey}_temp']))
-#        df.loc[yearmonth_inconsistency,monthkey] = pd.NA
-#        df = create_issue_convertdatetype(df)
-        df = modify_issue_convertdatetype(df, f'{baseyearkey}_{basemonthkey}_INCONSISTENT', yearmonth_inconsistency)
+        df = modifyissuecolumn.apply(df, issuekey='issue_convertdatetype', issuemsg=f'{baseyearkey}_{basemonthkey}_INCONSISTENT', subset=yearmonth_inconsistency)
     if daykey is not None:
         yearday_inconsistency = pd.isnull(df[yearkey]) & (~pd.isnull(df[daykey]))
         monthday_inconsistency = pd.isnull(df[monthkey]) & (~pd.isnull(df[daykey]))
-#        yearday_inconsistency = pd.isnull(df[f'{yearkey}_temp']) & (~pd.isnull(df[daykey]))
-#        monthday_inconsistency = pd.isnull(df[f'{monthkey}_temp']) & (~pd.isnull(df[daykey]))
-#        df.loc[yearday_inconsistency,daykey] = pd.NA
-#        df.loc[monthday_inconsistency,daykey] = pd.NA
-#        df = create_issue_convertdatetype(df)
-        df = modify_issue_convertdatetype(df, f'{baseyearkey}_{basedaykey}_INCONSISTENT', yearday_inconsistency)
-        df = modify_issue_convertdatetype(df, f'{basemonthkey}_{basedaykey}_INCONSISTENT',  monthday_inconsistency)
+        df = modifyissuecolumn.apply(df, issuekey='issue_convertdatetype', issuemsg=f'{baseyearkey}_{basedaykey}_INCONSISTENT', subset=yearday_inconsistency)
+        df = modifyissuecolumn.apply(df, issuekey='issue_convertdatetype', issuemsg=f'{basemonthkey}_{basedaykey}_INCONSISTENT',  subset=monthday_inconsistency)
 
-    if drop_inconsistent:
-        if monthkey is not None:
-            df.loc[yearmonth_inconsistency,monthkey] = pd.NA
-        if daykey is not None:
-            df.loc[yearday_inconsistency,daykey] = pd.NA
-            df.loc[monthday_inconsistency,daykey] = pd.NA
-
-#    df.drop(columns=drop_columns, inplace=True)
+#    if drop_inconsistent:
+#        if monthkey is not None:
+#            df.loc[yearmonth_inconsistency,monthkey] = pd.NA
+#        if daykey is not None:
+#            df.loc[yearday_inconsistency,daykey] = pd.NA
+#            df.loc[monthday_inconsistency,daykey] = pd.NA
 
     # Convert the year, month, and day columns to integers
 
@@ -307,15 +201,12 @@ def apply(df, datekey=None, yearkey=None, monthkey=None, daykey=None, format='IS
         df = convert_year(df, yearkey, drop_ambiguous=drop_ambiguous, drop_empty=drop_empty)
     if monthkey is not None:
         df = convert_month(df, monthkey, drop_empty=drop_empty)
-#        if drop_inconsistent:
-#            df.loc[pd.isnull(df[yearkey]),monthkey] = pd.NA
     if daykey is not None:
         df = convert_day(df, daykey, drop_empty=drop_empty)
-#        if drop_inconsistent:
-#            df.loc[pd.isnull(df[yearkey]),daykey] = pd.NA
-#            df.loc[pd.isnull(df[monthkey]),daykey] = pd.NA
+    if (yearkey is not None) and (monthkey is not None) and (daykey is not None):
+        df = isvaliddate(df, yearkey, monthkey, daykey)
 
-   # Ensure hierarchical consistency
+    # Ensure hierarchical consistency
 
     if drop_inconsistent:
        if monthkey is not None:
