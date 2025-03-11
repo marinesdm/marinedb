@@ -4,8 +4,16 @@
 
 import pandas as pd
 import warnings
+import os
 
+# Internal import
+
+from marinedb.tools import getcolumnname
 from marinedb.tools.temporal import convertdatetype
+
+# Global variable
+
+SCRIPT_NAME = os.path.basename(__file__)[:-3]
 
 def isdateinterval(df, datekey):
 
@@ -71,7 +79,7 @@ def apply_strategy(df, key, index, strategy):
 
 def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_number=1, maxinterval_level='years', inplace=False, flag=True):
 
-    # maxinterval_number=-1 keep the start date for all intervals
+    # maxinterval_number=-1 : process all date intervals regardless of width
     # strategy in ['start', 'end', 'overlap'] : a different strategy could be implemented (e.g. take the median date)
     # drop_interval=True : drop date intervals
     # drop_interval=False : process date intervals
@@ -90,33 +98,17 @@ def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_numb
     if (maxinterval_number < -1):
         raise ValueError(f"`processdateinterval.py` | `maxinterval_number` must be > -1, not {maxinterval_number}")
     if maxinterval_level not in ['years','months','days']:
-        raise ValueError(f"`processdateinterval.py` | `maxinterval_level` must be 'years', 'months' or 'days', not {maxinterval_level}")
-
-#    if drop_interval and (not inplace) and (not flag):
-#        print(f'            WARNING | drop_interval={drop_interval} and inplace={inplace}, but flag={flag}')
-#        print(f'            Date intervals will be flagged only (flag=True)')
-#        print(f'            The lines containing a date interval will be dropped in-place (inplace=True)')
-#        inplace = True
-#        flag = True
-
-#    if (drop_interval and flag) and inplace:
-#        print(f'            WARNING | drop_interval={drop_interval} and flag={flag}, but inplace={inplace}')
-#        print(f'            The lines containing a date interval will be flagged only (inplace=False)')
-#        inplace = True
+        raise ValueError(f"`processdateinterval.py` | `maxinterval_level` must be 'years', 'months' or 'days', not '{maxinterval_level}'")
 
     if (strategy == 'overlap'):
-        print(f'            INFO | If strategy={strategy}, maxinterval_number={maxinterval_number} will not be considered')
+        print(f"            INFO | As strategy='{strategy}', maxinterval_number={maxinterval_number} and maxinterval_level='{maxinterval_level}' will be ignored")
 
-    df, datekey, outputkey = getcolumnname.apply(df, datekey, 'parsedate', inplace=inplace)
+    df, datekey, outputkey = getcolumnname.apply(df, datekey, SCRIPT_NAME, inplace=inplace)
+
     if not inplace:
         df[outputkey] = df[datekey].copy()
 
-    basedatekey = datekey.split('_processedby_')[0] #.upper()
-#    if inplace:
-#        colname = key
-#    else:
-#        colname = f'{key}_processedby_processdateinterval'
-#        df[colname] = df[key].values.copy()
+    basedatekey = datekey.split('_processedby_')[0]
 
     ## Date format
 
@@ -131,12 +123,12 @@ def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_numb
     if not issymmetrical.all():
         raise ValueError(f"`processdateinterval.py` | All date intervals should be symmetrical, i.e., both dates must have the same precision")
 
-    flagname = f'flag_{basedatekey}_interval'
-    df[flagname] = False
-
     # Find intervals
 
     print(f'            ** processdateinterval | find date intervals')
+
+    flagname = f'flag_{basedatekey}_dateinterval'
+    df[flagname] = False
 
     isdatemissing = pd.isnull(df[datekey])
     df.loc[~isdatemissing,flagname] = df.loc[~isdatemissing,datekey].astype('string').str.contains('/') # interval format: YYYY[-MM[-DD]]/YYYY[-MM[-DD]]
@@ -147,55 +139,6 @@ def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_numb
 
         df['issue_processdateinterval'] = pd.NA
         drop_interval = True
-
-#VERSION N°1
-#    if drop_interval and not flag:
-
-#        # Delete intervals
-
-#        print(f'            ** processdateinterval | delete date intervals')
-
-#        df = df[~df[flagname]].reset_index(drop_interval=True)
-#        df.drop(columns=flagname, inplace=True)
-#        df[outputkey] = df[outputkey].astype('string')
-
-#        return df
-
-#    elif drop_interval and flag:
-
-#        # Flag intervals for later deletion or processing
-
-#        print(f'            ** processdateinterval | flag date intervals')
-
-#        if inplace:
-#            df = df[~df[flagname]].reset_index(drop_interval=True)
-#        else:
-#            df.drop(columns=outputkey, inplace=True)
-
-#        return df
-#VERSION N°2
-#    if drop_interval and inplace:
-
-#        # Delete intervals
-
-#        print(f'            ** processdateinterval | delete date intervals')
-
-#        df = df[~df[flagname]].reset_index(drop_interval=True)
-#        df[outputkey] = df[outputkey].astype('string')
-#        if not flag:
-#            df.drop(columns=flagname, inplace=True)
-
-#        return df
-
-#    elif drop_interval and (not inplace):
-
-#        # Flag intervals for later deletion or processing
-
-#        print(f'            ** processdateinterval | flag date intervals')
-
-#        df.drop(columns=outputkey, inplace=True)
-
-#        return df
 
     if drop_interval:
 
@@ -219,22 +162,22 @@ def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_numb
         tempcol = ['start_str','end_str','start','end']
         df.loc[df[flagname],['start_str','end_str']] = df.loc[df[flagname],datekey].astype('string').str.split('/').tolist()
         df[['start','end']] = df[['start_str','end_str']].astype('string').values
-        df = convertdatetype.apply(df, 'start', format='ISO8601')
-        df = convertdatetype.apply(df, 'end', format='ISO8601')
-        # Note: if the month or day is unknown, it is replaced with '01'
-        # i.e., the first day of the month or January
+        df = convertdatetype.apply(df, datekey='start', format='ISO8601')
+        df = convertdatetype.apply(df, datekey='end', format='ISO8601')
+        # Note: unknown month and day are replaced with '01'
+        # i.e., the first day of the known month or January
 
         if maxinterval_number == 0:
-            # assumption: equivalent to less than 1 maxinterval_level
+            # assumption: equivalent to less than 1 `maxinterval_level`
             maxinterval_number = 1
 
         if maxinterval_number != -1:
 
-            # If the date interval is greater than maxinterval_number (default:1) maxinterval_level (default:year),
+            # If the date interval is greater than `maxinterval_number` (default:1) `maxinterval_level` (default:year),
             # assign a missing value to the date for later deletion
             # Else, process date intervals
 
-            ismissing = pd.isnull(df['start']) | pd.isnull(df['end'])
+            ismissing = (pd.isnull(df['start']) & (~pd.isnull(df['end']))) | (pd.isnull(df['end']) & (~pd.isnull(df['start'])))
             df.loc[ismissing,outputkey] = pd.NA
             df.loc[ismissing,'issue_processdateinterval'] = f'{basedatekey.upper()}_INTERVAL_PROCESSING_FAILED'
 
