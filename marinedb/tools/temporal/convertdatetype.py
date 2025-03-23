@@ -1,12 +1,17 @@
 # coding: utf-8
 
-#External import
+# External import
 
 import pandas as pd
 
 # Internal import
 
+from marinedb.utils.allexport import export
 from marinedb.tools import modifyissuecolumn
+
+# Global variable
+
+__all__ = [] # populated using the @export decorator
 
 def drop_emptygeneratedcolumn(df, gencolumn):
 
@@ -15,6 +20,7 @@ def drop_emptygeneratedcolumn(df, gencolumn):
 
     return df
 
+@export
 def astype_Int64(df, key, drop_empty=True):
 
     basekey = key.split('_processedby_')[0].upper()
@@ -41,6 +47,7 @@ def astype_Int64(df, key, drop_empty=True):
 
     return df
 
+@export
 def convert_year(df, yearkey, drop_ambiguous=False, drop_empty=True):
 
     baseyearkey = yearkey.split('_processedby_')[0].upper()
@@ -72,6 +79,7 @@ def convert_year(df, yearkey, drop_ambiguous=False, drop_empty=True):
 
     return df
 
+@export
 def convert_month(df, monthkey, drop_empty=True):
 
     basemonthkey = monthkey.split('_processedby_')[0].upper()
@@ -84,7 +92,6 @@ def convert_month(df, monthkey, drop_empty=True):
 
     ismissing = pd.isnull(df[monthkey])
     isinvalid = (df[monthkey] > 12) | (df[monthkey] < 1)
-#    monthlength = df[monthkey].astype('string').str.len()
     invalidmonth = (~ismissing) & isinvalid
     df.loc[invalidmonth, monthkey] = pd.NA
     df = modifyissuecolumn.apply(df, issuekey='issue_convertdatetype', issuemsg=f'{basemonthkey}_INVALID', subset=invalidmonth)
@@ -93,6 +100,7 @@ def convert_month(df, monthkey, drop_empty=True):
 
     return df
 
+@export
 def convert_day(df, daykey, drop_empty=True):
 
     basedaykey = daykey.split('_processedby_')[0].upper()
@@ -105,7 +113,6 @@ def convert_day(df, daykey, drop_empty=True):
 
     ismissing = pd.isnull(df[daykey])
     isinvalid = (df[daykey] > 31) | (df[daykey] < 1)
-#    daylength = df[daykey].astype('string').str.len()
     invalidday = (~ismissing) & isinvalid
     df.loc[invalidday, daykey] = pd.NA
     df = modifyissuecolumn.apply(df, issuekey='issue_convertdatetype', issuemsg=f'{basedaykey}_INVALID', subset=invalidday)
@@ -121,19 +128,21 @@ def isvaliddate(df, yearkey, monthkey, daykey):
     basedaykey = daykey.split('_processedby_')[0].upper()
 
     maxdaybymonth = pd.Series([0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31])
-#    maxdaybymonth_leapyear = pd.Series([0, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31])
+
+    # Nonexistent date
     ismissing = (pd.isnull(df[daykey]) | pd.isnull(df[monthkey]) | pd.isnull(df[daykey]))
     isvaliddate = ismissing
     isvaliddate[~ismissing] = (df.loc[~ismissing,daykey] <= maxdaybymonth[df.loc[~ismissing,monthkey]].set_axis(df.loc[~ismissing,:].index))
+
+    # Leap years with 29 days in February
     isleapyear = (df[yearkey]%4 == 0) & ((df[yearkey]%100 != 0) | (df[yearkey]%400 == 0))
-    isvaliddate[isleapyear & (~ismissing) & (df[monthkey] == 2)] = (df.loc[isleapyear & (~ismissing) & (df[monthkey] == 2),daykey] <= 29)
-#    df.loc[isleapyear,'isvaliddate'] = (df.loc[isleapyear,daykey] <= maxdaybymonth_leapyear[df.loc[isleapyear,monthkey]])
-#    df.loc[~isleapyear,'isvaliddate'] = (df.loc[~isleapyear,daykey] <= maxdaybymonth[df.loc[~isleapyear,monthkey]])
+    isvaliddate[(~ismissing) & isleapyear & (df[monthkey] == 2)] = (df.loc[(~ismissing) & isleapyear & (df[monthkey] == 2),daykey] <= 29)
 
     df = modifyissuecolumn.apply(df, issuekey='issue_convertdatetype', issuemsg=f'{baseyearkey}_{basemonthkey}_{basedaykey}_COMBINATION_INVALID', subset=(~isvaliddate))
 
     return df
 
+@export
 def apply(df, datekey=None, yearkey=None, monthkey=None, daykey=None, format='ISO8601', drop_inconsistent=False, drop_ambiguous=False, drop_empty=False):
 
     if (datekey is None) and (yearkey is None) and (monthkey is None) and (daykey is None):
@@ -157,12 +166,12 @@ def apply(df, datekey=None, yearkey=None, monthkey=None, daykey=None, format='IS
         # errors='coerce':
         #    invalid parsing set as NaT (Not a Time)
         #    e.g. NaT if date < 1677-09-22 or date > 2262-04-11 (Timestamp limitations)
-        #    Remark : time span can been wider with unit > ns (ms, s ...)
+        #    Remark : time span can be wider with unit > ns (ms, s ...)
         #    https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#timestamp-limitations
         #    https://numpy.org/doc/stable/reference/arrays.datetime.html#datetime-units
-        #    Warning : there may be other parsing issues and they may be mask
+        #    Warning : it may obscure other underlying issues
 
-        df[datekey]=df[datekey].dt.tz_localize(None) # remove the time zone information (and preserve local time)
+        df[datekey] = df[datekey].dt.tz_localize(None) # remove the time zone information (and preserve local time)
 
     # Verify hierarchical consistency:
     # - if the month is present, the year must also be present
@@ -187,13 +196,6 @@ def apply(df, datekey=None, yearkey=None, monthkey=None, daykey=None, format='IS
         monthday_inconsistency = pd.isnull(df[monthkey]) & (~pd.isnull(df[daykey]))
         df = modifyissuecolumn.apply(df, issuekey='issue_convertdatetype', issuemsg=f'{baseyearkey}_{basedaykey}_INCONSISTENT', subset=yearday_inconsistency)
         df = modifyissuecolumn.apply(df, issuekey='issue_convertdatetype', issuemsg=f'{basemonthkey}_{basedaykey}_INCONSISTENT',  subset=monthday_inconsistency)
-
-#    if drop_inconsistent:
-#        if monthkey is not None:
-#            df.loc[yearmonth_inconsistency,monthkey] = pd.NA
-#        if daykey is not None:
-#            df.loc[yearday_inconsistency,daykey] = pd.NA
-#            df.loc[monthday_inconsistency,daykey] = pd.NA
 
     # Convert the year, month, and day columns to integers
 
