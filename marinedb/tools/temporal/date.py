@@ -2,11 +2,15 @@
 
 # Internal import
 
+from marinedb.utils.allexport import export
 from marinedb.tools.temporal import parsedate
-from marinedb.tools.temporal import processdateinterval
 from marinedb.tools.temporal import splitdate
-#from marinedb.tools import getcolumnname
 
+# Global variable
+
+__all__ = [] # populated using the @export decorator
+
+@export
 def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, format=None, inplace=False, flag=True, stdnan=True, parallel=False, cpu=None, drop_interval=False, strategy='overlap', maxinterval_number=1, maxinterval_level='years', split='all', drop_mismatch=True):
 
     params = {
@@ -16,8 +20,6 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, format=None, in
              }
 
     # Parse raw date strings
-
-#    df, datekey = getcolumnname.apply(df, datekey, 'parsedate', inplace)
 
     params_parsedate = {
                         'format' : format,
@@ -31,24 +33,17 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, format=None, in
 
     # Process date intervals
 
-#    df, datekey = getcolumnname.apply(df, datekey, 'processdateinterval', inplace)
-
     params_processdateinterval = {
                                   'drop_interval' : drop_interval,
                                   'strategy' : strategy,
                                   'maxinterval_number' : maxinterval_number,
                                   'maxinterval_level' : maxinterval_level,
-#                                  'flag' : True,
-#                                  'inplace' : inplace
                                  }
-
-#    df = processdateinterval.apply(df, datekey, **params_processdateinterval)
 
     # Split date into year, month, and day
 
     params_splitdate = {
                         'split' : split,
-#                        'drop_interval' : drop_interval,
                         'drop_mismatch' : drop_mismatch,
                         'drop_empty' : False,
                         'flag' : flag,
@@ -56,6 +51,5 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, format=None, in
                        }
 
     df = splitdate.apply(df, datekey, **params, **params_processdateinterval, **params_splitdate)
-#    df = splitdate.apply(df, datekey, **params, **params_splitdate)
 
     return df
