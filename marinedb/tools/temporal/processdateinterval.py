@@ -8,13 +8,17 @@ import os
 
 # Internal import
 
+from marinedb.utils.allexport import export
 from marinedb.tools import getcolumnname
 from marinedb.tools.temporal import convertdatetype
 
 # Global variable
 
+__all__ = [] # populated using the @export decorator
+
 SCRIPT_NAME = os.path.basename(__file__)[:-3]
 
+@export
 def isdateinterval(df, datekey):
 
     flaginterval = pd.Series([False]*len(df))
@@ -77,6 +81,7 @@ def apply_strategy(df, key, index, strategy):
 
     return df
 
+@export
 def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_number=1, maxinterval_level='years', inplace=False, flag=True):
 
     # maxinterval_number=-1 : process all date intervals regardless of width
@@ -96,7 +101,7 @@ def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_numb
     maxinterval_number = int(maxinterval_number)
 
     if (maxinterval_number < -1):
-        raise ValueError(f"`processdateinterval.py` | `maxinterval_number` must be > -1, not {maxinterval_number}")
+        raise ValueError(f'`processdateinterval.py` | `maxinterval_number` must be > -1, not {maxinterval_number}')
     if maxinterval_level not in ['years','months','days']:
         raise ValueError(f"`processdateinterval.py` | `maxinterval_level` must be 'years', 'months' or 'days', not '{maxinterval_level}'")
 
@@ -115,13 +120,13 @@ def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_numb
     pattern = r'([0-9]{4}(?:-[0-9]{2}){0,2})(?:/([0-9]{4}(?:-[0-9]{2}){0,2}))?'
     isformatrecognized = df[datekey].str.fullmatch(pattern)
     if not isformatrecognized.all():
-        raise ValueError(f"`processdateinterval.py` | All dates should follow the 'YYYY[[-MM[-DD]]/YYYY[-MM[-DD]]]' format. Please use `parsedate.py` upstream to convert date strings to this valid format.")
+        raise ValueError(f"`processdateinterval.py` | all dates should follow the 'YYYY[[-MM[-DD]]/YYYY[-MM[-DD]]]' format. Please use `parsedate.py` upstream to convert date strings to this valid format.")
 
     issymmetrical = df.loc[(~pd.isnull(df[datekey])),datekey].str.extract(pattern)
     issymmetrical = issymmetrical[(~pd.isnull(issymmetrical.iloc[:,1]))]
     issymmetrical = (issymmetrical.iloc[:,0].str.len() == issymmetrical.iloc[:,1].str.len())
     if not issymmetrical.all():
-        raise ValueError(f"`processdateinterval.py` | All date intervals should be symmetrical, i.e., both dates must have the same precision")
+        raise ValueError(f'`processdateinterval.py` | all date intervals should be symmetrical, i.e., both dates must have the same precision')
 
     # Find intervals
 
@@ -204,7 +209,7 @@ def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_numb
             # Date interval length in days
 
             with warnings.catch_warnings():
-                warnings.simplefilter("ignore", FutureWarning)
+                warnings.simplefilter('ignore', FutureWarning)
                 df[f'{basedatekey}_dateinterval_indays'] = pd.NA
                 df.loc[df[flagname],f'{basedatekey}_dateinterval_indays'] = df.loc[df[flagname],'end'].dt.to_pydatetime() - df.loc[df[flagname],'start'].dt.to_pydatetime()
                 df.loc[df[flagname],f'{basedatekey}_dateinterval_indays'] = df.loc[df[flagname],f'{basedatekey}_dateinterval_indays'].apply(lambda width: width.days)
