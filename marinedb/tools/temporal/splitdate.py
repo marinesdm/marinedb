@@ -3,31 +3,22 @@
 # External import
 
 import pandas as pd
-import numpy as np
 import os
 
 # Internal import
 
+from marinedb.utils.allexport import export
 from marinedb.tools import getcolumnname, modifyissuecolumn
 from marinedb.tools.temporal import convertdatetype
 from marinedb.tools.temporal import processdateinterval
 
 # Global variable
 
+__all__ = [] # populated using the @export decorator
+
 SCRIPT_NAME = os.path.basename(__file__)[:-3]
 
-#def modify_issue(df, issuekey, issue, subset=None):
-
-#    if (subset is None):
-#        subset = list(df.index)
-
-#    df.loc[subset, issuekey] = df.loc[subset, issuekey].fillna('') + f';{issue}'
-#    df.loc[subset, issuekey] = df.loc[subset, issuekey].str.strip(';')
-#    df[issuekey] = df[issuekey].astype('string')
-
-#    return df
-
-def _clean(df, yearkey, monthkey, daykey, issuekey, split, dropcolumns=None, drop_empty=True):
+def clean(df, yearkey, monthkey, daykey, issuekey, split, dropcolumns=None, drop_empty=True):
 
     # Drop columns
 
@@ -64,14 +55,14 @@ def _clean(df, yearkey, monthkey, daykey, issuekey, split, dropcolumns=None, dro
             df[monthkey] = df[monthkey].astype('string')
             df[daykey] = df[daykey].astype('string')
         else:
-            raise ValueError(error)
+            raise ValueError('`splitdate.py` | ' + error)
 
     issuekeys = [col for col in df.columns if 'issue' in col]
     df[issuekeys] = df[issuekeys].astype('string')
 
     return df
 
-def _processdateinterval(df, datekey, drop_interval, strategy='overlap', maxinterval_number=1, maxinterval_level='years'):
+def call_processdateinterval(df, datekey, drop_interval, strategy='overlap', maxinterval_number=1, maxinterval_level='years'):
 
     # Warning :
     # If the function is applied to a DataFrame that lacks 'flag_{basedatekey}_dateinterval' column,
@@ -115,10 +106,6 @@ def _processdateinterval(df, datekey, drop_interval, strategy='overlap', maxinte
 
     datekeyin = [col for col in df.columns if (col[:len(basedatekey)] == basedatekey) and ('processdateinterval' in col)]
     if len(datekeyin) > 1:
-#        for col in datekeyin:
-#            coldiff = set(col) - set(datekeyin[-1])
-#            if (len(coldiff) != 0):
-#                # unexpected
         raise Exception(f"`splitdate.py` | '{basedatekey}' & 'processdateinterval': {datekeyin}. An issue may have occurred during execution.")
     elif len(datekeyin) == 1:
         datekeyin = datekeyin[0]
@@ -128,9 +115,10 @@ def _processdateinterval(df, datekey, drop_interval, strategy='overlap', maxinte
 
     return df, datekeyin
 
+@export
 def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', drop_interval=False, drop_mismatch=True, drop_empty=False, inplace=False, flag=True, strategy='overlap', maxinterval_number=1, maxinterval_level='years'):
 
-    # output: issue_splitdate/issue_splitdateinterval, flagcolumn, yearkeyout, monthkeyout, daykeyout
+    # Verifications
 
     if split not in ['all','interval']:
         raise ValueError(f"`splitdate.py` | `split` must be 'all' or 'interval'")
@@ -139,6 +127,8 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', dr
         raise Exception(f"`splitdate.py` | yearkey={yearkey} but monthkey='{monthkey}'. Please assign a value to `yearkey` or set `monthkey` to None.")
     if (daykey is not None) and (monthkey is None):
         raise Exception(f"`splitdate.py` | monthkey={monthkey} but daykey='{daykey}'. Please assign a value to `monthkey` or set `daykey` to None.")
+
+    # Set up
 
     if (yearkey is None):
         yearkey = 'year'
@@ -163,7 +153,7 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', dr
                                   'maxinterval_level': maxinterval_level
                                   }
 
-    df, datekey = _processdateinterval(df, datekey, **processdateinterval_params)
+    df, datekey = call_processdateinterval(df, datekey, **processdateinterval_params)
 
     basedatekey = datekey.split('_processedby_')[0]
     baseyearkey = yearkey.split('_processedby_')[0].upper()
@@ -172,7 +162,6 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', dr
     flagcolumn = f'flag_{basedatekey}_dateinterval'
     intervalcolumns = list(set(df.columns) - set(columns))
     intervalcolumns = [col for col in intervalcolumns if ('flag' in col) or ('dateinterval_indays' in col)]
-#    intervalcolumns = [col for col in intervalcolumns if 'issue' not in col]
 
     # Select the dates to process
     # split='all': all dates
@@ -217,13 +206,9 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', dr
 
     ## Initialize the output columns
 
-    colnames = {'day':daykeyout, 'month':monthkeyout, 'year':yearkeyout} #DEBUG : si marche remplacer tous les colnames par out
-
     if isday or ismonth or isyear:
 
         if inplace:
-
-#            colnames = {'day':daykey, 'month':monthkey, 'year':yearkey}
 
             if split == 'all':
                 print(f'            WARNING | `{daykey}`, `{monthkey}` and/or `{yearkey}` columns already exist and will be overwritten')
@@ -232,27 +217,21 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', dr
 
         else:
 
-#            colnames = {'day':f'{daykey}_processedby_splitdate', 'month':f'{monthkey}_processedby_splitdate', 'year':f'{yearkey}_processedby_splitdate'}
-
             if isyear:
-                df[colnames['year']] = df[yearkey].copy()
+                df[yearkeyout] = df[yearkey].copy()
             if ismonth:
-                df[colnames['month']] = df[monthkey].copy()
+                df[monthkeyout] = df[monthkey].copy()
             if isday:
-                df[colnames['day']] = df[daykey].copy()
+                df[daykeyout] = df[daykey].copy()
 
-#    else:
-
-#        colnames = {'day':daykey, 'month':monthkey, 'year':yearkey}
-
-    df[colnames['year']] = df[colnames['year']].astype('string')
-    df[colnames['month']] = df[colnames['month']].astype('string')
-    df[colnames['day']] = df[colnames['day']].astype('string')
+    df[yearkeyout] = df[yearkeyout].astype('string')
+    df[monthkeyout] = df[monthkeyout].astype('string')
+    df[daykeyout] = df[daykeyout].astype('string')
 
     isoutputcolumnsgenerated = (not inplace) or ((not isday) and (not ismonth) and (not isyear))
     drop_empty = (drop_empty and isoutputcolumnsgenerated)
 
-    print(f"            INFO | daykey='{colnames['day']}', monthkey='{colnames['month']}', yearkey='{colnames['year']}'")
+    print(f"            INFO | daykey='{daykeyout}', monthkey='{monthkeyout}', yearkey='{yearkeyout}'")
 
     if (split == 'interval') and (~df[flagcolumn]).all():
 
@@ -265,7 +244,7 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', dr
         else:
             dropcolumns = intervalcolumns
 
-        df = _clean(df, colnames['year'], colnames['month'], colnames['day'], issuekey, split, dropcolumns=dropcolumns, drop_empty=drop_empty)
+        df = clean(df, yearkeyout, monthkeyout, daykeyout, issuekey, split, dropcolumns=dropcolumns, drop_empty=drop_empty)
 
         return df
 
@@ -274,11 +253,11 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', dr
         # Replace year, month and day values with NaN for interval dates
 
         if isyear:
-            df.loc[process,colnames['year']] = pd.NA
+            df.loc[process,yearkeyout] = pd.NA
         if ismonth:
-            df.loc[process,colnames['month']] = pd.NA
+            df.loc[process,monthkeyout] = pd.NA
         if isday:
-            df.loc[process,colnames['day']] = pd.NA
+            df.loc[process,daykeyout] = pd.NA
 
         # Clean
 
@@ -287,7 +266,7 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', dr
         else:
             dropcolumns = None
 
-        df = _clean(df, colnames['year'], colnames['month'], colnames['day'], issuekey, split, dropcolumns=dropcolumns, drop_empty=drop_empty)
+        df = clean(df, yearkeyout, monthkeyout, daykeyout, issuekey, split, dropcolumns=dropcolumns, drop_empty=drop_empty)
 
         return df
 
@@ -297,63 +276,63 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', dr
 
     date_split = df.loc[process,datekey].str.split('-')
 
-    df.loc[process,colnames['year']] = date_split.str[0][process].astype('string').values
-    df.loc[process,colnames['month']] = date_split.str[1][process].astype('string').values
-    df.loc[process,colnames['day']] = date_split.str[2][process].astype('string').values
+    df.loc[process,yearkeyout] = date_split.str[0][process].astype('string').values
+    df.loc[process,monthkeyout] = date_split.str[1][process].astype('string').values
+    df.loc[process,daykeyout] = date_split.str[2][process].astype('string').values
 
     # Handle date intervals
 
     if drop_interval:
-        df.loc[df[flagcolumn],colnames['year']] = pd.NA
-        df.loc[df[flagcolumn],colnames['month']] = pd.NA
-        df.loc[df[flagcolumn],colnames['day']] = pd.NA
+        df.loc[df[flagcolumn],yearkeyout] = pd.NA
+        df.loc[df[flagcolumn],monthkeyout] = pd.NA
+        df.loc[df[flagcolumn],daykeyout] = pd.NA
 
-    df[colnames['year']] = df[colnames['year']].astype('string')
-    df[colnames['month']] = df[colnames['month']].astype('string')
-    df[colnames['day']] = df[colnames['day']].astype('string')
+    df[yearkeyout] = df[yearkeyout].astype('string')
+    df[monthkeyout] = df[monthkeyout].astype('string')
+    df[daykeyout] = df[daykeyout].astype('string')
 
     # Replace mismatched year, month, or day values with NaN
 
     if isyear:
-        ismissing = (pd.isnull(df[colnames['year']]) | pd.isnull(year))
+        ismissing = (pd.isnull(df[yearkeyout]) | pd.isnull(year))
         isfourdigit = (year.str.len() == 4)
         # four-digit years
         condition = (~ismissing) & isfourdigit & process
-        isyearmismatch = (df.loc[condition,colnames['year']] != year[condition])
+        isyearmismatch = (df.loc[condition,yearkeyout] != year[condition])
         isyearmismatch = list(isyearmismatch[isyearmismatch].index)
         # one-digit years or two-digit years
         condition = (~ismissing) & (~isfourdigit) & process
         refyear = year[condition].astype('string')
         mapindex = list(refyear.index)
-        isyearmismatch += [mapindex[idx] for idx,y in enumerate(refyear) if (y != df.loc[mapindex[idx],colnames['year']][-2:])]
+        isyearmismatch += [mapindex[idx] for idx,y in enumerate(refyear) if (y != df.loc[mapindex[idx],yearkeyout][-2:])]
         df = modifyissuecolumn.apply(df, issuekey, f'{baseyearkey}_MISMATCH', subset=isyearmismatch)
 
     if ismonth:
-        ismissing = (pd.isnull(df[colnames['month']]) | pd.isnull(month))
-        ismonthmismatch = (df.loc[(~ismissing) & process,colnames['month']] != month[(~ismissing) & process])
+        ismissing = (pd.isnull(df[monthkeyout]) | pd.isnull(month))
+        ismonthmismatch = (df.loc[(~ismissing) & process,monthkeyout] != month[(~ismissing) & process])
         ismonthmismatch = ismonthmismatch[ismonthmismatch].index
         df = modifyissuecolumn.apply(df, issuekey, f'{basemonthkey}_MISMATCH', subset=ismonthmismatch)
 
     if isday:
-        ismissing = (pd.isnull(df[colnames['day']]) | pd.isnull(day))
-        isdaymismatch = (df.loc[(~ismissing) & process,colnames['day']] != day[(~ismissing) & process])
+        ismissing = (pd.isnull(df[daykeyout]) | pd.isnull(day))
+        isdaymismatch = (df.loc[(~ismissing) & process,daykeyout] != day[(~ismissing) & process])
         isdaymismatch = isdaymismatch[isdaymismatch].index
         df = modifyissuecolumn.apply(df, issuekey, f'{basedaykey}_MISMATCH', subset=isdaymismatch)
 
     if drop_mismatch:
         if isyear:
-            df.loc[isyearmismatch,[colnames['year'],colnames['month'],colnames['day']]] = pd.NA
+            df.loc[isyearmismatch,[yearkeyout,monthkeyout,daykeyout]] = pd.NA
         if ismonth:
-            df.loc[ismonthmismatch,[colnames['month'],colnames['day']]] = pd.NA
+            df.loc[ismonthmismatch,[monthkeyout,daykeyout]] = pd.NA
         if isday:
-            df.loc[isdaymismatch,colnames['day']] = pd.NA
+            df.loc[isdaymismatch,daykeyout] = pd.NA
 
     # Ensure hierarchical consistency:
     # - if year is missing, set month and day to NaN
     # - if month is missing, set day to NaN
 
-    df.loc[process & pd.isnull(df[colnames['year']]),[colnames['month'],colnames['day']]] = pd.NA
-    df.loc[process & pd.isnull(df[colnames['month']]),colnames['day']] = pd.NA
+    df.loc[process & pd.isnull(df[yearkeyout]),[monthkeyout,daykeyout]] = pd.NA
+    df.loc[process & pd.isnull(df[monthkeyout]),daykeyout] = pd.NA
 
     # Clean
 
@@ -362,6 +341,6 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', dr
     else:
         dropcolumns = None
 
-    df = _clean(df, colnames['year'], colnames['month'], colnames['day'], issuekey, split=split, dropcolumns=dropcolumns, drop_empty=drop_empty)
+    df = clean(df, yearkeyout, monthkeyout, daykeyout, issuekey, split=split, dropcolumns=dropcolumns, drop_empty=drop_empty)
 
     return df
