@@ -1,4 +1,15 @@
+#!/usr/bin/python
+# coding: utf-8
 
+# Internal import
+
+from marinedb.utils.allexport import export
+
+# Global variable
+
+__all__ = [] # populated using the @export decorator
+
+@export
 def apply(df, key, modulename, inplace):
 
     ismodulename = (len(modulename) != 0)
@@ -7,7 +18,7 @@ def apply(df, key, modulename, inplace):
         raise Exception(f"`getcolumnname.py` | inplace={inplace} but modulename='{modulename}'. Assign a value to `modulename` or set `inplace` to True.")
 
     # Check if `basekey` has been previously processed and not modified in place,
-    # as indicated by the naming pattern '{basekey}_processedby_{modulename}_...'
+    # as indicated by the naming pattern '{basekey}_processedby_...'
 
     basekey = key.split('_processedby_')[0]
     processedkey = [col for col in df.columns if (f'{basekey}_processedby' in col)]
@@ -18,24 +29,30 @@ def apply(df, key, modulename, inplace):
             coldiff = set(col) - set(processedkey[-1])
             if (len(coldiff) != 0):
                 # unexpected
-                raise Exception(f"`getcolumnname.py` | Multiple processed columns found for '{basekey}': {processedkey}. An issue may have occurred during execution.")
+                raise Exception(f"`getcolumnname.py` | Multiple independently processed columns found for '{basekey}': {processedkey}. An issue may have occurred during execution.")
         processedkey = processedkey[-1:]
 
     if len(processedkey) == 1:
+
         # Previously processed and not modified in place
+
         inputkey = processedkey[0]
         isprocessed = True
         isgenerated = False
 
     else:
+
         # Either unprocessed, modified in place or newly created
+
         inputkey = basekey
         isprocessed = False
         isgenerated = (inputkey not in df.columns)
 
     outputkey = inputkey
     if ismodulename:
+
         # Maintain a record of curation process
+
         if isprocessed:
             if modulename in inputkey:
                 raise Exception(f"`getcolumnname.py` | '{basekey}' has already been processed by `{modulename}`: '{inputkey}'")
@@ -47,7 +64,9 @@ def apply(df, key, modulename, inplace):
                 inputkey = outputkey
 
     if inplace and (outputkey != inputkey):
-        # If `inplace` is True, overwrite the original column
+
+        # Overwrite the original column
+
         df.rename(columns={inputkey:outputkey}, inplace=True)
         inputkey = outputkey
 
