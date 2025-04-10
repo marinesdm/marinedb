@@ -1,73 +1,53 @@
+#!/usr/bin/python
+# coding: utf-8
+
+# External import
+
 import pandas as pd
 import re
 
+# Internal import
 
-def boolean(value):
+from marinedb.utils.allexport import export
+from marinedb.tools import getcolumnname
+from marinedb.tools import aligndtypes
 
-    if isinstance(value,str):
-        if value in ['True','False']:
-            value=(value=='True')
-        else:
-            raise ValueError(f'`value` must be True or False, but `value`={value}')
+# Global variables
 
-    else:
-        value=bool(value)
-
-    return value
+__all__ = [] # populated using the @export decorator
 
 
-TYPE_CONVERSION = {
-                    'int':int,
-                    'float':float,
-                    'bool':boolean,
-                    'string':str
-                  }
-
-
-def apply(df, **conditions):
+@export
+def apply(df, dropna=False, **conditions):
 
     OR_condition = None
 
     for key, value in conditions.items():
-        print('key,value:',key,value)
+        print('key,value:',key,value) #DEBUG
 
-        # Ensure the objects compared are of the same type
+        df, key, _ = getcolumnname.apply(df, key, '', inplace=True)
 
-        dtype = str(df[key].dtypes)
+        # Ensure that the objects being compared are of the same type
 
-        if dtype=='object':
-            df[key]=df[key].convert_dtypes()
-            dtype = str(df[key].dtypes)
-
-        try:
-            astype = TYPE_CONVERSION[re.match(r'int|float|bool',dtype.lower()).group()]
-            column_dtype = dtype
-        except AttributeError:
-            astype = TYPE_CONVERSION['string']
-            column_dtype = 'string'
-
-        df[key]=df[key].astype(column_dtype)
-
-        if isinstance(value,tuple):
-            value = list(value)
+        df, value = aligndtypes.apply(df, key, value)
         if not isinstance(value, list):
             value = [value]
 
-        value = [astype(v) for v in value]
-        print('value:',value)
-        print('df dtype:',df[key].dtypes)
-        print('dtype:',dtype)
         # Filtering conditions
 
-        condition = ((~pd.isnull(df[key])) & (df[key].isin(value)))
+        if dropna:
+            condition = (pd.isnull(df[key]) | df[key].isin(value))
+        else:
+            condition = ((~pd.isnull(df[key])) & df[key].isin(value))
 
         if OR_condition is None:
             OR_condition = condition
         else:
             OR_condition = (OR_condition | condition)
 
-        df[key] = df[key].astype(dtype)
-        print('df dtype:', df[key].dtypes)
+    # Drop rows satisfying any of the specified conditions
+    # Note: rows with missing values in the filter columns are removed
+
     df = df[~OR_condition].reset_index(drop=True)
 
     return df
