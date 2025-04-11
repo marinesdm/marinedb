@@ -1,3 +1,4 @@
+#!/usr/bin/python
 # coding: utf-8
 
 # External import
@@ -13,9 +14,10 @@ from tqdm import tqdm
 
 # Internal import
 
-from marinedb.utils.allexport import export
 from marinedb.utils import tqdmjoblib
+from marinedb.utils.allexport import export
 from marinedb.tools import getcolumnname
+from marinedb.tools import modifyissuecolumn
 from marinedb.tools.temporal import convertdatetype
 from marinedb.tools.temporal import isdatemismatch
 
@@ -25,7 +27,7 @@ __all__ = [] # populated using the @export decorator
 
 PATH = os.path.dirname(os.path.abspath(__file__))
 JAR_PATH = os.path.join(PATH,'gbif-date-parser-20250214.jar')
-SCRIPT_NAME = os.path.basename(__file__)[:-3]
+
 TIMEOUT = 600 #seconds
 
 def execute_java(multiple_datestr):
@@ -122,7 +124,7 @@ def parse_java(multiple_datestr, datekey):
                 # java code flaw
                 stderr_message = re.sub('RECORDED_DATE_MISMATCH','',stderr_message).strip()
             if len(stderr_message.split()) > 1:
-                # Note: never encountered during testing
+                # note: never encountered during testing
                 stderr_message = ';'.join(stderr_message.split())
             stderr[i] = re.sub('RECORDED_DATE',f'{basedatekey}',stderr_message)
 
@@ -190,7 +192,7 @@ def gbif_dateparser(df, datekey, index, format=None):
 
     return result
 
-def parallel_dateparser(df, datekey, datestr_index, cpu, format=None):
+def parallel_dateparser(df, datekey, datestr_index, cpu, format=None, indent=''):
 
     ndates = len(datestr_index)
     batch_size = 1000
@@ -200,11 +202,11 @@ def parallel_dateparser(df, datekey, datestr_index, cpu, format=None):
 
     nbatch = len(index_slides)
     cpu = min(cpu, nbatch)
-    print(f'          ** parsedate | {ndates} dates to process ({nbatch} batches)')
-    print(f'          INFO | {cpu} CPUs will be used')
+    print(indent + f'** parsedate | {ndates} dates to process ({nbatch} batches)')
+    print(indent + f'INFO | {cpu} CPUs will be used')
 
     if cpu != 1:
-        with tqdmjoblib.apply(tqdm(desc='          Progress', total=nbatch)) as progress_bar:
+        with tqdmjoblib.apply(tqdm(desc=indent + 'Progress', total=nbatch)) as progress_bar:
             parallel = Parallel(n_jobs=cpu, prefer='threads')
             # the outputs are returned in the same order as the submissions
             results = parallel(delayed(gbif_dateparser)(df, datekey, datestr_index[start:end], format=format) for start,end in index_slides)
@@ -212,12 +214,12 @@ def parallel_dateparser(df, datekey, datestr_index, cpu, format=None):
 
     if cpu == 1:
         results = []
-        for start,end in tqdm(index_slides,desc='          Progress'):
+        for start,end in tqdm(index_slides,desc=indent + 'Progress'):
             results += gbif_dateparser(df, datekey, datestr_index[start:end], format=format)
 
     return results
 
-def assemble_date(df, datekey, outputkey, yearkey=None, monthkey=None, daykey=None, stdnan=True, parallel=False, cpu=None):
+def assemble_date(df, datekey, outputkey, yearkey=None, monthkey=None, daykey=None, stdnan=True, parallel=False, cpu=None, indent=''):
 
     if (yearkey is None):
         return df
@@ -229,7 +231,7 @@ def assemble_date(df, datekey, outputkey, yearkey=None, monthkey=None, daykey=No
 
     # Exclude lines with a missing or unlikely year value
 
-    date2process = (pd.isnull(df[outputkey])) & (df['issue_parsedate']!=f'{basedatekey}_UNLIKELY')
+    date2process = (pd.isnull(df[outputkey])) & (df['issue_parsedate'] != f'{basedatekey}_UNLIKELY')
 
     baseyearkey = yearkey.split('_processedby_')[0].upper()
     df[f'TEMPORARYPARSEDATE_{yearkey}'] = df[yearkey].values
@@ -249,7 +251,7 @@ def assemble_date(df, datekey, outputkey, yearkey=None, monthkey=None, daykey=No
         tempcol.append(daykey)
         joincol.append(daykey)
 
-    df = convertdatetype.apply(df, yearkey=yearkey, monthkey=monthkey, daykey=daykey, drop_inconsistent=False, drop_ambiguous=False, drop_empty=False)
+    df = convertdatetype.apply(df, yearkey=yearkey, monthkey=monthkey, daykey=daykey, drop_inconsistent=False, drop_ambiguous=False, drop_empty=False, indent=indent)
     df[tempcol] = df[tempcol].astype('string')
     if (monthkey is not None):
         isonedigit = (df[monthkey].fillna('_MISSING_').str.len()==1)
@@ -261,7 +263,7 @@ def assemble_date(df, datekey, outputkey, yearkey=None, monthkey=None, daykey=No
     # Exclude lines where date and year/month/day values mismatch
 
     tempcol.append('issue_isdatemismatch')
-    df = isdatemismatch.apply(df, datekey, yearkey, *joincol, stdnan=stdnan, cvttype=False, parallel=parallel, cpu=cpu, drop_empty=False)
+    df = isdatemismatch.apply(df, datekey, yearkey, *joincol, stdnan=stdnan, cvttype=False, parallel=parallel, cpu=cpu, drop_empty=False, indent=indent)
     isissue = (~pd.isnull(df['issue_isdatemismatch']))
     df.loc[isissue,'issue_isdatemismatch'] = df.loc[isissue,'issue_isdatemismatch'].str.replace('TEMPORARYPARSEDATE_','',case=True)
     df.loc[isissue,'issue_parsedate'] = df.loc[isissue,'issue_parsedate'].str.cat(df.loc[isissue,'issue_isdatemismatch'], sep=';', na_rep='')
@@ -284,13 +286,12 @@ def assemble_date(df, datekey, outputkey, yearkey=None, monthkey=None, daykey=No
 
     ## Build the date from available year, month, and day values
 
-    print(f'          ** parsedate | date construction from {", ".join(print_colnames)} columns')
+    print(indent + f'** parsedate | date construction from {", ".join(print_colnames)} columns')
     df.loc[date2process, outputkey] = df.loc[date2process, yearkey].str.cat(df.loc[date2process, joincol], sep='-', na_rep='')
     df.loc[date2process, outputkey] = df.loc[date2process, outputkey].str.strip('- ')
 
     isassembled = date2process & (~pd.isnull(df[outputkey]))
-    df.loc[isassembled, 'issue_parsedate'] = df.loc[isassembled, 'issue_parsedate'].fillna('') + f';{basedatekey}_ASSEMBLED'
-    df.loc[isassembled, 'issue_parsedate'] = df.loc[isassembled, 'issue_parsedate'].str.strip(' ;')
+    df = modifyissuecolumn.apply(df, issuekey='issue_parsedate', issuemsg=f'{basedatekey}_ASSEMBLED', subset=isassembled)
 
     ## Clean columns
 
@@ -299,7 +300,7 @@ def assemble_date(df, datekey, outputkey, yearkey=None, monthkey=None, daykey=No
     return df
 
 @export
-def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, format=None, inplace=False, stdnan=True, parallel=False, cpu=None):
+def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, format=None, inplace=False, stdnan=True, parallel=False, cpu=None, drop_empty=False, indent=''):
 
     if (yearkey is None) and (monthkey is not None):
         raise Exception(f'`parsedate.py` | `monthkey`={monthkey} but `yearkey` is None')
@@ -311,7 +312,7 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, format=None, in
     if not parallel:
         cpu=1
 
-    df, datekey, outputkey = getcolumnname.apply(df, datekey, SCRIPT_NAME, inplace=inplace)
+    df, datekey, outputkey = getcolumnname.apply(df, datekey, 'issue_parsedate', inplace=inplace)
 
     df[datekey] = df[datekey].astype('string')
     df['issue_parsedate'] = pd.NA
@@ -320,7 +321,7 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, format=None, in
 
     isdate = (~pd.isnull(df[datekey]))
     datestr_index = list(isdate[isdate].index)
-    df.loc[datestr_index,[outputkey,'issue_parsedate']] = parallel_dateparser(df, datekey, datestr_index, format=format, cpu=cpu)
+    df.loc[datestr_index,[outputkey,'issue_parsedate']] = parallel_dateparser(df, datekey, datestr_index, format=format, cpu=cpu, indent=indent)
     condition = pd.isnull(df.loc[isdate,[outputkey,'issue_parsedate']]).all(axis=1)
     if condition.any():
         error_index = list(df[condition].index)
@@ -329,9 +330,12 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, format=None, in
     # If no concatenated date is present or parsing fails,
     # construct the date from available year, month and day columns
 
-    df = assemble_date(df, datekey, outputkey=outputkey, yearkey=yearkey, monthkey=monthkey, daykey=daykey, stdnan=stdnan, parallel=parallel, cpu=cpu)
+    df = assemble_date(df, datekey, outputkey=outputkey, yearkey=yearkey, monthkey=monthkey, daykey=daykey, stdnan=stdnan, parallel=parallel, cpu=cpu, indent=indent)
 
     df['issue_parsedate'] = df['issue_parsedate'].astype('string')
     df[outputkey] = df[outputkey].astype('string')
+
+    if drop_empty and pd.isnull(df['issue_parsedate']).all():
+        df.drop(columns=['issue_parsedate'], inplace=True)
 
     return df
