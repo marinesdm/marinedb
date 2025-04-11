@@ -1,5 +1,20 @@
+#!/usr/bin/python
+# coding: utf-8
+
+# External import
+
 import pandas as pd
 
+# Internal import
+
+from marinedb.utils.allexport import export
+from marinedb.tools import getcolumnname
+
+# Global variable
+
+__all__ = [] # populated using the @export decorator
+
+@export
 def apply(df, issuekey, issuemsg, subset=None):
 
     if (issuekey not in df.columns):
