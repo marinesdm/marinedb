@@ -3,7 +3,7 @@
 #    Sigovini, M., Keppel, E. and Tagliapietra, D. (2016), Open Nomenclature in the biodiversity era. Methods Ecol Evol, 7: 1217-1225. https://doi.org/10.1111/2041-210X.12594
 #    https://www.habitas.org.uk/invertebrateireland/glossary.html
 #    https://species.wikimedia.org/wiki/Wikispecies:Glossary
-
+#    https://www.northernontarioflora.ca/definitions.cfm
 
 SCN_IGNORE: #scn: scientific name
 
@@ -118,6 +118,7 @@ SCN_IGNORE: #scn: scientific name
     - culture
     - cultured
     - cv
+    - proles
     - uncultured
     - candidatus
     - candidate
@@ -126,6 +127,8 @@ SCN_IGNORE: #scn: scientific name
     - convariety
     - convar
     - hybrid
+    - hyb
+    - nm #nothomorph
     - clone
     - environmental
     - env
@@ -145,11 +148,13 @@ SCN_IGNORE: #scn: scientific name
     - inq
     #- dubia #counterexample:'Lindernia dubia', 'Halcampactis dubia'
     - dub
+    - exclusa
     - incertae
     - sedis
     - sed
     - new
     #- nudum #counterexample:'Eriogonum nudum'
+    - nud
     - nod
     - novum
     - nova
