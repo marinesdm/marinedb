@@ -1,8 +1,17 @@
+#!/usr/bin/python
+# coding: utf-8
+
 # from https://stackoverflow.com/questions/24983493/tracking-progress-of-joblib-parallel-execution
+
+# External import
 
 import contextlib
 import joblib
 from tqdm import tqdm
+
+# Global variable
+
+__all__ = ['apply']
 
 @contextlib.contextmanager
 def apply(tqdm_object):
