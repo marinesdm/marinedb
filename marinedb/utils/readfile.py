@@ -1,8 +1,16 @@
+#!/usr/bin/python
+# coding: utf-8
 
-# Local import
+# Internal import
 
 from marinedb.utils import isgzip
+from marinedb.utils.allexport import export
 
+# Global variable
+
+__all__ = [] # populated using the @export decorator
+
+@export
 def apply(filepath):
 
     if isgzip.apply(filepath):
