@@ -1,3 +1,4 @@
+#!/usr/bin/python
 # coding: utf-8
 
 #External import
@@ -25,6 +26,7 @@ from marinedb.tools.temporal import convertdatetype
 __all__ = [] # populated using the @export decorator
 
 PATH = os.path.dirname(os.path.abspath(__file__))
+
 with open(os.path.join(PATH,'month.yaml'),'r') as f:
     file = yaml.safe_load(f)
     MONTH_MAPPING = file['month_mapping']
@@ -183,17 +185,15 @@ def isdaymismatch(datestr, daystr, datekey, daykey):
 def issingledatemismatch(datestr, datekey, yearstr, yearkey, monthstr=None, monthkey=None, daystr=None, daykey=None):
 
     # WARNING:
-    # This code detects mismatches between a date string and year, month, and/or day values.
+    # This code detects mismatches between a date string and year, month, or day values.
     # However, the absence of mismatches does not guarantee a correct match,
     # and some mismatches may also result from an unrecognized month names (e.g. unsupported language),
     # an unhandled date format (e.g. Unix timestamp, week based), or other limitations in the code
     # assumption:
     # - if the date string contains a month, it also includes a year
     # - if it contains a day, it also includes both a month and a year
-    # (this assumption leads to failures when the month name is unrecognized)
+    # The process stops if a mismatch is found. Therefore, the detected issues are not exhaustive.
 
-#    if ((yearstr is not None) and (yearkey is None)) or ((yearstr is None) and (yearkey is not None)):
-#        raise Exception(f'`isdatemismatch.py` | Either `yearstr` or `yearkey` is None, while the other is not.')
     if ((monthstr is not None) and (monthkey is None)) or ((monthstr is None) and (monthkey is not None)):
         raise Exception(f'`isdatemismatch.py` | either `monthstr` or `monthkey` is None, while the other is not.')
     if ((daystr is not None) and (daykey is None)) or ((daystr is None) and (daykey is not None)):
@@ -293,7 +293,7 @@ def issingledatemismatch(datestr, datekey, yearstr, yearkey, monthstr=None, mont
 
     return ''
 
-def get_mismatchissue(df, batch, paramsK, paramsV, verbose=False):
+def get_mismatchissue(df, batch, paramsK, paramsV, verbose=False, indent=''):
 
     paramsmap = {'datestr' : 'datekey', 'yearstr' : 'yearkey', 'monthstr' : 'monthkey', 'daystr' : 'daykey'}
     paramskey = itemgetter(*paramsK)(paramsmap)
@@ -305,7 +305,7 @@ def get_mismatchissue(df, batch, paramsK, paramsV, verbose=False):
 
     result = []
     if verbose:
-        process = tqdm(batch, desc='          Progress')
+        process = tqdm(batch, desc=indent + 'Progress')
     else:
         process = batch
 
@@ -325,7 +325,7 @@ def get_mismatchissue(df, batch, paramsK, paramsV, verbose=False):
 #    return params
 
 @export
-def apply(df, datekey, yearkey, monthkey=None, daykey=None, stdnan=True, cvttype=True, parallel=False, cpu=None, drop_empty=False):
+def apply(df, datekey, yearkey, monthkey=None, daykey=None, stdnan=True, cvttype=True, parallel=False, cpu=None, drop_empty=False, indent=''):
 
     # WARNING:
     # This code detects mismatches between a date string and year, month, and/or day values.
@@ -371,13 +371,13 @@ def apply(df, datekey, yearkey, monthkey=None, daykey=None, stdnan=True, cvttype
 
     if stdnan:
         # prevent mismatches caused by unrecognized missing values
-        print('          ** isdatemismatch | standardizenan')
+        print(indent + '** isdatemismatch | standardizenan')
         df = standardizenan.apply(df, key=paramsV)
 
     if cvttype:
         # prevent mismatches caused by invalid year/month/day strings
-        print('          ** isdatemismatch | convertdatetype')
-        df = convertdatetype.apply(df, yearkey=yearkey, monthkey=monthkey, daykey=daykey, drop_inconsistent=False, drop_ambiguous=False, drop_empty=drop_empty)
+        print(indent + '** isdatemismatch | convertdatetype')
+        df = convertdatetype.apply(df, yearkey=yearkey, monthkey=monthkey, daykey=daykey, drop_inconsistent=False, drop_ambiguous=False, drop_empty=drop_empty, indent=indent)
 
     # Check for mismatches between the date string and the year, month, or day strings
 
@@ -395,17 +395,17 @@ def apply(df, datekey, yearkey, monthkey=None, daykey=None, stdnan=True, cvttype
         nbatch = len(batches)
         cpu = min(cpu, nbatch)
 
-        print(f'          ** isdatemismatch | {ndates} lines to process ({nbatch} batches)')
-        print(f'          INFO | {cpu} CPUs will be used')
+        print(indent + f'** isdatemismatch | {ndates} lines to process ({nbatch} batches)')
+        print(indent + f'INFO | {cpu} CPUs will be used')
 
-        with tqdmjoblib.apply(tqdm(desc='          Progress', total=nbatch)) as progress_bar:
-            results = Parallel(n_jobs=cpu)(delayed(get_mismatchissue)(df, batch, paramsK, paramsV, verbose=False) for batch in batches)
+        with tqdmjoblib.apply(tqdm(desc=indent + 'Progress', total=nbatch)) as progress_bar:
+            results = Parallel(n_jobs=cpu)(delayed(get_mismatchissue)(df, batch, paramsK, paramsV, verbose=False, indent=indent) for batch in batches)
         results = list(itertools.chain(*results))
 
         df.loc[isdateindex,'issue_isdatemismatch'] = results
 
     else:
-        df.loc[isdateindex,'issue_isdatemismatch'] = get_mismatchissue(df, isdateindex, paramsK, paramsV, verbose=True)
+        df.loc[isdateindex,'issue_isdatemismatch'] = get_mismatchissue(df, isdateindex, paramsK, paramsV, verbose=True, indent=indent)
 
     # Clean columns
 
@@ -421,9 +421,8 @@ def apply(df, datekey, yearkey, monthkey=None, daykey=None, stdnan=True, cvttype
 
     df['issue_isdatemismatch'] = df['issue_isdatemismatch'].astype('string')
 
-    if drop_empty:
-        if pd.isnull(df['issue_isdatemismatch']).all():
-            dropcolumns += ['issue_isdatemismatch']
+    if drop_empty and pd.isnull(df['issue_isdatemismatch']).all():
+        dropcolumns += ['issue_isdatemismatch']
 
     df.drop(columns=dropcolumns, inplace=True)
 
