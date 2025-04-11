@@ -1,3 +1,4 @@
+#!/usr/bin/python
 # coding: utf-8
 
 # Internal import
@@ -11,12 +12,14 @@ from marinedb.tools.temporal import splitdate
 __all__ = [] # populated using the @export decorator
 
 @export
-def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, format=None, inplace=False, flag=True, stdnan=True, parallel=False, cpu=None, drop_interval=False, strategy='overlap', maxinterval_number=1, maxinterval_level='years', split='all', drop_mismatch=True):
+def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, format=None, inplace=False, flag=True, stdnan=True, parallel=False, cpu=None, drop_interval=False, strategy='overlap', maxinterval_number=1, maxinterval_level='years', split='all', drop_mismatch=True, indent=''):
 
     params = {
               'yearkey' : yearkey,
               'monthkey' : monthkey,
               'daykey' : daykey,
+              'drop_empty' : False,
+              'indent': indent
              }
 
     # Parse raw date strings
@@ -45,7 +48,6 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, format=None, in
     params_splitdate = {
                         'split' : split,
                         'drop_mismatch' : drop_mismatch,
-                        'drop_empty' : False,
                         'flag' : flag,
                         'inplace' : inplace
                        }

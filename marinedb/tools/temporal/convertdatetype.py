@@ -3,7 +3,6 @@
 
 # External import
 
-import os
 import pandas as pd
 
 # Internal import
