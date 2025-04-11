@@ -1,7 +1,9 @@
+#!/usr/bin/python
 # coding: utf-8
 
 # External import
 
+import os
 import pandas as pd
 
 # Internal import
@@ -143,10 +145,10 @@ def isvaliddate(df, yearkey, monthkey, daykey):
     return df
 
 @export
-def apply(df, datekey=None, yearkey=None, monthkey=None, daykey=None, format='ISO8601', drop_inconsistent=False, drop_ambiguous=False, drop_empty=False):
+def apply(df, datekey=None, yearkey=None, monthkey=None, daykey=None, format='ISO8601', drop_inconsistent=False, drop_ambiguous=False, drop_empty=False, indent=''):
 
     if (datekey is None) and (yearkey is None) and (monthkey is None) and (daykey is None):
-        print('            INFO | No column specified, the dataframe is returned as is.')
+        print(indent + 'INFO | No column specified, the dataframe is returned as is.')
         return df
 
     if (yearkey is None) and (monthkey is not None):
