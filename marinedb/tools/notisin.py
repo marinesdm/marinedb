@@ -1,14 +1,63 @@
+#!/usr/bin/python
+# coding: utf-8
 
-def apply(df, key, values, flag=False):
+# External import
 
-    if isinstance(values, str):
-        values = [values]
+import pandas as pd
 
-    delete = df[key].isin(values)
+# Internal import
+
+from marinedb.utils.allexport import export
+from marinedb.tools import getcolumnname
+from marinedb.tools import isin
+
+# Global variable
+
+__all__ = [] # populated using the @export decorator
+
+@export
+def apply(df, key, values, flag=False, flagname_mapping=None, dropna=False, indent=''):
+
+    df, key, _ = getcolumnname.apply(df, key, '', inplace=True)
+
+    # Run `isin` on the `key` column
+
+    try:
+        df = isin.apply(df, key, values, flag=True, flagname_mapping=flagname_mapping, indent=indent)
+    except Exception as err:
+        raise Exception(f"`notisin.py` | {str(err).split('|')[-1]}")
+
+    isin_flagcolumn = [col for col in df.columns if (f'flag_{key}_isin' in col)]
+    assert len(isin_flagcolumn) == 1
+    isin_flagcolumn = isin_flagcolumn[0]
+    values_str = isin_flagcolumn.split('_')[-1]
+
+    # Apply missing data handling strategy
+
+    ismissing = pd.isnull(df[isin_flagcolumn])
+    df.loc[ismissing, isin_flagcolumn] = dropna
+
+    notisin = (~df[isin_flagcolumn])
+
+    # Clean
+
+    df.drop(columns=isin_flagcolumn, inplace=True)
 
     if flag:
-        values_str = '-'.join(values)
-        df[f'flag_{key}_notisin_{values_str}'] = delete
+
+        # Flag rows where `key` values are not in `values`
+
+        notisin[ismissing] = pd.NA
+        df[f'flag_{key}_notisin_{values_str}'] = notisin
+
         return df
+
     else:
-        return df[~delete].reset_index(drop=True)
+
+        # Drop rows:
+        #   - where `key` values are not in `values`
+        #   - with missing values in `key` if `dropna`
+
+        return df[notisin].reset_index(drop=True)
+
+
