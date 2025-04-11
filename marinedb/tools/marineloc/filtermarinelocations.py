@@ -1,41 +1,45 @@
-#!/usr/bin/env python3
+#!/usr/bin/python
+# coding: utf-8
 
 # External imports
-import os
-import pandas as pd
-import numpy as np
-import argparse
+
 import gzip
 import time
+import argparse
+import numpy as np
 
-def _store_data(data, outputpath):
+
+def store(data, outputpath):
 
     """
-    Store extracted data.
+    Store the extracted data in the specified location.
 
     Parameters
     ----------
     data : list of strings
 
-           Data extracted from the GBIF file, each value in the list being a line in the aforementioned file.
+           Data to be stored
+
+    outputpath : string
+
+           Path to the output file
 
     Returns
     -------
     True
     """
 
-    with open(outputpath,"a") as outputfile:
+    with open(outputpath, 'a') as outputfile:
         outputfile.writelines(data)
 
     return True
 
 
-
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser(description='Retrieve data from a file according to a filter file containing the indices of the data to be retrieved', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(description='Retrieve data from a file based on a filter file containing the indices of the data to be extracted', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('gzip_file', type=str, help='path to the gzip file to be processed (default delimiter: tab)')
-    parser.add_argument('filter_file', type=str, help='path to the filter file (must have a sorted "index" column) (default delimiter: tab)')
+    parser.add_argument('filter_file', type=str, help="path to the filter file, which must contain a sorted 'index' column (default delimiter: tab)")
     parser.add_argument('--gzip_delimiter', type=str, help='gzip file delimiter', default='\t')
     parser.add_argument('--filter_delimiter', type=str, help='filter file delimiter', default='\t')
     parser.add_argument('--output_file', type=str, help='output file path', default='./')
@@ -47,12 +51,6 @@ if __name__ == '__main__':
     gzipsep = args.gzip_delimiter.encode('utf-8').decode('unicode_escape')
     outputfile = args.output_file
 
-    if len(os.path.basename(outputfile).split('.'))==1: #not a file or ''
-        filename = os.path.basename(gzipfile).split('.')[0]
-        outputfilename = os.path.join(outputfile, f'{filename}_marine.txt')
-    else:
-        outputfilename = args.output_file
-
     data = []
     count = 1
     error = 0
@@ -60,79 +58,85 @@ if __name__ == '__main__':
     start=time.time()
 
     # Open the filter file
+
     with open(filterfile, 'r') as filter:
 
-        # Get the index of the "index" column in the filter file
+        # Retrieve the index of the 'index' column in the filter file
+
         header = filter.readline().strip('\n').split(filtersep)
         index_idx = header.index('index')
 
         # Start reading the filter file
+
         index = int(filter.readline().strip('\n').split(filtersep)[index_idx])
 
         # Open the gzip file
-        with gzip.open(gzipfile, "r") as gbif_data:
 
-            header = gbif_data.readline().decode("utf8").split(gzipsep)
+        with gzip.open(gzipfile, 'r') as gzipdata:
+
+            header = gzipdata.readline().decode('utf8').split(gzipsep)
             Ncolumns = len(header)
 
-            # Create output file header
+            # Create the header for the outputfile
 
-            with open(outputfilename, "w") as outputfile:
+            with open(outputfile, 'w') as outputfile:
                 outputfile.write(gzipsep.join(header))
 
-            # Read the gzip file until all data corresponding to the indices contained in the filter file have been retrieved
+            # Read the gzip file until all entries matching the indices from the filter file have been retrieved
 
-            print(f"----- Start retrieving data from the gzip file corresponding to the indexes in the filter file -----")
-            print(f"gzip file: {gzipfile}")
-            print(f"filter file: {filterfile}")
+            print(f'--- Retrieve data from the gzip file corresponding to the indices in the filter file ---')
+            print(f'gzip file: {gzipfile}')
+            print(f'filter file: {filterfile}')
 
-            for idx, line in enumerate(gbif_data):
+            for idx, line in enumerate(gzipdata):
 
-                if idx==index: #both `idx` and  `index` start at 0
+                if idx == index:
 
-                    obs = line.decode("utf8").split(gzipsep)
+                    obs = line.decode('utf8').split(gzipsep)
 
-                    if len(obs)!=Ncolumns:
+                    if len(obs) != Ncolumns:
                         error+=1
                         print()
-                        print(f"    SplittingError: splitting line n°{idx} gives more fields ({len(obs)}) than the header ({Ncolumns}).")
-                        print(f"                    line n°{idx} is skipped : {line}")
+                        print(f'SplittingError: splitting line n°{idx} yields a different number of fields ({len(obs)}) than the header ({Ncolumns}).')
+                        print(f'                line n°{idx} is skipped : {line}')
                         print()
                     else:
                         data.append(gzipsep.join(obs))
 
                     ## Save data every 50,000 lines
-                    if (count%50000)==0:
-                        _store_data(data, outputfilename)
+
+                    if (count%50000) == 0:
+                        store(data, outputfile)
                         data.clear()
 
-                    if (count%100000)==0:
-                        print(f"Processing | {count} lines done (GBIF: line {idx})")
+                    if (count%100000) == 0:
+                        print(f'Processing | {count} lines done (gzip file: line {idx})')
 
                     ## Next filter index
+
                     index = filter.readline()
-                    if index == "":
-                        # No more data to retrieve
+                    if index == '':
+                        # no more data to retrieve
                         break
-                    count += 1
                     index = int(index.strip('\n').split(filtersep)[index_idx])
+                    count += 1
 
-    _store_data(data, outputfilename)
-    end=time.time()
+    store(data, outputfile)
+    end = time.time()
 
-    print(f"Number of marine data: {count}")
+    print(f'Number of marine data: {count}')
 
-    if index!="":
+    if index != '':
         print()
-        print(f'WARNING: Not all filter indices have been processed. Something may have gone wrong.')
+        print(f'WARNING | Some filter indices remain unprocessed. An issue may have occurred.')
 
     print()
-    print(f'----- End filtering: {args.gzip_file} -----')
+    print(f'--- End filtering: {args.gzip_file} ---')
     print(f'TIME : {np.round(end-start,0)}s')
 
-    if error!=0:
+    if error != 0:
         print()
-        print(f'SplittingError: For {error} observations, split gave more fields than header fields and the observations have been ignored.')
+        print(f'SplittingError: {error} observations produced a different number of fields upon splitting compared to the header, and were consequently ignored.')
 
 
 
