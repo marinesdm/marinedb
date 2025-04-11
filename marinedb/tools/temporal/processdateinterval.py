@@ -1,22 +1,20 @@
+#!/usr/bin/python
 # coding: utf-8
 
 # External import
 
 import pandas as pd
 import warnings
-import os
 
 # Internal import
 
-from marinedb.utils.allexport import export
 from marinedb.tools import getcolumnname
+from marinedb.utils.allexport import export
 from marinedb.tools.temporal import convertdatetype
 
 # Global variable
 
 __all__ = [] # populated using the @export decorator
-
-SCRIPT_NAME = os.path.basename(__file__)[:-3]
 
 @export
 def isdateinterval(df, datekey):
@@ -82,7 +80,7 @@ def apply_strategy(df, key, index, strategy):
     return df
 
 @export
-def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_number=1, maxinterval_level='years', inplace=False, flag=True):
+def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_number=1, maxinterval_level='years', inplace=False, flag=True, drop_empty=False, indent=''):
 
     # maxinterval_number=-1 : process all date intervals regardless of width
     # strategy in ['start', 'end', 'overlap'] : a different strategy could be implemented (e.g. take the median date)
@@ -106,9 +104,13 @@ def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_numb
         raise ValueError(f"`processdateinterval.py` | `maxinterval_level` must be 'years', 'months' or 'days', not '{maxinterval_level}'")
 
     if (strategy == 'overlap'):
-        print(f"            INFO | As strategy='{strategy}', maxinterval_number={maxinterval_number} and maxinterval_level='{maxinterval_level}' will be ignored")
+        print(indent + f"INFO | As strategy='{strategy}', maxinterval_number={maxinterval_number} and maxinterval_level='{maxinterval_level}' will be ignored")
 
-    df, datekey, outputkey = getcolumnname.apply(df, datekey, SCRIPT_NAME, inplace=inplace)
+    if drop_interval:
+        flag = False
+        print(indent + f"INFO | As drop_interval='{drop_interval}', `flag` will be ignored")
+
+    df, datekey, outputkey = getcolumnname.apply(df, datekey, 'processdateinterval', inplace=inplace)
 
     if not inplace:
         df[outputkey] = df[datekey].copy()
@@ -130,19 +132,20 @@ def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_numb
 
     # Find intervals
 
-    print(f'            ** processdateinterval | find date intervals')
+    print(indent + f'** processdateinterval | find date intervals')
 
-    flagname = f'flag_{basedatekey}_dateinterval'
+    flagname = f'flag_{basedatekey}_isdateinterval'
     df[flagname] = False
 
     isdatemissing = pd.isnull(df[datekey])
     df.loc[~isdatemissing,flagname] = df.loc[~isdatemissing,datekey].astype('string').str.contains('/') # interval format: YYYY[-MM[-DD]]/YYYY[-MM[-DD]]
 
+    df['issue_processdateinterval'] = pd.NA
+
     if (~df[flagname]).all() and (not drop_interval):
 
         # No interval
 
-        df['issue_processdateinterval'] = pd.NA
         drop_interval = True
 
     if drop_interval:
@@ -151,8 +154,13 @@ def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_numb
 
         df.loc[df[flagname],outputkey] = pd.NA
         df[outputkey] = df[outputkey].astype('string')
+
+        dropcolumns = []
+        if drop_empty and pd.isnull(df['issue_processdateinterval']).all():
+            dropcolumns += ['issue_processdateinterval']
         if not flag:
-            df.drop(columns=flagname, inplace=True)
+            dropcolumns += flagname
+        df.drop(columns=dropcolumns, inplace=True)
 
         return df
 
@@ -160,15 +168,13 @@ def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_numb
 
         # Convert intervals to date
 
-        print(f'            ** processdateinterval | replace date intervals with {strategy} date')
-
-        df['issue_processdateinterval'] = pd.NA
+        print(indent + f'** processdateinterval | replace date intervals with {strategy} date')
 
         tempcol = ['start_str','end_str','start','end']
         df.loc[df[flagname],['start_str','end_str']] = df.loc[df[flagname],datekey].astype('string').str.split('/').tolist()
         df[['start','end']] = df[['start_str','end_str']].astype('string').values
-        df = convertdatetype.apply(df, datekey='start', format='ISO8601')
-        df = convertdatetype.apply(df, datekey='end', format='ISO8601')
+        df = convertdatetype.apply(df, datekey='start', format='ISO8601', indent=indent)
+        df = convertdatetype.apply(df, datekey='end', format='ISO8601', indent=indent)
         # Note: unknown month and day are replaced with '01'
         # i.e., the first day of the known month or January
 
@@ -204,16 +210,19 @@ def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_numb
             index2process = df[flagname].index
             df = apply_strategy(df, outputkey, index2process, strategy)
 
+        if drop_empty and pd.isnull(df['issue_processdateinterval']).all():
+            tempcol += ['issue_processdateinterval']
+
         if flag:
 
             # Date interval length in days
 
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore', FutureWarning)
-                df[f'{basedatekey}_dateinterval_indays'] = pd.NA
-                df.loc[df[flagname],f'{basedatekey}_dateinterval_indays'] = df.loc[df[flagname],'end'].dt.to_pydatetime() - df.loc[df[flagname],'start'].dt.to_pydatetime()
-                df.loc[df[flagname],f'{basedatekey}_dateinterval_indays'] = df.loc[df[flagname],f'{basedatekey}_dateinterval_indays'].apply(lambda width: width.days)
-                df[f'{basedatekey}_dateinterval_indays'] = df[f'{basedatekey}_dateinterval_indays'].astype('Int64')
+                df[f'{basedatekey}_intervalwidth_generatedby_processdateinterval'] = pd.NA
+                df.loc[df[flagname],f'{basedatekey}_intervalwidth_generatedby_processdateinterval'] = df.loc[df[flagname],'end'].dt.to_pydatetime() - df.loc[df[flagname],'start'].dt.to_pydatetime()
+                df.loc[df[flagname],f'{basedatekey}_intervalwidth_generatedby_processdateinterval'] = df.loc[df[flagname],f'{basedatekey}_intervalwidth_generatedby_processdateinterval'].apply(lambda width: width.days)
+                df[f'{basedatekey}_intervalwidth_generatedby_processdateinterval'] = df[f'{basedatekey}_intervalwidth_generatedby_processdateinterval'].astype('Int64')
 
             # Clean
 
