@@ -1,4 +1,15 @@
+#!/usr/bin/python
+# coding: utf-8
 
+# Internal import
+
+from marinedb.utils.allexport import export
+
+# Global variable
+
+__all__ = [] # populated using the @export decorator
+
+@export
 def to_txt(df, txt_filename, init=False, verbose=False, indent=''):
 
     if verbose:
