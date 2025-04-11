@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# Warning:
+# Only non-compressed files can be split using this script,
+# which assumes sufficient disk space is available to store
+# the uncompressed file during execution
+
 # Set variables
 
 while [[ $# -gt 0 ]]; do
@@ -18,7 +23,7 @@ while [[ $# -gt 0 ]]; do
           columns="$2"
           shift 2
           ;;
-      -o|--output)
+      -o|--outputfile)
           outputname="$2"
           shift 2
           ;;
@@ -44,7 +49,7 @@ if [[ -z ${lines+x} ]]; then
 fi
 
 if [[ -z ${columns+x} ]]; then
-    echo "-c: Enter column number(s), the format must be number or number-number"
+    echo "-c: Enter column number(s), the expected format is: number[-number][,number[-number]]... (e.g. '1-2,7,9-12')"
     exit 1
 fi
 
@@ -67,32 +72,34 @@ fi
 
 
 # Keep ${columns} columns
-#- delimiter: tabulation, use default -d for cut
-#- latitude / longitude: columns 22-23 of GBIF file
+# note:
+# - GBIF interpreted file: latitude and longitude correspond to columns 22 & 23
+# - GBIF interpreted file: the delimiter is a tabulation
 
 echo "* Extract column(s) ${columns}"
-cut -d "${delimiter}" -f "${columns}" "${filename}" > "${outputname}2split.txt"
+cut -d "${delimiter}" -f "${columns}" "${filename}" > "${outputname}2split"
 
 # Delete header & Add indexes
 # -b a : number all lines, including empty lines
-# -v 0 : first line number = 0
-# -w 1 : column for line numbers = 1
+# -v 0 : start line numbering at 0
+# -w 1 : use 1 column for line numbers
 
-echo "* Temporary remove the header & Add a column with row indices"
-sed 1d "${outputname}2split.txt" | nl -w1 -b a -v 0 > "${outputname}2split_idx.txt"
+echo "* Temporarily remove the header"
+echo "* Add a column containing row indices"
+sed 1d "${outputname}2split" | nl -w 1 -b a -v 0 > "${outputname}2split_idx"
 
 # Split into ${lines}-line files
 
 echo "* Split into ${lines}-line(s) files"
-split -l "${lines}" --numeric-suffixes --verbose -a 4 "${outputname}2split_idx.txt" "${outputname}_split"
-rm "${outputname}2split_idx.txt"
+split -l "${lines}" --numeric-suffixes --verbose -a 4 "${outputname}2split_idx" "${outputname}_split"
+rm "${outputname}2split_idx"
 
 # Add a header to all new files
 
 echo "* Add the header to all new files"
-header="index	$(head -n 1 ${outputname}2split.txt)"
+header="index	$(head -n 1 ${outputname}2split)"
 sed -i "1i$header" "${outputname}"_split*
-rm "${outputname}2split.txt"
+rm "${outputname}2split"
 
 if [[ ${delimiter} != '\t' ]]; then
     # Convert to ${delimiter}-separated value file
