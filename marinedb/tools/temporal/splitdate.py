@@ -1,3 +1,4 @@
+#!/usr/bin/python
 # coding: utf-8
 
 # External import
@@ -18,7 +19,7 @@ __all__ = [] # populated using the @export decorator
 
 SCRIPT_NAME = os.path.basename(__file__)[:-3]
 
-def clean(df, yearkey, monthkey, daykey, issuekey, split, dropcolumns=None, drop_empty=True):
+def clean(df, yearkey, monthkey, daykey, issuekey, split, dropcolumns=None, drop_empty=True, indent=''):
 
     # Drop columns
 
@@ -26,7 +27,7 @@ def clean(df, yearkey, monthkey, daykey, issuekey, split, dropcolumns=None, drop
         dropcolumns = []
 
     if drop_empty:
-        print(f'            INFO | only non-empty generated columns will be returned')
+        print(indent + f'INFO | only non-empty generated columns will be returned')
         # i.e., the dataframe can be returned as is
         if pd.isnull(df[yearkey]).all():
             dropcolumns += [yearkey]
@@ -50,7 +51,7 @@ def clean(df, yearkey, monthkey, daykey, issuekey, split, dropcolumns=None, drop
     except ValueError as error:
 
         if split=='interval':
-            print(f"            INFO | failed to convert `{yearkey}`, `{monthkey}` and `{daykey}` to integers (type='{split}'). Converting to strings instead.")
+            print(indent + f"INFO | failed to convert `{yearkey}`, `{monthkey}` and `{daykey}` to integers (type='{split}'). Converting to strings instead.")
             df[yearkey] = df[yearkey].astype('string')
             df[monthkey] = df[monthkey].astype('string')
             df[daykey] = df[daykey].astype('string')
@@ -62,7 +63,7 @@ def clean(df, yearkey, monthkey, daykey, issuekey, split, dropcolumns=None, drop
 
     return df
 
-def call_processdateinterval(df, datekey, drop_interval, strategy='overlap', maxinterval_number=1, maxinterval_level='years'):
+def call_processdateinterval(df, datekey, drop_interval, strategy='overlap', maxinterval_number=1, maxinterval_level='years', indent=''):
 
     # Warning :
     # If the function is applied to a DataFrame that lacks 'flag_{basedatekey}_dateinterval' column,
@@ -72,7 +73,8 @@ def call_processdateinterval(df, datekey, drop_interval, strategy='overlap', max
 
     # Check if the `datekey` column has already been processed by `processdateinterval`
 
-    if ('processdateinterval' in datekey) and (f'flag_{basedatekey}_dateinterval' not in df.columns):
+    flagname = f'flag_{basedatekey}_isdateinterval'
+    if ('processdateinterval' in datekey) and (flagname not in df.columns):
 
         # The column has already been processed by `processdateinterval`
         # but `processdateinterval` has been called with flag=False
@@ -88,25 +90,26 @@ def call_processdateinterval(df, datekey, drop_interval, strategy='overlap', max
 
         if previouscolumnversion in df.columns:
             ## Identify date intervals from the column version prior to `processdateinterval`
-            df[f'flag_{basedatekey}_dateinterval'] = processdateinterval.isdateinterval(df, previouscolumnversion)
+            df[flagname] = processdateinterval.isdateinterval(df, previouscolumnversion)
         else:
             ## No remaining date intervals, with no way to determine prior existence
             print('here')
-            df[f'flag_{basedatekey}_dateinterval'] = False
+            df[flagname] = False
 
-    if f'flag_{basedatekey}_dateinterval' not in df.columns:
+    if flagname not in df.columns:
 
         # Process date intervals
 
-        print(f'            ** splitdate | processdateinterval')
+        print(indent + f'** splitdate | processdateinterval')
 
-        df = processdateinterval.apply(df, datekey, drop_interval=drop_interval, strategy=strategy, maxinterval_number=maxinterval_number, maxinterval_level=maxinterval_level, inplace=False, flag=True)
+        df = processdateinterval.apply(df, datekey, drop_interval=drop_interval, strategy=strategy, maxinterval_number=maxinterval_number, maxinterval_level=maxinterval_level, inplace=False, flag=True, indent=indent)
 
     # Column name for futher processing
 
-    datekeyin = [col for col in df.columns if (col[:len(basedatekey)] == basedatekey) and ('processdateinterval' in col)]
+    colstart = f'{basedatekey}_processedby'
+    datekeyin = [col for col in df.columns if (col[:len(colstart)] == colstart) and ('processdateinterval' in col)]
     if len(datekeyin) > 1:
-        raise Exception(f"`splitdate.py` | '{basedatekey}' & 'processdateinterval': {datekeyin}. An issue may have occurred during execution.")
+        raise Exception(f"`splitdate.py` | mutiple column names contain '{colstart}' and 'processdateinterval': {datekeyin}. An issue may have occurred during execution.")
     elif len(datekeyin) == 1:
         datekeyin = datekeyin[0]
     else:
@@ -116,7 +119,7 @@ def call_processdateinterval(df, datekey, drop_interval, strategy='overlap', max
     return df, datekeyin
 
 @export
-def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', drop_interval=False, drop_mismatch=True, drop_empty=False, inplace=False, flag=True, strategy='overlap', maxinterval_number=1, maxinterval_level='years'):
+def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', drop_interval=False, drop_mismatch=True, drop_empty=False, inplace=False, flag=True, strategy='overlap', maxinterval_number=1, maxinterval_level='years', indent=''):
 
     # Verifications
 
@@ -142,9 +145,9 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', dr
     df, monthkey, monthkeyout = getcolumnname.apply(df, monthkey, SCRIPT_NAME, inplace=inplace)
     df, daykey, daykeyout = getcolumnname.apply(df, daykey, SCRIPT_NAME, inplace=inplace)
 
-    columns = df.columns
     issuekey = ('issue_splitdate' if (split == 'all') else 'issue_splitdateinterval')
     df[issuekey] = pd.NA
+    columns = df.columns
 
     processdateinterval_params = {
                                   'drop_interval': drop_interval,
@@ -153,15 +156,18 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', dr
                                   'maxinterval_level': maxinterval_level
                                   }
 
-    df, datekey = call_processdateinterval(df, datekey, **processdateinterval_params)
+    df, datekey = call_processdateinterval(df, datekey, **processdateinterval_params, indent=indent)
 
     basedatekey = datekey.split('_processedby_')[0]
     baseyearkey = yearkey.split('_processedby_')[0].upper()
     basemonthkey = monthkey.split('_processedby_')[0].upper()
     basedaykey = daykey.split('_processedby_')[0].upper()
-    flagcolumn = f'flag_{basedatekey}_dateinterval'
+
     intervalcolumns = list(set(df.columns) - set(columns))
-    intervalcolumns = [col for col in intervalcolumns if ('flag' in col) or ('dateinterval_indays' in col)]
+    intervalcolumns = [col for col in intervalcolumns if ('issue_' not in col)]
+    flagcolumn = [col for col in intervalcolumns if ('flag_' in col)]
+    assert len(flagcolumn) == 1
+    flagcolumn = flagcolumn[0]
 
     # Select the dates to process
     # split='all': all dates
@@ -184,7 +190,7 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', dr
 
     if isyear:
 
-        convertdf = convertdatetype.apply(df.copy(), yearkey=yearkey, monthkey=monthkey, daykey=daykey, drop_inconsistent=False, drop_ambiguous=False, drop_empty=False)
+        convertdf = convertdatetype.apply(df.copy(), yearkey=yearkey, monthkey=monthkey, daykey=daykey, drop_inconsistent=False, drop_ambiguous=False, drop_empty=False, indent=indent)
 
         year = convertdf[yearkey].astype('string').copy()
         isonedigit = (year.astype('string').str.len() == 1)
@@ -211,9 +217,9 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', dr
         if inplace:
 
             if split == 'all':
-                print(f'            WARNING | `{daykey}`, `{monthkey}` and/or `{yearkey}` columns already exist and will be overwritten')
+                print(indent + f'WARNING | `{daykey}`, `{monthkey}` and/or `{yearkey}` columns already exist and will be overwritten')
             if split == 'interval':
-                print(f'            WARNING | `{daykey}`, `{monthkey}` and/or `{yearkey}` columns already exist and will be overwritten for date intervals')
+                print(indent + f'WARNING | `{daykey}`, `{monthkey}` and/or `{yearkey}` columns already exist and will be overwritten for date intervals')
 
         else:
 
@@ -231,20 +237,20 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', dr
     isoutputcolumnsgenerated = (not inplace) or ((not isday) and (not ismonth) and (not isyear))
     drop_empty = (drop_empty and isoutputcolumnsgenerated)
 
-    print(f"            INFO | daykey='{daykeyout}', monthkey='{monthkeyout}', yearkey='{yearkeyout}'")
+    print(indent + f"INFO | daykey='{daykeyout}', monthkey='{monthkeyout}', yearkey='{yearkeyout}'")
 
     if (split == 'interval') and (~df[flagcolumn]).all():
 
         # No date interval
 
-        print(f"            INFO | split='{split}', but no date intervals were found")
+        print(indent + f"INFO | split='{split}', but no date intervals were found")
 
         if flag:
             dropcolumns = None
         else:
             dropcolumns = intervalcolumns
 
-        df = clean(df, yearkeyout, monthkeyout, daykeyout, issuekey, split, dropcolumns=dropcolumns, drop_empty=drop_empty)
+        df = clean(df, yearkeyout, monthkeyout, daykeyout, issuekey, split, dropcolumns=dropcolumns, drop_empty=drop_empty, indent=indent)
 
         return df
 
@@ -261,18 +267,18 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', dr
 
         # Clean
 
-        if not flag:
-            dropcolumns = intervalcolumns
-        else:
+        if flag:
             dropcolumns = None
+        else:
+            dropcolumns = intervalcolumns
 
-        df = clean(df, yearkeyout, monthkeyout, daykeyout, issuekey, split, dropcolumns=dropcolumns, drop_empty=drop_empty)
+        df = clean(df, yearkeyout, monthkeyout, daykeyout, issuekey, split, dropcolumns=dropcolumns, drop_empty=drop_empty, indent=indent)
 
         return df
 
     # Split date into year, month & day
 
-    print(f'            ** splitdate | split into year/month/day when known')
+    print(indent + f'** splitdate | split into year/month/day when known')
 
     date_split = df.loc[process,datekey].str.split('-')
 
@@ -336,11 +342,11 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', dr
 
     # Clean
 
-    if not flag:
-        dropcolumns = intervalcolumns
-    else:
+    if flag:
         dropcolumns = None
+    else:
+        dropcolumns = intervalcolumns
 
-    df = clean(df, yearkeyout, monthkeyout, daykeyout, issuekey, split=split, dropcolumns=dropcolumns, drop_empty=drop_empty)
+    df = clean(df, yearkeyout, monthkeyout, daykeyout, issuekey, split=split, dropcolumns=dropcolumns, drop_empty=drop_empty, indent=indent)
 
     return df
