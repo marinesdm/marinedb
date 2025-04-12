@@ -23,9 +23,9 @@ def apply(df, keylat, keylon, value, flag=False, dropna=False, indent=''):
 
     # Apply `isbelow_minfloatprecision` separately to latitude and longitude
 
-    print(indent + f'* minlatlonprecision | isbelow_minfloatprecision for {keylat}')
+    print(indent + f'* isbelow_minlatlonprecision | isbelow_minfloatprecision for {keylat}')
     df = mfp.apply(df, keylat, value, flag=True, dropna=dropna, indent=(indent + '  '))
-    print(indent + f'* minlatlonprecision | isbelow_minfloatprecision for {keylon}')
+    print(indent + f'* isbelow_minlatlonprecision | isbelow_minfloatprecision for {keylon}')
     df = mfp.apply(df, keylon, value, flag=True, dropna=dropna, indent=(indent + '  '))
 
     columns = list(df.columns)
@@ -48,10 +48,10 @@ def apply(df, keylat, keylon, value, flag=False, dropna=False, indent=''):
         ## Precision
         precision = df[precision_columns].max(axis=1).astype('Int64')
         precision[ismissing] = pd.NA
-        df[f'{keylat}_{keylon}_floatprecision_generatedby_minlatlonprecision'] = precision
+        df[f'{keylat}_{keylon}_floatprecision_generatedby_isbelow_minlatlonprecision'] = precision
 
         ## Flag
-        df[f'flag_{keylat}_{keylon}_minlatlonprecision_{str(value)}'] = isbelow_minlatlonprecision
+        df[f'flag_{keylat}_{keylon}_isbelow_minlatlonprecision_{str(value)}'] = isbelow_minlatlonprecision
 
         ## Clean
         df.drop(columns=dropcolumns, inplace=True)
