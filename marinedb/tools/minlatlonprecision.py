@@ -9,7 +9,7 @@ import pandas as pd
 
 from marinedb.tools import getcolumnname
 from marinedb.utils.allexport import export
-from marinedb.tools import minfloatprecision as mfp
+from marinedb.tools import isbelow_minfloatprecision as mfp
 
 # Global variable
 
@@ -21,17 +21,17 @@ def apply(df, keylat, keylon, value, flag=False, dropna=False, indent=''):
     df, keylat, _ = getcolumnname.apply(df, keylat, '', inplace=True)
     df, keylon, _ = getcolumnname.apply(df, keylon, '', inplace=True)
 
-    # Apply `minfloatprecision` separately to latitude and longitude
+    # Apply `isbelow_minfloatprecision` separately to latitude and longitude
 
-    print(indent + f'* minlatlonprecision | minfloatprecision for {keylat}')
+    print(indent + f'* minlatlonprecision | isbelow_minfloatprecision for {keylat}')
     df = mfp.apply(df, keylat, value, flag=True, dropna=dropna, indent=(indent + '  '))
-    print(indent + f'* minlatlonprecision | minfloatprecision for {keylon}')
+    print(indent + f'* minlatlonprecision | isbelow_minfloatprecision for {keylon}')
     df = mfp.apply(df, keylon, value, flag=True, dropna=dropna, indent=(indent + '  '))
 
     columns = list(df.columns)
-    flag_columns = [col for col in columns if ('flag' in col) and ('minfloatprecision' in col)]
+    flag_columns = [col for col in columns if ('flag' in col) and ('isbelow_minfloatprecision' in col)]
     assert len(flag_columns) == 2
-    precision_columns = [col for col in columns if ('generatedby' in col) and ('minfloatprecision' in col)]
+    precision_columns = [col for col in columns if ('generatedby' in col) and ('isbelow_minfloatprecision' in col)]
     assert len(precision_columns) == 2
     dropcolumns = flag_columns + precision_columns
 

@@ -30,15 +30,15 @@ def get_floatprecision(series_flt):
 def apply(df, key, value, flag=False, dropna=False, indent=''):
 
     if not isinstance(value,int):
-        raise ValueError(f'`minfloatprecision.py` | `value` must be an integer (value={value})')
+        raise ValueError(f'`isbelow_minfloatprecision.py` | `value` must be an integer (value={value})')
 
     df, key, _ = getcolumnname.apply(df, key, '', inplace=True)
 
     # Compute the number of digits after the decimal point
 
-    print(indent + f'* minfloatprecision | count the number of decimal places')
+    print(indent + f'* isbelow_minfloatprecision | count the number of decimal places')
 
-    precision_column = f'{key}_floatprecision_generatedby_minfloatprecision'
+    precision_column = f'{key}_floatprecision_generatedby_isbelow_minfloatprecision'
     if precision_column in df.columns:
         print(indent + f'INFO | {precision_column} column already exists and will be used')
     else:
@@ -50,13 +50,13 @@ def apply(df, key, value, flag=False, dropna=False, indent=''):
     ismissing = pd.isnull(df[key].astype('Float64'))
     isbelow_minfloatprecision[ismissing] = pd.NA
 
-    print(indent + f'* minfloatprecision | flag and/or filter')
+    print(indent + f'* isbelow_minfloatprecision | flag and/or filter')
 
     if flag:
 
         # Flag rows where the float precision of `key` is below `value`
 
-        df[f'flag_{key}_minfloatprecision_{str(value)}'] = isbelow_minfloatprecision
+        df[f'flag_{key}_isbelow_minfloatprecision_{str(value)}'] = isbelow_minfloatprecision
 
         return df
 
