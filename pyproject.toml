@@ -19,5 +19,9 @@ dependencies = [
     "PyYAML>=6.0.1"
 ]
 
-[options]
-package_dir = "marinedb"
+[tool.setuptools.packages.find]
+where = ["src"] # namespaces is true by default
+
+[tool.setuptools.package-data]
+marinedb = ["*.yaml"]
+"marinedb.tools.data" = ["*.yaml", "*.json"]
