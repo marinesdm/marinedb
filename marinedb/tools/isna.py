@@ -23,7 +23,7 @@ def apply(df, key, flag=False):
 
     if flag:
         # Flag rows with missing values in the `key` column
-        df[f'flag_{key}_dropna'] = ismissing
+        df[f'flag_{key}_isna'] = ismissing
         return df
 
     else:
