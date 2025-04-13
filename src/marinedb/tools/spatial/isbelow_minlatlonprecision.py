@@ -9,7 +9,7 @@ import pandas as pd
 
 from marinedb.tools import getcolumnname
 from marinedb.utils.allexport import export
-from marinedb.tools import isbelow_minfloatprecision as mfp
+from marinedb.tools.spatial import isbelow_minfloatprecision as mfp
 
 # Global variable
 
