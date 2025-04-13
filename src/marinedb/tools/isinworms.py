@@ -3,41 +3,41 @@
 
 # External imports
 
-import os
-import pandas as pd
-import numpy as np
-import argparse
-from operator import itemgetter
-from functools import wraps
-from unidecode import unidecode
 import re
-from difflib import get_close_matches
-import Levenshtein
+import os
 import json
 import copy
-import time
-from tqdm import tqdm
 import gzip #DEBUG
 import yaml
+import time
+import argparse
+import numpy as np
+import Levenshtein
+import pandas as pd
+from tqdm import tqdm
+from functools import wraps
+from operator import itemgetter
+from unidecode import unidecode
+from difflib import get_close_matches
+from importlib.resources import files
 
 # Local imports
 
 from marinedb.tools import dropvalues
-from marinedb.tools import getcolumnname
-from marinedb.tools import createwormsfilters as cwf
 from marinedb.utils import regexstrip
+from marinedb.tools import getcolumnname
 from marinedb.utils import standardizenan
 from marinedb.utils import writedataframe
-from marinedb.utils import preprocessquotationmark
 from marinedb.utils.allexport import export
+from marinedb.utils import preprocessquotationmark
+from marinedb.tools import createwormsfilters as cwf
 
 # Global variables
 
 __all__ = [] # populated using the @export decorator
 
-PATH = os.path.dirname(os.path.abspath(__file__))
-
-with open(os.path.join(PATH,'ignoreWords.yaml'),'r') as f:
+IGNOREWORDS_PATH = files('marinedb.tools.data').joinpath('ignoreWords.yaml')
+with open(IGNOREWORDS_PATH,'r') as f:
     file = yaml.safe_load(f)
     IGNOREWORDS = file['SCN_IGNORE'] + file['AUTHORSHIP_IGNORE']
 IGNOREWORDS = sorted(IGNOREWORDS, key=len, reverse=True)
