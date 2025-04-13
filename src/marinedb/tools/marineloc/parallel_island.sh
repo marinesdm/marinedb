@@ -43,6 +43,10 @@ while [[ $# -gt 0 ]]; do
           fileslist="$2"
           shift 2
           ;;
+      --maskfile)
+          maskfile="$2"
+          shift 2
+          ;;
       --cpu)
           cpu="$2"
           shift 2
@@ -86,6 +90,10 @@ if [[ -z ${fileslist+x} ]]; then
     fileslist=""
 fi
 
+if [[ -z ${maskfile+x} ]]; then
+    maskfile=""
+fi
+
 if [[ -z ${cpu+x} ]]; then
     cpu=-1
 fi
@@ -94,4 +102,4 @@ if [[ -z ${outputdir+x} ]]; then
     outputdir=""
 fi
 
-python3 island.py "${inputdir}" --latitude_column "${latitude}" --longitude_column "${longitude}" --index_column "${index}" --files_list_path "${fileslist}" --delimiter "${delimiter}" --cpu "${cpu}" --outputdir_path "${outputdir}"
+python3 island.py "${inputdir}" --latitude_column "${latitude}" --longitude_column "${longitude}" --index_column "${index}" --fileslist_path "${fileslist}" --delimiter "${delimiter}" --maskfile_path "${maskfile}" --cpu "${cpu}" --outputdir_path "${outputdir}"
