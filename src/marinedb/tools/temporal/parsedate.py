@@ -3,30 +3,29 @@
 
 # External import
 
-import subprocess
-#import signal
-import pandas as pd
-import os
-from joblib import Parallel, delayed
 import re
+import os
 import itertools
+import subprocess
+import pandas as pd
 from tqdm import tqdm
+from joblib import Parallel, delayed
+from importlib.resources import files
 
 # Internal import
 
 from marinedb.utils import tqdmjoblib
-from marinedb.utils.allexport import export
 from marinedb.tools import getcolumnname
+from marinedb.utils.allexport import export
 from marinedb.tools import modifyissuecolumn
-from marinedb.tools.temporal import convertdatetype
 from marinedb.tools.temporal import isdatemismatch
+from marinedb.tools.temporal import convertdatetype
 
 # Global variables
 
 __all__ = [] # populated using the @export decorator
 
-PATH = os.path.dirname(os.path.abspath(__file__))
-JAR_PATH = os.path.join(PATH,'gbif-date-parser-20250214.jar')
+JAR_PATH = files('marinedb.tools.temporal').joinpath('gbif-date-parser-20250214.jar')
 
 TIMEOUT = 600 #seconds
 
@@ -312,7 +311,7 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, format=None, in
     if not parallel:
         cpu=1
 
-    df, datekey, outputkey = getcolumnname.apply(df, datekey, 'issue_parsedate', inplace=inplace)
+    df, datekey, outputkey = getcolumnname.apply(df, datekey, 'parsedate', inplace=inplace)
 
     df[datekey] = df[datekey].astype('string')
     df['issue_parsedate'] = pd.NA
