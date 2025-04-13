@@ -28,11 +28,11 @@ from concurrent.futures import ProcessPoolExecutor
 
 from marinedb.utils import readfile
 from marinedb.utils import regexstrip
-from marinedb.tools import subsetranks
 from marinedb.utils import standardizenan
 from marinedb.utils import writedataframe
 from marinedb.utils.allexport import export
 from marinedb.utils.standardizenan import isnan
+from marinedb.tools.taxonomic import subsetranks
 from marinedb.utils import preprocessquotationmark
 
 # Global variables

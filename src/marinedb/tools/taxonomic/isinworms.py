@@ -30,7 +30,7 @@ from marinedb.utils import standardizenan
 from marinedb.utils import writedataframe
 from marinedb.utils.allexport import export
 from marinedb.utils import preprocessquotationmark
-from marinedb.tools import createwormsfilters as cwf
+from marinedb.tools.taxonomic import createwormsfilters as cwf
 
 # Global variables
 
