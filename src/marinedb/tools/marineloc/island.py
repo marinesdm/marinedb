@@ -20,6 +20,7 @@ from functools import partial
 import matplotlib.pyplot as plt
 from matplotlib.path import Path
 from multiprocessing import Pool
+from importlib.resources import files
 from mpl_toolkits.basemap import Basemap
 
 # Internal import
@@ -34,17 +35,14 @@ __all__ = [] # populated using the @export decorator
 # Processing
 
 
-def setup(path=None):
+def setup(mask_filepath=None):
 
-    if path is None:
-        _path = pathlib.Path(__file__).parent.resolve()
-        _path = os.path.join(_path, 'data/')
+    if maskpath is None:
+        _mask_filename = files('marinedb.tools.data').joinpath('globe_mask_coastline.npz')
     else:
-        _path = path
+        _mask_filename = mask_filepath
 
     # Load the mask data
-
-    _mask_filename = os.path.join(_path,'globe_mask_coastline.npz')
 
     print(f'Preliminary step | Loading GLOBE mask ({_mask_filename})')
 
@@ -191,7 +189,7 @@ def island_basemap(lat, lon):
     return result
 
 @export
-def island_mask(lat,lon,parallel=False):
+def island(lat, lon, parallel=False):
 
     """
 
@@ -221,12 +219,12 @@ def island_mask(lat,lon,parallel=False):
     lat_i = lat_to_index(lat)
     lon_i = lon_to_index(lon)
 
-    printv(f'STEP N°1 | Using GLOBE mask', verbose=(not parallel), indent='    ')
+    printv(f'STEP N°1 | Using GLOBE mask', verbose=(not parallel), indent='  ')
     land_points = np.logical_not(_mask[lat_i,lon_i])
 
     coastline_i = np.where(_mask[lat_i,lon_i] == 2)[0]
     if len(coastline_i)!=0:
-        printv(f'STEP N°2 | Using basemap & GSHHS coastline data ({len(coastline_i)} coastal observations)', verbose=(not parallel), indent='    ')
+        printv(f'STEP N°2 | Using basemap & GSHHS coastline data ({len(coastline_i)} coastal observations)', verbose=(not parallel), indent='  ')
         land_points[coastline_i] = island_basemap(lat[coastline_i],lon[coastline_i])
 
     df = pd.DataFrame(land_points, columns=['island'])
@@ -255,11 +253,11 @@ def process_one_file(filepath, latkey, lonkey, idxkey, sep='\t', outputdir='./',
     printv('* Processing ' + filepath, verbose=(not parallel))
 
     data = pd.read_csv(filepath, sep=sep)
-    data_processed = island_mask(data[latkey], data[lonkey], parallel=parallel)
+    data_processed = island(data[latkey], data[lonkey], parallel=parallel)
     data_processed['index'] = data[idxkey].values
 
-    printv(f'Done | Saving as {res}', verbose=(not parallel), indent='  ')
-    data_processed.to_csv(res, index=False, sep=sep, encoding='utf-8')
+    printv(f'>>> save to {res}', verbose=(not parallel), indent='  ')
+    data_processed[['index','latitude','longitude','mask','island']].to_csv(res, index=False, sep=sep, encoding='utf-8')
 
     span = np.round((time.time() - start),2)
     printv('--- %s seconds ---' % span, verbose=(not parallel), indent='  ')
@@ -422,7 +420,7 @@ def land_sea_statistics(outputdir, outputfile='statistics', sep='\t', overwrite=
         del df
 
         if ((len(stats)+1)%100) == 0:
-            print(f'    Processing | {len(stats)+1} files done')
+            print(f'Processing | {len(stats)+1} files done')
 
     stats = pd.DataFrame(stats, columns=['filename_output','filename_input','mask_0','mask_1','mask_2','sea','land'])
     stats['pct_coast'] = np.round(stats['mask_2']/stats[['mask_0','mask_1','mask_2']].sum(axis=1),2)
@@ -518,33 +516,38 @@ if __name__ == '__main__':
     parser.add_argument('--latitude_column', type=str, help='latitude column name', required=True)
     parser.add_argument('--longitude_column', type=str, help='longitude column name', required=True)
     parser.add_argument('--index_column', type=str, help='index column name', required=True)
-    parser.add_argument('--files_list_path', type=str, help='path to the file that contains the list of files to be processed', default=None)
-    parser.add_argument('--delimiter', type=str, help='delimiter used in the input files', default='\t') #!! delimiter must be enclosed in quotation marks !!
+    parser.add_argument('--fileslist_path', type=str, help='path to the file that lists the files to be processed', default=None)
+    parser.add_argument('--delimiter', type=str, help='delimiter used in the input files', default='\t')
+    # Warning: delimiter must be enclosed in quotation marks
+    parser.add_argument('--maskfile_path', type=str, help='path to the .npz file containing the land/sea/coast mask', default=None)
     parser.add_argument('--cpu', type=int, help='number of CPUs to be used', default=None)
     parser.add_argument('--outputdir_path', type=str, help='path to the directory where the output files will be stored', default='./')
     parser.add_argument('--store_time', action=argparse.BooleanOptionalAction, help='whether to store the processing times', default=True)
     args = parser.parse_args()
 
-    print()
     print(f'`island.py` | Identify marine coordinates')
 
     inputdir = args.inputdir_path
     outputdir = args.outputdir_path
-    files_list_path = args.files_list_path
+    fileslist_path = args.fileslist_path
     sep = args.delimiter
     latkey = args.latitude_column
     lonkey = args.longitude_column
     idxkey = args.index_column
+    mask_filepath = args.maskfile_path
     cpu = args.cpu
     store_time = args.store_time
 
-    if (files_list_path is None) or (len(files_list_path) == 0):
+    if (fileslist_path is None) or (len(fileslist_path) == 0):
         fileslist = [os.path.join(inputdir,file) for file in os.listdir(inputdir) if (file != 'processed')]
     else:
-        print(f'INFO | Only the files listed in {files_list_path} will be processed')
-        with open(files_list_path,'r') as file:
+        print(f'INFO | Only the files listed in {fileslist_path} will be processed')
+        with open(fileslist_path,'r') as file:
             fileslist = file.read().splitlines()
         fileslist = [os.path.join(inputdir,file) if (os.path.dirname(file) == '') else file for file in fileslist]
+
+    if (len(mask_filepath) == 0):
+        mask_filepath = None
 
     if len(outputdir) == 0:
         outputdir = './'
@@ -577,7 +580,7 @@ if __name__ == '__main__':
 
     # Create global variables
 
-    setup()
+    setup(mask_filepath=mask_filepath)
 
     # Parallelize the processing of `process_one_file`
 
@@ -597,4 +600,4 @@ if __name__ == '__main__':
 
     end = time.time()
 
-    print(f'    TIME : {round(end - start,0)}s')
+    print(f'TIME : {round(end - start,0)}s')
