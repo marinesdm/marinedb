@@ -24,28 +24,33 @@ def write(df, txt_filename, sep='\t', init=False):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Extract indices corresponding to marine occurrences', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('dirpath', type=str, help='path to the directory where the files to be processed are stored')
+    parser.add_argument('inputdir_path', type=str, help='path to the directory where the files to be processed are stored')
     parser.add_argument('--delimiter', type=str, help='delimiter used in the input files', default='\t')
-    parser.add_argument('--outputfilepath', type=str, help='file path where the output will be saved', default='./marine_filter')
+    parser.add_argument('--outputfile_path', type=str, help='file path where the output will be saved', default='./marine_filter')
     args = parser.parse_args()
 
-    outputfile = args.outputfilepath
+    print(f'`createmarinefilter.py` | Extract the indices of marine occurrences from {args.inputdir_path} files')
+
+    outputfile = args.outputfile_path
     sep = args.delimiter.encode('utf-8').decode('unicode_escape')
 
     # If a file has been processed multiple times,
     # consider only one corresponding `island.py` output file
 
-    files = sorted(glob.glob(args.dirpath + '*'))
+    files = sorted(glob.glob(args.inputdir_path + '*'))
     Nfiles = len(files)
+
+    print(f'* Deduplicate entries across the {Nfiles} files in the folder')
+
     files2process = pd.DataFrame(files, columns=['filepath'])
     files2process['basename'] = ['_'.join(os.path.basename(file).split('_')[:-1]) for file in files2process['filepath']] # format: 'inputfilename_device'
     files2process = files2process.drop_duplicates(subset=['basename'], keep='first', ignore_index=True)
     files = files2process['filepath'].tolist()
     del files2process
 
-   # Keep only the indices corresponding to locations not classified as land
+    # Keep only the indices corresponding to locations not classified as land
 
-    print(f'Extracting indices of marine occurrence | {len(files)} out of {Nfiles} files will be processed (duplicates excluded)')
+    print(f'* Process {len(files)} files')
 
     init_array = True
     init_storage = True
@@ -53,7 +58,7 @@ if __name__ == '__main__':
     for file in tqdm(files, total=len(files)):
 
         df_file = pd.read_csv(file, header=0, sep=sep, engine='python')
-        df_file = df_file[~df_file.is_land]
+        df_file = df_file[~df_file['island']]
 
         if init_array and len(df_file) != 0:
 
