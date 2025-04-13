@@ -20,8 +20,11 @@ dependencies = [
 ]
 
 [tool.setuptools.packages.find]
-where = ["src"] # namespaces is true by default
+where = ["src"] 
+# `namespaces` is true by default
 
 [tool.setuptools.package-data]
 marinedb = ["*.yaml"]
-"marinedb.tools.data" = ["*.yaml", "*.json"]
+"marinedb.tools.marineloc" = ["*.sh"]
+"marinedb.tools.data" = ["*.yaml", "*.json", "*.npz"]
+"marinedb.tools.temporal" = ["*.jar"]
