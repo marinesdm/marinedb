@@ -3,22 +3,29 @@
 
 # External import
 
+from importlib.resources import files
 import numpy as np
 import argparse
 import cv2
 import os
 
+GLOBEMASK_PATH = files('marinedb.tools.data').joinpath('globe_mask.npz')
+
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser(description='Generate a mask differentiating land, sea, and coast', formatter_class=arggparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--dirpath', type=str, help='directory containing the GLOBE mask', default='./')
+    parser = argparse.ArgumentParser(description='Generate a mask differentiating land, sea, and coast', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('--kernel_type', type=str, help='kernel type (square or ellipse)', default='square')
+    parser.add_argument('--kernel_size', type=int, help='kernel size', default=51)
+    parser.add_argument('--outputdir', type=str, help='path to the directory where the output .npz file will be stored', default='./')
     args = parser.parse_args()
-
-    directory = args.dirpath
 
     # Load the GLOBE mask
 
-    data = np.load(os.path.join(directory,'globe_mask.npz'))
+    print(f'`createmask.py` | Generate a mask differentiating land, sea, and coast')
+
+    print(f'* Load the land/sea mask from {GLOBEMASK_PATH}')
+
+    data = np.load(GLOBEMASK_PATH)
     mask_globe = data['mask'].copy()
     lat_globe = data['lat']
     lon_globe = data['lon']
@@ -29,11 +36,27 @@ if __name__ == '__main__':
     # i.e., those that are not on the coast
     # note: the morphological gradient is the difference between dilation and erosion of an image
 
-    kernel = np.ones((51, 51), np.uint8) # square kernel
-    # note: for an elliptical kernel, use kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(25,25))
+    print('* Generate the land/sea/coast mask')
+
+    if args.kernel_type == 'square':
+        # square kernel
+        kernel = np.ones((args.kernel_size, args.kernel_size), np.uint8)
+    elif args.kernel_type == 'ellipse':
+        # elliptical kernel
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(args.kernel_size,args.kernel_size))
+    else:
+        raise ValueError(f"`createmask.py` | `kernel_type` must be either 'square' or 'ellipse', got '{args.kernel_type}'")
+
     gradient_mask_globe = cv2.morphologyEx(mask_globe, cv2.MORPH_GRADIENT, kernel)
 
     # Create the final mask distinguishing land, sea, and coast
 
     full_mask_globe = np.maximum(gradient_mask_globe*2, mask_globe)
-    np.savez_compressed(os.path.join(directory,'globe_mask_coastline.npz'), lat=lat_globe, lon=lon_globe, mask=full_mask_globe)
+
+    # Store
+
+    outputfile = os.path.join(args.outputdir,'globe_mask_coastline.npz')
+
+    print(f'* Save the land/sea/coast mask to {outputfile}')
+
+    np.savez_compressed(outputfile, lat=lat_globe, lon=lon_globe, mask=full_mask_globe)
