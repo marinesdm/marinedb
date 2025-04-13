@@ -3,45 +3,44 @@
 
 # External import
 
-import argparse
+import re
+import os
 import gzip
-import pandas as pd
 import math
 import yaml
 import time
 import glob
-import os
+import http
+import argparse
+import pandas as pd
+from tqdm import tqdm
+from datetime import date
+from datetime import datetime
 from unidecode import unidecode
 from operator import itemgetter
-import re
-from datetime import datetime
-from datetime import date
-from concurrent.futures import ProcessPoolExecutor
-from concurrent.futures import as_completed
-from tqdm import tqdm
-
 from suds.client import Client
 from suds.sudsobject import items
-import http
+from importlib.resources import files
+from concurrent.futures import as_completed
+from concurrent.futures import ProcessPoolExecutor
 
 # Internal import
 
 from marinedb.utils import readfile
 from marinedb.utils import regexstrip
+from marinedb.tools import subsetranks
 from marinedb.utils import standardizenan
 from marinedb.utils import writedataframe
 from marinedb.utils.allexport import export
 from marinedb.utils.standardizenan import isnan
 from marinedb.utils import preprocessquotationmark
-from marinedb.tools import subsetranks
 
 # Global variables
 
 __all__ = [] # populated using the @export decorator
 
-PATH = os.path.dirname(os.path.abspath(__file__))
-
-with open(os.path.join(PATH,'ignoreWords.yaml'),'r') as f:
+IGNOREWORDS_PATH = files('marinedb.tools.data').joinpath('ignoreWords.yaml')
+with open(IGNOREWORDS_PATH,'r') as f:
     file = yaml.safe_load(f)
     IGNOREWORDS = file['SCN_IGNORE'] + file['AUTHORSHIP_IGNORE']
 IGNOREWORDS = sorted(IGNOREWORDS, key=len, reverse=True)
