@@ -6,6 +6,7 @@
 import os
 import yaml
 import pathlib
+from importlib.resources import files
 
 # Internal import
 
@@ -27,7 +28,7 @@ def apply(identification_level, lower=False, strict=True):
 
     # Load `taxonomicRanks.yaml` file
 
-    rankfile_path = os.path.join(pathlib.Path(__file__).parent.resolve(), 'taxonomicRanks.yaml')
+    rankfile_path = files('marinedb.tools.data').joinpath('taxonomicRanks.yaml')
 
     with open(rankfile_path,'r') as file:
         rankfile = yaml.safe_load(file)
