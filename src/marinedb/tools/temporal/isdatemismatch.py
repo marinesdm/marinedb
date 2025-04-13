@@ -3,31 +3,31 @@
 
 #External import
 
-import re
-from operator import itemgetter
-import pandas as pd
-from joblib import Parallel, delayed
 import os
-from tqdm import tqdm
-import itertools
-from unidecode import unidecode
+import re
 import yaml
+import itertools
+import pandas as pd
+from tqdm import tqdm
 from datetime import datetime
+from unidecode import unidecode
+from operator import itemgetter
+from joblib import Parallel, delayed
+from importlib.resources import files
 
 # Internal import
 
-from marinedb.utils.allexport import export
-from marinedb.utils import standardizenan
 from marinedb.utils import tqdmjoblib
+from marinedb.utils import standardizenan
+from marinedb.utils.allexport import export
 from marinedb.tools.temporal import convertdatetype
 
 # Global variables
 
 __all__ = [] # populated using the @export decorator
 
-PATH = os.path.dirname(os.path.abspath(__file__))
-
-with open(os.path.join(PATH,'month.yaml'),'r') as f:
+MONTH_PATH = files('marinedb.tools.data').joinpath('month.yaml')
+with open(MONTH_PATH,'r') as f:
     file = yaml.safe_load(f)
     MONTH_MAPPING = file['month_mapping']
 
