@@ -5,6 +5,7 @@
 
 import pandas as pd
 import os
+import re
 
 # Internal import
 
@@ -17,7 +18,18 @@ from marinedb.tools.temporal import processdateinterval
 
 __all__ = [] # populated using the @export decorator
 
-SCRIPT_NAME = os.path.basename(__file__)[:-3]
+
+def get_basekey(key, columns):
+
+    basekey = key.split('_processedby_')[0]
+    if ('generatedby' in basekey):
+        basekey = basekey.split('_generatedby_')[0]
+        columns = [col.split('_processedby_')[0] for col in columns]
+        if basekey in columns:
+            basekey += '-GEN'
+    basekey = basekey.upper()
+
+    return basekey
 
 def clean(df, yearkey, monthkey, daykey, issuekey, split, dropcolumns=None, drop_empty=True, indent=''):
 
@@ -50,7 +62,7 @@ def clean(df, yearkey, monthkey, daykey, issuekey, split, dropcolumns=None, drop
 
     except ValueError as error:
 
-        if split=='interval':
+        if split == 'interval':
             print(indent + f"INFO | failed to convert `{yearkey}`, `{monthkey}` and `{daykey}` to integers (type='{split}'). Converting to strings instead.")
             df[yearkey] = df[yearkey].astype('string')
             df[monthkey] = df[monthkey].astype('string')
@@ -93,14 +105,13 @@ def call_processdateinterval(df, datekey, drop_interval, strategy='overlap', max
             df[flagname] = processdateinterval.isdateinterval(df, previouscolumnversion)
         else:
             ## No remaining date intervals, with no way to determine prior existence
-            print('here')
             df[flagname] = False
 
     if flagname not in df.columns:
 
         # Process date intervals
 
-        print(indent + f'** splitdate | processdateinterval')
+        print(indent + f'* Apply processdateinterval')
 
         df = processdateinterval.apply(df, datekey, drop_interval=drop_interval, strategy=strategy, maxinterval_number=maxinterval_number, maxinterval_level=maxinterval_level, inplace=False, flag=True, indent=indent)
 
@@ -109,7 +120,7 @@ def call_processdateinterval(df, datekey, drop_interval, strategy='overlap', max
     colstart = f'{basedatekey}_processedby'
     datekeyin = [col for col in df.columns if (col[:len(colstart)] == colstart) and ('processdateinterval' in col)]
     if len(datekeyin) > 1:
-        raise Exception(f"`splitdate.py` | mutiple column names contain '{colstart}' and 'processdateinterval': {datekeyin}. An issue may have occurred during execution.")
+        raise Exception(f"`splitdate.py` | Mutiple column names contain '{colstart}' and 'processdateinterval': {datekeyin}. An issue may have occurred during execution.")
     elif len(datekeyin) == 1:
         datekeyin = datekeyin[0]
     else:
@@ -133,21 +144,41 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', dr
 
     # Set up
 
+    columns = list(df.columns)
+    yearmodulename = 'splitdate'
+    monthmodulename = 'splitdate'
+    daymodulename = 'splitdate'
+
     if (yearkey is None):
-        yearkey = 'year'
+        yearkey = 'year_generatedby_splitdate'
+        yearmodulename = ''
+        keyin = [col for col in columns if yearkey in col]
+        doeskeyexist = (len(keyin) > 0)
+        if doeskeyexist:
+            raise Exception(f'`splitdate.py` | {yearkey} found in {",".join(keyin)} columns')
     if (monthkey is None):
-        monthkey = 'month'
-    if (daykey is  None):
-        daykey = 'day'
+        monthkey = 'month_generatedby_splitdate'
+        monthmodulename = ''
+        keyin = [col for col in columns if monthkey in col]
+        doeskeyexist = (len(keyin) > 0)
+        if doeskeyexist:
+            raise Exception(f'`splitdate.py` | {monthkey} found in {",".join(keyin)} columns')
+    if (daykey is None):
+        daykey = 'day_generatedby_splitdate'
+        daymodulename = ''
+        keyin = [col for col in columns if daykey in col]
+        doeskeyexist = (len(keyin) > 0)
+        if doeskeyexist:
+            raise Exception(f'`splitdate.py` | {daykey} found in {",".join(keyin)} columns')
 
     df, datekey, _ = getcolumnname.apply(df, datekey, '', inplace=True)
-    df, yearkey, yearkeyout = getcolumnname.apply(df, yearkey, SCRIPT_NAME, inplace=inplace)
-    df, monthkey, monthkeyout = getcolumnname.apply(df, monthkey, SCRIPT_NAME, inplace=inplace)
-    df, daykey, daykeyout = getcolumnname.apply(df, daykey, SCRIPT_NAME, inplace=inplace)
+    df, yearkey, yearkeyout = getcolumnname.apply(df, yearkey, yearmodulename, inplace=inplace)
+    df, monthkey, monthkeyout = getcolumnname.apply(df, monthkey, monthmodulename, inplace=inplace)
+    df, daykey, daykeyout = getcolumnname.apply(df, daykey, daymodulename, inplace=inplace)
 
     issuekey = ('issue_splitdate' if (split == 'all') else 'issue_splitdateinterval')
     df[issuekey] = pd.NA
-    columns = df.columns
+    columns = list(df.columns)
 
     processdateinterval_params = {
                                   'drop_interval': drop_interval,
@@ -158,10 +189,9 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', dr
 
     df, datekey = call_processdateinterval(df, datekey, **processdateinterval_params, indent=indent)
 
-    basedatekey = datekey.split('_processedby_')[0]
-    baseyearkey = yearkey.split('_processedby_')[0].upper()
-    basemonthkey = monthkey.split('_processedby_')[0].upper()
-    basedaykey = daykey.split('_processedby_')[0].upper()
+    baseyearkey = get_basekey(yearkey, columns)
+    basemonthkey = get_basekey(monthkey, columns)
+    basedaykey = get_basekey(daykey, columns)
 
     intervalcolumns = list(set(df.columns) - set(columns))
     intervalcolumns = [col for col in intervalcolumns if ('issue_' not in col)]
@@ -278,7 +308,7 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', dr
 
     # Split date into year, month & day
 
-    print(indent + f'** splitdate | split into year/month/day when known')
+    print(indent + f'* Split into year/month/day when known')
 
     date_split = df.loc[process,datekey].str.split('-')
 
