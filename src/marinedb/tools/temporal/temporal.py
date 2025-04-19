@@ -19,8 +19,10 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, format=None, in
               'monthkey' : monthkey,
               'daykey' : daykey,
               'drop_empty' : False,
-              'indent': indent
+              'indent': indent + '   '
              }
+
+    print(indent + '** parsedate')
 
     # Parse raw date strings
 
@@ -33,6 +35,8 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, format=None, in
                        }
 
     df = parsedate.apply(df, datekey, **params, **params_parsedate)
+
+    print(indent + '** splitdate')
 
     # Process date intervals
 

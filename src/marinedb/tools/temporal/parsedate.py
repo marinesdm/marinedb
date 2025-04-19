@@ -35,7 +35,6 @@ def execute_java(multiple_datestr):
 
     cmd = ['java', '-jar', JAR_PATH, multiple_datestr]
 
-#    try:
     p = subprocess.Popen(
         cmd,
         stdin=subprocess.PIPE,
@@ -43,10 +42,6 @@ def execute_java(multiple_datestr):
         stderr=subprocess.PIPE,
     )
     p.wait(timeout=TIMEOUT)
-#    except subprocess.TimeoutExpired as err:
-#        os.killpg(os.getpgid(p.pid), signal.SIGTERM)
-#        raise TimeoutError(err.message)
-
 
     keys = []
     stdout = []
@@ -201,7 +196,7 @@ def parallel_dateparser(df, datekey, datestr_index, cpu, format=None, indent='')
 
     nbatch = len(index_slides)
     cpu = min(cpu, nbatch)
-    print(indent + f'** parsedate | {ndates} dates to process ({nbatch} batches)')
+    print(indent + f'* Parse date | {ndates} dates to process ({nbatch} batches)')
     print(indent + f'INFO | {cpu} CPUs will be used')
 
     if cpu != 1:
@@ -285,7 +280,7 @@ def assemble_date(df, datekey, outputkey, yearkey=None, monthkey=None, daykey=No
 
     ## Build the date from available year, month, and day values
 
-    print(indent + f'** parsedate | date construction from {", ".join(print_colnames)} columns')
+    print(indent + f'* Build date from {", ".join(print_colnames)} columns')
     df.loc[date2process, outputkey] = df.loc[date2process, yearkey].str.cat(df.loc[date2process, joincol], sep='-', na_rep='')
     df.loc[date2process, outputkey] = df.loc[date2process, outputkey].str.strip('- ')
 

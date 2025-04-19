@@ -318,12 +318,6 @@ def get_mismatchissue(df, batch, paramsK, paramsV, verbose=False, indent=''):
 
     return result
 
-#def create_args(df, idx, paramsK, paramsV):
-#
-#    params = dict(zip(paramsK, df.loc[idx,paramsV].astype('string').values.tolist()))
-#
-#    return params
-
 @export
 def apply(df, datekey, yearkey, monthkey=None, daykey=None, stdnan=True, cvttype=True, parallel=False, cpu=None, drop_empty=False, indent=''):
 
@@ -371,12 +365,12 @@ def apply(df, datekey, yearkey, monthkey=None, daykey=None, stdnan=True, cvttype
 
     if stdnan:
         # prevent mismatches caused by unrecognized missing values
-        print(indent + '** isdatemismatch | standardizenan')
+        print(indent + '* Apply standardizenan')
         df = standardizenan.apply(df, key=paramsV)
 
     if cvttype:
         # prevent mismatches caused by invalid year/month/day strings
-        print(indent + '** isdatemismatch | convertdatetype')
+        print(indent + '* Apply convertdatetype')
         df = convertdatetype.apply(df, yearkey=yearkey, monthkey=monthkey, daykey=daykey, drop_inconsistent=False, drop_ambiguous=False, drop_empty=drop_empty, indent=indent)
 
     # Check for mismatches between the date string and the year, month, or day strings
@@ -395,7 +389,7 @@ def apply(df, datekey, yearkey, monthkey=None, daykey=None, stdnan=True, cvttype
         nbatch = len(batches)
         cpu = min(cpu, nbatch)
 
-        print(indent + f'** isdatemismatch | {ndates} lines to process ({nbatch} batches)')
+        print(indent + f'* Process | {ndates} lines to process ({nbatch} batches)')
         print(indent + f'INFO | {cpu} CPUs will be used')
 
         with tqdmjoblib.apply(tqdm(desc=indent + 'Progress', total=nbatch)) as progress_bar:

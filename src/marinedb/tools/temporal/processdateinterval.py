@@ -104,7 +104,7 @@ def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_numb
         raise ValueError(f"`processdateinterval.py` | `maxinterval_level` must be 'years', 'months' or 'days', not '{maxinterval_level}'")
 
     if (strategy == 'overlap'):
-        print(indent + f"INFO | As strategy='{strategy}', maxinterval_number={maxinterval_number} and maxinterval_level='{maxinterval_level}' will be ignored")
+        print(indent + f"INFO | Since strategy='{strategy}', maxinterval_number={maxinterval_number} and maxinterval_level='{maxinterval_level}' will be ignored")
 
     if drop_interval:
         flag = False
@@ -132,7 +132,7 @@ def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_numb
 
     # Find intervals
 
-    print(indent + f'** processdateinterval | find date intervals')
+    print(indent + f'* Find date intervals')
 
     flagname = f'flag_{basedatekey}_isdateinterval'
     df[flagname] = False
@@ -168,7 +168,7 @@ def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_numb
 
         # Convert intervals to date
 
-        print(indent + f'** processdateinterval | replace date intervals with {strategy} date')
+        print(indent + f'* Replace date intervals with {strategy} date')
 
         tempcol = ['start_str','end_str','start','end']
         df.loc[df[flagname],['start_str','end_str']] = df.loc[df[flagname],datekey].astype('string').str.split('/').tolist()
