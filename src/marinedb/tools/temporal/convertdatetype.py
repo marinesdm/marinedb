@@ -21,10 +21,22 @@ def drop_emptygeneratedcolumn(df, gencolumn):
 
     return df
 
+def get_basekey(key, columns):
+
+    basekey = key.split('_processedby_')[0]
+    if ('generatedby' in basekey):
+        basekey = basekey.split('_generatedby_')[0]
+        columns = [col.split('_processedby_')[0] for col in columns]
+        if basekey in columns:
+            basekey += '-GEN'
+    basekey = basekey.upper()
+
+    return basekey
+
 @export
 def astype_Int64(df, key, drop_empty=True):
 
-    basekey = key.split('_processedby_')[0].upper()
+    basekey = get_basekey(key, list(df.columns))
 
     # Pre-process date components (strip)
 
@@ -49,9 +61,9 @@ def astype_Int64(df, key, drop_empty=True):
     return df
 
 @export
-def convert_year(df, yearkey, drop_ambiguous=False, drop_empty=True):
+def convert_year(df, yearkey, drop_ambiguous=False, drop_empty=True, indent=''):
 
-    baseyearkey = yearkey.split('_processedby_')[0].upper()
+    baseyearkey = get_basekey(yearkey, list(df.columns))
 
     # Convert to integers
 
@@ -81,9 +93,9 @@ def convert_year(df, yearkey, drop_ambiguous=False, drop_empty=True):
     return df
 
 @export
-def convert_month(df, monthkey, drop_empty=True):
+def convert_month(df, monthkey, drop_empty=True, indent=''):
 
-    basemonthkey = monthkey.split('_processedby_')[0].upper()
+    basemonthkey = get_basekey(monthkey, list(df.columns))
 
     # Convert to integers
 
@@ -102,9 +114,9 @@ def convert_month(df, monthkey, drop_empty=True):
     return df
 
 @export
-def convert_day(df, daykey, drop_empty=True):
+def convert_day(df, daykey, drop_empty=True, indent=''):
 
-    basedaykey = daykey.split('_processedby_')[0].upper()
+    basedaykey = get_basekey(daykey, list(df.columns))
 
     # Convert to integers
 
@@ -124,9 +136,10 @@ def convert_day(df, daykey, drop_empty=True):
 
 def isvaliddate(df, yearkey, monthkey, daykey):
 
-    baseyearkey = yearkey.split('_processedby_')[0].upper()
-    basemonthkey = monthkey.split('_processedby_')[0].upper()
-    basedaykey = daykey.split('_processedby_')[0].upper()
+    columns = list(df.columns)
+    baseyearkey = get_basekey(yearkey, columns)
+    basemonthkey = get_basekey(monthkey, columns)
+    basedaykey = get_basekey(daykey, columns)
 
     maxdaybymonth = pd.Series([0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31])
 
@@ -137,7 +150,8 @@ def isvaliddate(df, yearkey, monthkey, daykey):
 
     # Leap years with 29 days in February
     isleapyear = (df[yearkey]%4 == 0) & ((df[yearkey]%100 != 0) | (df[yearkey]%400 == 0))
-    isvaliddate[(~ismissing) & isleapyear & (df[monthkey] == 2)] = (df.loc[(~ismissing) & isleapyear & (df[monthkey] == 2),daykey] <= 29)
+    condition = (~ismissing) & isleapyear & (df[monthkey] == 2)
+    isvaliddate[condition] = (df.loc[condition, daykey] <= 29)
 
     df = modifyissuecolumn.apply(df, issuekey='issue_convertdatetype', issuemsg=f'{baseyearkey}_{basemonthkey}_{basedaykey}_COMBINATION_INVALID', subset=(~isvaliddate))
 
@@ -182,12 +196,13 @@ def apply(df, datekey=None, yearkey=None, monthkey=None, daykey=None, format='IS
         df['issue_convertdatetype'] = pd.NA
         df['issue_convertdatetype'] = df['issue_convertdatetype'].astype('string')
 
+    columns = list(df.columns)
     if yearkey is not None:
-        baseyearkey = yearkey.split('_processedby_')[0].upper()
+        baseyearkey = get_basekey(yearkey, columns)
     if monthkey is not None:
-        basemonthkey = monthkey.split('_processedby_')[0].upper()
+        basemonthkey = get_basekey(monthkey, columns)
     if daykey is not None:
-        basedaykey = daykey.split('_processedby_')[0].upper()
+        basedaykey = get_basekey(daykey, columns)
 
     if monthkey is not None:
         yearmonth_inconsistency = pd.isnull(df[yearkey]) & (~pd.isnull(df[monthkey]))
