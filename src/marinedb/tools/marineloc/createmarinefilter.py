@@ -4,11 +4,20 @@
 # External import
 
 import os
-import glob
+#import glob
 import argparse
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+
+# Internal import
+
+from marinedb.utils.allexport import export
+from marinedb.tools.marineloc import island
+
+# Global variable
+
+__all__ = [] # populated using the @export decorator
 
 def write(df, txt_filename, sep='\t', init=False):
 
@@ -21,26 +30,46 @@ def write(df, txt_filename, sep='\t', init=False):
 
     return True
 
-if __name__ == '__main__':
+def extract_marine_locations(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=None, outputdir='', store_time=True, parallel=False, cpu=None, indent=''):
 
-    parser = argparse.ArgumentParser(description='Extract indices corresponding to marine occurrences', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('inputdir_path', type=str, help='path to the directory where the files to be processed are stored')
-    parser.add_argument('--delimiter', type=str, help='delimiter used in the input files', default='\t')
-    parser.add_argument('--outputfile_path', type=str, help='file path where the output will be saved', default='./marine_filter')
-    args = parser.parse_args()
+    params = {
+              'fileslist': fileslist,
+              'latkey': latkey,
+              'lonkey': lonkey,
+              'idxkey': idxkey,
+              'sep': sep,
+              'maskfile': maskfile,
+              'outputdir': outputdir,
+              'parallel': parallel,
+              'cpu': cpu,
+              'store_time': store_time,
+              'indent': indent
+             }
 
-    print(f'`createmarinefilter.py` | Extract the indices of marine occurrences from {args.inputdir_path} files')
+    print(indent + f'* Extract marine coordinates')
 
-    outputfile = args.outputfile_path
-    sep = args.delimiter.encode('utf-8').decode('unicode_escape')
+    params['indent'] += '  '
+
+    outputdir = island.apply(inputdir, **params)
+
+    return outputdir
+
+def extract_marine_indices(inputdir, outputfile='marine_filter', sep='\t', indent=''):
+
+    print(indent + f'* Extract indices corresponding to marine coordinates')
+
+    sep = sep.encode('utf-8').decode('unicode_escape')
+
+    if len(os.path.dirname(outputfile)) == 0:
+        outputfile = os.path.join(inputdir,outputfile)
 
     # If a file has been processed multiple times,
     # consider only one corresponding `island.py` output file
 
-    files = sorted(glob.glob(args.inputdir_path + '*'))
+    files = sorted([os.path.join(inputdir,file) for file in os.listdir(inputdir) if ('time' not in file) and ('filter' not in file)])
     Nfiles = len(files)
 
-    print(f'* Deduplicate entries across the {Nfiles} files in the folder')
+    print(indent + f'** Deduplicate entries across the {Nfiles} files in {inputdir}')
 
     files2process = pd.DataFrame(files, columns=['filepath'])
     files2process['basename'] = ['_'.join(os.path.basename(file).split('_')[:-1]) for file in files2process['filepath']] # format: 'inputfilename_device'
@@ -50,12 +79,12 @@ if __name__ == '__main__':
 
     # Keep only the indices corresponding to locations not classified as land
 
-    print(f'* Process {len(files)} files')
+    print(indent + f'** Extract indices from {len(files)} files')
 
     init_array = True
     init_storage = True
 
-    for file in tqdm(files, total=len(files)):
+    for file in tqdm(files, total=len(files), desc=indent + 'Progress'):
 
         df_file = pd.read_csv(file, header=0, sep=sep, engine='python')
         df_file = df_file[~df_file['island']]
@@ -80,3 +109,81 @@ if __name__ == '__main__':
         marinedata = pd.DataFrame(marinedata, columns=['index','mask','latitude','longitude'])
         marinedata['index'] = marinedata['index'].astype(int)
         write(marinedata, outputfile, init=init_storage, sep=sep)
+
+    return outputfile
+
+@export
+def apply(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=None, outputdir='', store_time=True, parallel=False, cpu=None, outputfile='marine_filter', indent=''):
+
+    params_marineloc = {
+                        'inputdir': inputdir,
+                        'fileslist': fileslist,
+                        'latkey': latkey,
+                        'lonkey': lonkey,
+                        'idxkey': idxkey,
+                        'sep': sep,
+                        'maskfile': maskfile,
+                        'outputdir': outputdir,
+                        'parallel': parallel,
+                        'cpu': cpu,
+                        'store_time': store_time,
+                        'indent': indent
+                       }
+
+    outputdir = extract_marine_locations(**params_marineloc)
+
+    print()
+
+    params_marineidx = {
+                        'inputdir': outputdir,
+                        'outputfile': outputfile,
+                        'sep': sep,
+                        'indent': indent
+                       }
+
+    outputfile = extract_marine_indices(**params_marineidx)
+
+    return outputfile
+
+if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser(description='Extract indices corresponding to marine occurrences', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('inputdir_path', type=str, help='directory path containing files to be processed')
+    parser.add_argument('--fileslist_path', type=str, help='path to the file that lists the files to be processed', default=None)
+    parser.add_argument('--latitude_column', type=str, help='latitude column name', required=True)
+    parser.add_argument('--longitude_column', type=str, help='longitude column name', required=True)
+    parser.add_argument('--index_column', type=str, help='index column name', required=True)
+    parser.add_argument('--delimiter', type=str, help='delimiter used in the input files', default='\t')
+    # Warning: delimiter must be enclosed in quotation marks
+    parser.add_argument('--maskfile_path', type=str, help='path to the .npz file containing the land/sea/coast mask', default=None)
+    parser.add_argument('--outputdir_path', type=str, help='path to the directory where output files from `island.py` will be saved', default='./')
+    parser.add_argument('--parallel', action=argparse.BooleanOptionalAction, help='whether to enable parallel processing across multiple CPUs', default=False)
+    parser.add_argument('--cpu', type=int, help='number of CPUs to be used', default=None)
+    parser.add_argument('--store_time', action=argparse.BooleanOptionalAction, help='whether to store the processing times', default=True)
+    parser.add_argument('--outputfile_path', type=str, help='path to the file where the filter will be saved', default='./marine_filter')
+    args = parser.parse_args()
+
+    print(f'`createmarinefilter.py` | Extract the indices of marine occurrences from {args.inputdir_path} files')
+
+    params = {
+              'inputdir': args.inputdir_path,
+              'fileslist': args.fileslist_path,
+              'latkey': args.latitude_column,
+              'lonkey': args.longitude_column,
+              'idxkey': args.index_column,
+              'sep': args.delimiter.encode('utf-8').decode('unicode_escape'),
+              'maskfile': args.maskfile_path,
+              'outputdir': args.outputdir_path,
+              'parallel': args.parallel,
+              'cpu': args.cpu,
+              'store_time': args.store_time,
+              'outputfile': args.outputfile_path
+             }
+
+    start = time.time()
+
+    _ = apply(**params)
+
+    end = time.time()
+
+    print(f'TIME : {round(end - start,0)}s')
