@@ -65,7 +65,6 @@ else
 fi
 
 if [[ -z ${delimiter+x} ]] || [[ ${delimiter} == '\t' ]]; then
-    #delimiter=$'\t'
     delimiter="	"
     echo "-d ${delimiter} will be the delimiter of the output file"
 fi
