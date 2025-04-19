@@ -8,6 +8,7 @@ import pandas as pd
 # Internal import
 
 from marinedb.utils.allexport import export
+
 from marinedb.tools import getcolumnname
 
 # Global variable
@@ -15,7 +16,7 @@ from marinedb.tools import getcolumnname
 __all__ = [] # populated using the @export decorator
 
 @export
-def apply(df, keylat, keylon, flag=False, eps=1e-5, dropna=False):
+def apply(df, keylat, keylon, flag=False, eps=1e-5, dropna=False, indent=''):
 
     # flag = True/False: whether to flag or drop observations that do not meet the condition
     # default eps: 1e-5
