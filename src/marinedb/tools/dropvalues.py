@@ -16,14 +16,12 @@ from marinedb.tools import aligndtypes
 
 __all__ = [] # populated using the @export decorator
 
-
 @export
-def apply(df, dropna=False, **conditions):
+def apply(df, dropna=False, indent='', **conditions):
 
     OR_condition = None
 
     for key, value in conditions.items():
-        print('key,value:',key,value) #DEBUG
 
         df, key, _ = getcolumnname.apply(df, key, '', inplace=True)
 

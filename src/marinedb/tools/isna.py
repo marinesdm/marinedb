@@ -15,7 +15,7 @@ from marinedb.utils.allexport import export
 __all__ = [] # populated using the @export decorator
 
 @export
-def apply(df, key, flag=False):
+def apply(df, key, flag=False, indent=''):
 
     df, key, _ = getcolumnname.apply(df, key, '', inplace=True)
 

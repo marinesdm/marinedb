@@ -22,7 +22,7 @@ def apply(df, key, values, flag=False, flagname_mapping=None, indent='', dropna=
 #        raise Exception('`doesnotcontain.py` | either `flagname_mapping` or `mappingfile` may be provided, but not both')
 
     if (not flag) and (flagname_mapping is not None):
-        print(indent + f'INFO | `flagname_mapping` will be ignored (flag={flag})')
+        print(indent + f'INFO | Since `flag` is {flag}, `flagname_mapping` will be ignored')
         flagname_mapping = None
 
     if (flagname_mapping is not None):
