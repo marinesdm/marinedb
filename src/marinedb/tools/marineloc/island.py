@@ -35,16 +35,16 @@ __all__ = [] # populated using the @export decorator
 # Processing
 
 
-def setup(mask_filepath=None):
+def setup(mask_filepath=None, indent=''):
 
-    if maskpath is None:
+    if mask_filepath is None:
         _mask_filename = files('marinedb.tools.data').joinpath('globe_mask_coastline.npz')
     else:
         _mask_filename = mask_filepath
 
     # Load the mask data
 
-    print(f'Preliminary step | Loading GLOBE mask ({_mask_filename})')
+    print(indent + f'* Load GLOBE mask ({_mask_filename})')
 
     _mask_fid = np.load(_mask_filename)
 
@@ -60,7 +60,7 @@ def setup(mask_filepath=None):
 
     # Create the basemap map
 
-    print('Preliminary step | Loading Basemap map')
+    print(indent + '* Load Basemap map')
 
     global _basemap
 
@@ -73,7 +73,7 @@ def setup(mask_filepath=None):
       urcrnrlat=80
     )
 
-    print('Preliminary step | Creating land polygons')
+    print(indent + '* Create land polygons')
 
     global _polygons
 
@@ -189,7 +189,7 @@ def island_basemap(lat, lon):
     return result
 
 @export
-def island(lat, lon, parallel=False):
+def island(lat, lon, verbose=True, indent=''):
 
     """
 
@@ -219,12 +219,12 @@ def island(lat, lon, parallel=False):
     lat_i = lat_to_index(lat)
     lon_i = lon_to_index(lon)
 
-    printv(f'STEP N°1 | Using GLOBE mask', verbose=(not parallel), indent='  ')
+    printv(f'STEP N°1 | GLOBE mask', verbose=verbose, indent=indent)
     land_points = np.logical_not(_mask[lat_i,lon_i])
 
     coastline_i = np.where(_mask[lat_i,lon_i] == 2)[0]
-    if len(coastline_i)!=0:
-        printv(f'STEP N°2 | Using basemap & GSHHS coastline data ({len(coastline_i)} coastal observations)', verbose=(not parallel), indent='  ')
+    if len(coastline_i) != 0:
+        printv(f'STEP N°2 | Basemap & GSHHS coastline data ({len(coastline_i)} coastal observations)', verbose=verbose, indent=indent)
         land_points[coastline_i] = island_basemap(lat[coastline_i],lon[coastline_i])
 
     df = pd.DataFrame(land_points, columns=['island'])
@@ -235,10 +235,12 @@ def island(lat, lon, parallel=False):
     return df
 
 @export
-def process_one_file(filepath, latkey, lonkey, idxkey, sep='\t', outputdir='./', store_time=True, parallel=False):
+def process_one_file(filepath, latkey, lonkey, idxkey, sep='\t', outputdir='./', store_time=True, parallel=False, mask_filepath=None, indent=''):
 
-    if not parallel:
-        setup()
+    verbose = (not parallel)
+
+    if '_mask' not in globals():
+        setup(mask_filepath=mask_filepath, indent=indent)
 
     sep = sep.encode('utf-8').decode('unicode_escape')
     start = time.time()
@@ -250,17 +252,17 @@ def process_one_file(filepath, latkey, lonkey, idxkey, sep='\t', outputdir='./',
     if len(glob.glob(f'{base}_*')) > 0:
         return '0\n'
 
-    printv('* Processing ' + filepath, verbose=(not parallel))
+    printv('* Processing ' + filepath, verbose=verbose, indent=indent)
 
     data = pd.read_csv(filepath, sep=sep)
-    data_processed = island(data[latkey], data[lonkey], parallel=parallel)
+    data_processed = island(data[latkey], data[lonkey], verbose=verbose, indent=indent)
     data_processed['index'] = data[idxkey].values
 
-    printv(f'>>> save to {res}', verbose=(not parallel), indent='  ')
+    printv(f'>>> save to {res}', verbose=verbose, indent=indent)
     data_processed[['index','latitude','longitude','mask','island']].to_csv(res, index=False, sep=sep, encoding='utf-8')
 
     span = np.round((time.time() - start),2)
-    printv('--- %s seconds ---' % span, verbose=(not parallel), indent='  ')
+    printv('--- %s seconds ---' % span, verbose=verbose, indent=indent)
     if store_time:
         span = str(span)+'\n'
         timefilepath = os.path.join(outputdir, f'time_{base}')
@@ -277,6 +279,91 @@ def process_one_file(filepath, latkey, lonkey, idxkey, sep='\t', outputdir='./',
 
     return str(span)+'\n'
 
+@export
+def apply(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=None, outputdir='', store_time=True, parallel=False, cpu=None, indent=''):
+
+    if not os.path.isdir(inputdir):
+        raise FileNotFoundError(f'`island.py` | Directory specified for `inputdir` not found: {inputdir}')
+    if fileslist is not None:
+        if not isinstance(fileslist, str):
+            raise TypeError(f'`island.py` | `fileslist` must be a string path')
+        if not os.path.exists(fileslist):
+            raise FileNotFoundError(f'`island.py` | File specified for `fileslist` not found: {fileslist}')
+    if maskfile is not None:
+        if not isinstance(maskfile, str):
+            raise TypeError(f'`island.py` | `maskfile` must be a string path')
+        if not os.path.exists(maskfile):
+            raise FileNotFoundError(f'`island.py` | File specified for `maskfile` not found: {maskfile}')
+
+    if (fileslist is None) or (len(fileslist) == 0):
+        fileslist = [os.path.join(inputdir,file) for file in os.listdir(inputdir) if os.path.isfile(os.path.join(inputdir,file))]
+    else:
+        print(indent + f'INFO | Only the files listed in {fileslist} will be processed')
+        with open(fileslist,'r') as file:
+            temp = file.read().splitlines()
+        fileslist = [os.path.join(inputdir,file) if (os.path.dirname(file) == '') else file for file in temp]
+
+    if (maskfile is not None) and (len(maskfile) == 0):
+        maskfile = None
+
+    if len(outputdir) == 0:
+        outputdir = inputdir
+    outputdir = os.path.join(outputdir,'processed')
+    try:
+        os.mkdir(outputdir)
+    except:
+        pass
+
+    if (cpu is None) or (cpu == -1):
+        if parallel:
+            cpu = len(os.sched_getaffinity(0))
+        else:
+            cpu = 1
+    cpu = min(cpu,len(fileslist))
+    if cpu == 1:
+        parallel = False
+
+    params = {
+              'latkey': latkey,
+              'lonkey': lonkey,
+              'idxkey': idxkey,
+              'sep': sep,
+              'outputdir': outputdir,
+              'store_time': store_time,
+              'parallel': parallel,
+              'indent': indent,
+              'mask_filepath': maskfile,
+             }
+
+    # Create global variables
+
+    setup(mask_filepath=maskfile, indent=indent)
+
+    # Parallelize the processing of `process_one_file`
+
+    # This script is intended to be executed across multiple machines in parallel,
+    # with each machine utilizing multiple CPUs.The shuffling process ensures that
+    # no two machines process the same file simultaneously. The shuffling would not
+    # be necessary if the script is to run on only a single machine
+    # see `parallel_island.sh`
+    random.shuffle(fileslist)
+
+    print(indent + f'Processing {len(fileslist)} files on {cpu} CPUs')
+
+    start = time.time()
+
+    if parallel:
+        with Pool(cpu) as p:
+            p.map(partial(process_one_file, **params), fileslist)
+    else:
+        for filepath in fileslist:
+            _ = process_one_file(filepath, **params)
+
+    end = time.time()
+    #print()
+    print(indent + f'TIME : {round(end - start,0)}s')
+
+    return outputdir
 
 # Progress monitoring
 
@@ -345,7 +432,7 @@ def concat_times(outputdir, outputfile='time', delete=True, overwrite=False):
         else:
             print(f'WARNING | {ouputfile} will be overwritten')
 
-    print(f'Storing times in {outputfile}')
+    print(f'* Store times in {outputfile}')
 
     init = True
     columns = ['filename_input', 'machine','time']
@@ -382,7 +469,7 @@ def land_sea_statistics(outputdir, outputfile='statistics', sep='\t', overwrite=
 
     # Compute statistics
 
-    print(f'Compute land/sea/coast statistics ({len(files)} files)')
+    print(f'* Compute land/sea/coast statistics ({len(files)} files)')
 
     stats=[]
     for filepath in files:
@@ -440,7 +527,7 @@ def land_sea_statistics(outputdir, outputfile='statistics', sep='\t', overwrite=
             print(f'WARNING | {ouputfile} will be overwritten')
 
 
-    print(f'Storing land/sea/coast statistics in {outputfile}')
+    print(f'* Store land/sea/coast statistics in {outputfile}')
     stats.to_csv(outputfile, sep=sep, mode='w', index=False)
 
     return True
@@ -513,91 +600,64 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Identify marine coordinates', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('inputdir_path', type=str, help='directory path containing files to be processed')
+    parser.add_argument('--fileslist_path', type=str, help='path to the file that lists the files to be processed', default=None)
     parser.add_argument('--latitude_column', type=str, help='latitude column name', required=True)
     parser.add_argument('--longitude_column', type=str, help='longitude column name', required=True)
     parser.add_argument('--index_column', type=str, help='index column name', required=True)
-    parser.add_argument('--fileslist_path', type=str, help='path to the file that lists the files to be processed', default=None)
     parser.add_argument('--delimiter', type=str, help='delimiter used in the input files', default='\t')
     # Warning: delimiter must be enclosed in quotation marks
     parser.add_argument('--maskfile_path', type=str, help='path to the .npz file containing the land/sea/coast mask', default=None)
-    parser.add_argument('--cpu', type=int, help='number of CPUs to be used', default=None)
     parser.add_argument('--outputdir_path', type=str, help='path to the directory where the output files will be stored', default='./')
+    parser.add_argument('--parallel', action=argparse.BooleanOptionalAction, help='whether to parallelize on multiple CPUs', default=False)
+    parser.add_argument('--cpu', type=int, help='number of CPUs to be used', default=None)
     parser.add_argument('--store_time', action=argparse.BooleanOptionalAction, help='whether to store the processing times', default=True)
     args = parser.parse_args()
 
     print(f'`island.py` | Identify marine coordinates')
 
     inputdir = args.inputdir_path
-    outputdir = args.outputdir_path
     fileslist_path = args.fileslist_path
     sep = args.delimiter
     latkey = args.latitude_column
     lonkey = args.longitude_column
     idxkey = args.index_column
     mask_filepath = args.maskfile_path
+    outputdir = args.outputdir_path
+    parallel = ars.parallel
     cpu = args.cpu
     store_time = args.store_time
 
-    if (fileslist_path is None) or (len(fileslist_path) == 0):
-        fileslist = [os.path.join(inputdir,file) for file in os.listdir(inputdir) if (file != 'processed')]
-    else:
-        print(f'INFO | Only the files listed in {fileslist_path} will be processed')
-        with open(fileslist_path,'r') as file:
-            fileslist = file.read().splitlines()
-        fileslist = [os.path.join(inputdir,file) if (os.path.dirname(file) == '') else file for file in fileslist]
-
     if (len(mask_filepath) == 0):
-        mask_filepath = None
+        maskfile = None
 
     if len(outputdir) == 0:
         outputdir = './'
     outputdir = os.path.join(outputdir,'processed')
-    try:
-        os.mkdir(outputdir)
-    except:
-        pass
 
     if (cpu is None) or (cpu == -1):
         cpu = len(os.sched_getaffinity(0))
+    if cpu == 1:
+        parallel = False
 
     params = {
+              'fileslist': fileslist_path,
               'latkey': latkey,
               'lonkey': lonkey,
               'idxkey': idxkey,
               'sep': sep,
+              'maskfile': mask_filepath,
               'outputdir': outputdir,
+              'parallel': parallel,
+              'cpu': cpu,
               'store_time': store_time,
-              'parallel': True,
              }
 
     print()
     print('Parameters')
     print('----------')
+    print(f'inputdir: {inputdir}')
     for key, value in params.items():
         print(f'{key}: {value}')
-    print(f'cpu: {cpu}')
     print()
 
-    # Create global variables
-
-    setup(mask_filepath=mask_filepath)
-
-    # Parallelize the processing of `process_one_file`
-
-    # This script is intended to be executed across multiple machines in parallel,
-    # with each machine utilizing multiple CPUs.The shuffling process ensures that
-    # no two machines process the same file simultaneously. The shuffling would not
-    # be necessary if the script is to run on only a single machine
-    # see `parallel_island.sh`
-    random.shuffle(fileslist)
-
-    print(f'Processing {len(fileslist)} files on {cpu} CPUs')
-
-    start = time.time()
-
-    with Pool(cpu) as p:
-        p.map(partial(process_one_file, **params), fileslist)
-
-    end = time.time()
-
-    print(f'TIME : {round(end - start,0)}s')
+    _ = apply(inputdir, **params)
