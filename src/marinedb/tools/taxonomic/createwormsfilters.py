@@ -20,6 +20,7 @@ from unidecode import unidecode
 from operator import itemgetter
 from suds.client import Client
 from suds.sudsobject import items
+from urllib.error import HTTPError
 from importlib.resources import files
 from concurrent.futures import as_completed
 from concurrent.futures import ProcessPoolExecutor
@@ -129,15 +130,17 @@ def get_uniqueRawSciname(filepath, colname, resume=True, store=False, overwrite=
                 left = outputfile.split('.')[0]
                 right = outputfile.split('.')[1]
                 outputfile = left + f'{date.today().strftime("_%Y%m%d")}.' + right
-                print(indent + f'INFO | unique raw scinames will be stored in {outputfile} (`overwrite`={overwrite})')
+                print(indent + f'INFO | Unique raw scinames will be stored in {outputfile} (`overwrite`={overwrite})')
 
     start = time.time()
 
     open_file, decode_line = readfile.apply(filepath)
+    error = 0
 
     with open_file(filepath,'r') as data:
 
         header = decode_line(data.readline()).strip('\n').split('\t')
+        header_length = len(header)
         sciname_index = header.index(colname)
         count = len(unique_rawsciname)
 
@@ -146,13 +149,24 @@ def get_uniqueRawSciname(filepath, colname, resume=True, store=False, overwrite=
             # Pre-process the raw scientific names
             # to avoid quotation problems with pandas
 
-            sciname = decode_line(line).strip('\n').split('\t')[sciname_index]
-            sciname = preprocessquotationmark.apply(sciname)
+            obs =  decode_line(line).strip('\n').split('\t')
 
-            # Update the set of unique raw scientific names
+            if len(obs) != header_length:
+                error += 1
+                print()
+                print(indent + f'SplittingError: splitting line n°{idx + 2} yields a different number of fields ({len(obs)}) than the header ({header_length}).')
+                print(indent + f'                line n°{idx + 2} is skipped : {line}')
+                print()
 
-            unique_rawsciname = update_set(unique_rawsciname,sciname)
-            Nunique = len(unique_rawsciname)
+            else:
+
+                sciname = obs[sciname_index]
+                sciname = preprocessquotationmark.apply(sciname)
+
+                # Update the set of unique raw scientific names
+
+                unique_rawsciname = update_set(unique_rawsciname,sciname)
+                Nunique = len(unique_rawsciname)
 
             # Display progress
 
@@ -165,13 +179,16 @@ def get_uniqueRawSciname(filepath, colname, resume=True, store=False, overwrite=
                 store_uniqueRawSciname(unique_rawsciname, outputfile, indent=indent)
                 count = Nunique
 
-
     # Store list of unique raw scientific names
 
     if store:
         store_uniqueRawSciname(unique_rawsciname, outputfile, indent=indent)
 
     print(indent + f'TIME: {round(time.time()-start)}s')
+
+    if error != 0:
+        print(indent + f'ERROR:')
+        print(indent + f'SplittingError: {error} observations produced a different number of fields upon splitting compared to the header, and were consequently ignored.')
 
     return list(unique_rawsciname)
 
@@ -643,9 +660,10 @@ def connect_matchAphiaRecordsByNames(wormsscinames, max_attempt=10, pause_durati
     while attempt < max_attempt:
         try:
             return cl.service.matchAphiaRecordsByNames(wormsscinames)
-        except (http.client.RemoteDisconnected, TimeoutError) as err:
+        except Exception as err: #(HTTPError, http.client.RemoteDisconnected, TimeoutError) as err:
             attempt += 1
             if attempt < max_attempt:
+                print(f'Failure | attempt n°{attempt}') #DEBUG
                 time.sleep(pause_duration)
                 cl = Client('https://www.marinespecies.org/aphia.php?p=soap&wsdl=1', timeout=4000)
             else:
@@ -714,7 +732,9 @@ def match50_WoRMSBySciname(wormsscinames, wormscall, species_only=True):
             print(wormsscinames)
             print(f'len: {len(wormsscinames)}')
             print('result')
-            print([val[wormscall.index('scientificname') + 1] for val in classif])
+            #print([val[wormscall.index('scientificname') + 1] for val in classif])
+            for c in classif:
+                print(c)
             print(f'len: {len(classif)}')
             #print('result')
             #print(worms_results)
@@ -1860,7 +1880,7 @@ def create_WoRMSacceptedfilter(unaccepted_aphiaID, wormscall=WORMSCALL, species_
     return worms_acceptedfilter
 
 @export
-def create_WoRMSfilter(filepath, colname, wormscall=WORMSCALL, identification_level='species', min_length=3, doublecheck=True, store=True, outputpath='./', overwrite=False, resume=True, resume_mode='soft', parallel=True, max_attempt=3, store_parallel=True, overwrite_parallel=False, resume_parallel='soft', indent=''):
+def create_WoRMSfilter(filepath, colname, wormscall=WORMSCALL, identification_level='species', min_length=3, doublecheck=True, store=True, outputpath='./', overwrite=False, resume=True, resume_mode='soft', parallel=True, max_attempt=3, store_parallel=True, overwrite_parallel=False, resume_parallel=True, indent=''):
 
     # Parameters
 
