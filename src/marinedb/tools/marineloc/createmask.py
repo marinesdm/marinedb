@@ -9,7 +9,58 @@ import argparse
 import cv2
 import os
 
+# Internal import
+
+from marinedb.utils.allexport import export
+
+# Global variable
+
+__all__ = [] # populated using the @export decorator
+
 GLOBEMASK_PATH = files('marinedb.tools.data').joinpath('globe_mask.npz')
+
+@export
+def apply(kernel_type='square', kernel_size=51, outputdir='./', indent=''):
+
+    print(indent + f'* Load the land/sea mask from {GLOBEMASK_PATH}')
+
+    data = np.load(GLOBEMASK_PATH)
+    mask_globe = data['mask'].copy()
+    lat_globe = data['lat']
+    lon_globe = data['lon']
+
+    mask_globe = mask_globe.astype('uint8')
+
+    # Identify locations that can be easily classified as land or sea,
+    # i.e., those that are not on the coast
+    # note: the morphological gradient is the difference between dilation and erosion of an image
+
+    print(indent + '* Generate the land/sea/coast mask')
+
+    if kernel_type == 'square':
+        # square kernel
+        kernel = np.ones((kernel_size, kernel_size), np.uint8)
+    elif kernel_type == 'ellipse':
+        # elliptical kernel
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(kernel_size, kernel_size))
+    else:
+        raise ValueError(f"`createmask.py` | `kernel_type` must be either 'square' or 'ellipse', got '{args.kernel_type}'")
+
+    gradient_mask_globe = cv2.morphologyEx(mask_globe, cv2.MORPH_GRADIENT, kernel)
+
+    # Create the final mask distinguishing land, sea, and coast
+
+    full_mask_globe = np.maximum(gradient_mask_globe*2, mask_globe)
+
+    # Store
+
+    outputfile = os.path.join(outputdir,'globe_mask_coastline.npz')
+
+    print(indent + f'* Save the land/sea/coast mask to {outputfile}')
+
+    np.savez_compressed(outputfile, lat=lat_globe, lon=lon_globe, mask=full_mask_globe)
+
+    return outputfile
 
 if __name__ == '__main__':
 
@@ -23,40 +74,4 @@ if __name__ == '__main__':
 
     print(f'`createmask.py` | Generate a mask differentiating land, sea, and coast')
 
-    print(f'* Load the land/sea mask from {GLOBEMASK_PATH}')
-
-    data = np.load(GLOBEMASK_PATH)
-    mask_globe = data['mask'].copy()
-    lat_globe = data['lat']
-    lon_globe = data['lon']
-
-    mask_globe = mask_globe.astype('uint8')
-
-    # Identify locations that can be easily classified as land or sea,
-    # i.e., those that are not on the coast
-    # note: the morphological gradient is the difference between dilation and erosion of an image
-
-    print('* Generate the land/sea/coast mask')
-
-    if args.kernel_type == 'square':
-        # square kernel
-        kernel = np.ones((args.kernel_size, args.kernel_size), np.uint8)
-    elif args.kernel_type == 'ellipse':
-        # elliptical kernel
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(args.kernel_size,args.kernel_size))
-    else:
-        raise ValueError(f"`createmask.py` | `kernel_type` must be either 'square' or 'ellipse', got '{args.kernel_type}'")
-
-    gradient_mask_globe = cv2.morphologyEx(mask_globe, cv2.MORPH_GRADIENT, kernel)
-
-    # Create the final mask distinguishing land, sea, and coast
-
-    full_mask_globe = np.maximum(gradient_mask_globe*2, mask_globe)
-
-    # Store
-
-    outputfile = os.path.join(args.outputdir,'globe_mask_coastline.npz')
-
-    print(f'* Save the land/sea/coast mask to {outputfile}')
-
-    np.savez_compressed(outputfile, lat=lat_globe, lon=lon_globe, mask=full_mask_globe)
+    _ = apply(kernel_type=args.kernel_type, kernel_size=args.kernel_size, outputdir=args.outputdir)
