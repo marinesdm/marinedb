@@ -23,7 +23,7 @@ def lowerbound_subset(df, taxonkey=None, specieskey=None, genuskey=None, familyk
         raise Exception(f'`taxasubset.py` | Either the column containing taxon IDs or the columns specifying the taxonomic classification must be provided')
 
     if istaxonkey and (not ispartialclassification):
-        print(indent + f"INFO | Classification keys will be ignored (taxonkey='{taxonkey}')")
+        print(indent + f"INFO | Since `taxonkey` is provided ('{taxonkey}'), classification keys will be ignored")
 
     if (not istaxonkey):
 
