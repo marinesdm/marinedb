@@ -21,8 +21,9 @@ def apply(df, key, flag=False, dropna=False, indent=''):
 
     df[key] = df[key].astype('string')
 
-    pattern=r'[^a-zA-Z]'
+    pattern=r'[^a-zA-Z\s]'
     islettersonly = (~df[key].str.contains(pattern, na=False))
+    islettersonly = islettersonly.astype('boolean')
     ismissing = pd.isnull(df[key])
     islettersonly[ismissing] = pd.NA
 
