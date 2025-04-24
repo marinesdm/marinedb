@@ -7,14 +7,16 @@ import pandas as pd
 
 # Internal import
 
-from marinedb.tools import getcolumnname
 from marinedb.utils.allexport import export
+from marinedb.utils.printverbose import printv
+
+from marinedb.tools import getcolumnname
 
 # Global variable
 
 __all__ = [] # populated using the @export decorator
 
-def lowerbound_subset(df, taxonkey=None, specieskey=None, genuskey=None, familykey=None, orderkey=None, classkey=None, phylumkey=None, kingdomkey=None, limit=50, flag=False, dropna=False, indent=''):
+def lowerbound_subset(df, taxonkey=None, specieskey=None, genuskey=None, familykey=None, orderkey=None, classkey=None, phylumkey=None, kingdomkey=None, limit=50, flag=False, dropna=False, verbose=True, indent=''):
 
     ispartialclassification = (specieskey is None) or (genuskey is None) or (familykey is None) or (orderkey is None) or (classkey is None) or (phylumkey is None) or (kingdomkey is None)
     istaxonkey = (taxonkey is not None)
@@ -23,7 +25,7 @@ def lowerbound_subset(df, taxonkey=None, specieskey=None, genuskey=None, familyk
         raise Exception(f'`taxasubset.py` | Either the column containing taxon IDs or the columns specifying the taxonomic classification must be provided')
 
     if istaxonkey and (not ispartialclassification):
-        print(indent + f"INFO | Since `taxonkey` is provided ('{taxonkey}'), classification keys will be ignored")
+        printv(f"INFO | Since `taxonkey` is provided ('{taxonkey}'), classification keys will be ignored", verbose=verbose, indent=indent)
 
     if (not istaxonkey):
 
@@ -41,11 +43,18 @@ def lowerbound_subset(df, taxonkey=None, specieskey=None, genuskey=None, familyk
         df.loc[pd.isnull(df[specieskey]) | df[columns[1:]].isnull().all(axis=1), taxonkey] = pd.NA
 
     else:
+        previous_taxonkey = taxonkey
+        generatedkey = [col for col in df.columns if (f'{taxonkey}_generatedby' in col)]
+        if len(generatedkey) > 1:
+            raise Exception(f"`taxasubset.py` | Multiple generated columns found for '{taxonkey}': {generatedkey}. An issue may have occurred during execution.")
+        if len(generatedkey) == 1:
+            taxonkey = generatedkey[0]
         df, taxonkey, _ = getcolumnname.apply(df, taxonkey, '', inplace=True)
 
     count = df[taxonkey].value_counts()
     isabovelimit = list(count[count >= limit].index)
     isabovelimit = df[taxonkey].isin(isabovelimit).astype('boolean')
+    isabovelimit = isabovelimit.astype('boolean')
     ismissing = pd.isnull(df[taxonkey])
     isabovelimit[ismissing] = pd.NA
 
@@ -75,7 +84,7 @@ def upperbound_subset(df, limit=-1, flag=False): #TODO
     return df
 
 @export
-def apply(df, lowerbound=-1, upperbound=-1, flag=False, dropna=False, indent='', seed=None,  taxonkey=None, specieskey=None, genuskey=None, familykey=None, orderkey=None, classkey=None, phylumkey=None, kingdomkey=None):
+def apply(df, lowerbound=-1, upperbound=-1, flag=False, dropna=False, verbose=True, indent='', seed=None,  taxonkey=None, specieskey=None, genuskey=None, familykey=None, orderkey=None, classkey=None, phylumkey=None, kingdomkey=None):
 
     if (upperbound == -1) and (lowerbound == -1):
         # Do not filter taxa based on their number of occurrences in the dataset
@@ -97,6 +106,7 @@ def apply(df, lowerbound=-1, upperbound=-1, flag=False, dropna=False, indent='',
                   'limit': lowerbound,
                   'flag': flag,
                   'dropna': dropna,
+                  'verbose': verbose,
                   'indent': indent
                  }
 
