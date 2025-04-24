@@ -26,6 +26,7 @@ def apply(df, key, flag=False, eps=1e-5, dropna=False, indent=''):
     df, key, _ = getcolumnname.apply(df, key, '', inplace=True)
 
     iszero = (df[key].astype('Float64').abs() <= eps)
+    iszero = iszero.astype('boolean')
     ismissing = pd.isnull(df[key])
     iszero[ismissing] = pd.NA
 
