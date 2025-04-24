@@ -20,12 +20,14 @@ from functools import partial
 import matplotlib.pyplot as plt
 from matplotlib.path import Path
 from multiprocessing import Pool
+from os.path import join, isfile
 from importlib.resources import files
 from mpl_toolkits.basemap import Basemap
 
 # Internal import
 
 from marinedb.utils.allexport import export
+from marinedb.utils.printverbose import printv
 
 # Global variables
 
@@ -35,7 +37,7 @@ __all__ = [] # populated using the @export decorator
 # Processing
 
 
-def setup(mask_filepath=None, indent=''):
+def setup(mask_filepath=None, verbose=True, indent=''):
 
     if mask_filepath is None:
         _mask_filename = files('marinedb.tools.data').joinpath('globe_mask_coastline.npz')
@@ -44,7 +46,7 @@ def setup(mask_filepath=None, indent=''):
 
     # Load the mask data
 
-    print(indent + f'* Load GLOBE mask ({_mask_filename})')
+    printv(f'* Load GLOBE mask ({_mask_filename})', verbose=verbose, indent=indent)
 
     _mask_fid = np.load(_mask_filename)
 
@@ -60,7 +62,7 @@ def setup(mask_filepath=None, indent=''):
 
     # Create the basemap map
 
-    print(indent + '* Load Basemap map')
+    printv('* Load Basemap map', verbose=verbose, indent=indent)
 
     global _basemap
 
@@ -73,18 +75,12 @@ def setup(mask_filepath=None, indent=''):
       urcrnrlat=80
     )
 
-    print(indent + '* Create land polygons')
+    printv('* Create land polygons', verbose=verbose, indent=indent)
 
     global _polygons
 
     _polygons = [Path(p.boundary) for p in _basemap.landpolygons]
 
-    return True
-
-
-def printv(message, verbose, indent=''):
-    if verbose:
-        print(indent + message)
     return True
 
 
@@ -235,9 +231,11 @@ def island(lat, lon, verbose=True, indent=''):
     return df
 
 @export
-def process_one_file(filepath, latkey, lonkey, idxkey, sep='\t', outputdir='./', store_time=True, parallel=False, mask_filepath=None, indent=''):
+def process_one_file(filepath, latkey, lonkey, idxkey, sep='\t', outputdir='./', store_time=True, parallel=False, mask_filepath=None, verbose=True, indent=''):
 
-    verbose = (not parallel)
+    outputdir = os.path.expanduser(outputdir)
+
+    verbose_func = (not parallel)
 
     if '_mask' not in globals():
         setup(mask_filepath=mask_filepath, indent=indent)
@@ -247,25 +245,26 @@ def process_one_file(filepath, latkey, lonkey, idxkey, sep='\t', outputdir='./',
 
     base = os.path.basename(filepath)
     hostname = socket.gethostname().split('.')[0]
-    res = os.path.join(outputdir,f'{base}_{hostname}')
+    res = join(outputdir,f'{base}_{hostname}')
 
-    if len(glob.glob(f'{base}_*')) > 0:
+    procfiles = join(outputdir,f'{base}_*')
+    if len(glob.glob(procfiles)) > 0:
         return '0\n'
 
-    printv('* Processing ' + filepath, verbose=verbose, indent=indent)
+    printv('* Processing ' + filepath, verbose=verbose_func, indent=indent)
 
     data = pd.read_csv(filepath, sep=sep)
-    data_processed = island(data[latkey], data[lonkey], verbose=verbose, indent=indent)
+    data_processed = island(data[latkey], data[lonkey], verbose=verbose_func, indent=indent)
     data_processed['index'] = data[idxkey].values
 
-    printv(f'>>> save to {res}', verbose=verbose, indent=indent)
+    printv(f'>>> save to {res}', verbose=verbose_func, indent=indent)
     data_processed[['index','latitude','longitude','mask','island']].to_csv(res, index=False, sep=sep, encoding='utf-8')
 
     span = np.round((time.time() - start),2)
-    printv('--- %s seconds ---' % span, verbose=verbose, indent=indent)
+    printv('--- %s seconds ---' % span, verbose=verbose_func, indent=indent)
     if store_time:
         span = str(span)+'\n'
-        timefilepath = os.path.join(outputdir, f'time_{base}')
+        timefilepath = join(outputdir, f'time_{base}')
         with open(timefilepath, 'a+', encoding='utf-8') as f:
             f.write(','.join([hostname, span]))
 
@@ -274,41 +273,46 @@ def process_one_file(filepath, latkey, lonkey, idxkey, sep='\t', outputdir='./',
 
     # Display progress
 
-    if parallel:
+    if parallel and verbose:
         print('#', end='', flush=True)
 
     return str(span)+'\n'
 
 @export
-def apply(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=None, outputdir='', store_time=True, parallel=False, cpu=None, indent=''):
+def apply(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=None, outputdir='', store_time=True, parallel=False, cpu=None, verbose=True, indent=''):
 
+    inputdir = os.path.expanduser(inputdir)
     if not os.path.isdir(inputdir):
         raise FileNotFoundError(f'`island.py` | Directory specified for `inputdir` not found: {inputdir}')
     if fileslist is not None:
         if not isinstance(fileslist, str):
             raise TypeError(f'`island.py` | `fileslist` must be a string path')
+        fileslist = os.path.expanduser(fileslist)
         if not os.path.exists(fileslist):
             raise FileNotFoundError(f'`island.py` | File specified for `fileslist` not found: {fileslist}')
     if maskfile is not None:
         if not isinstance(maskfile, str):
             raise TypeError(f'`island.py` | `maskfile` must be a string path')
+        maskfile = os.path.expanduser(maskfile)
         if not os.path.exists(maskfile):
             raise FileNotFoundError(f'`island.py` | File specified for `maskfile` not found: {maskfile}')
 
     if (fileslist is None) or (len(fileslist) == 0):
-        fileslist = [os.path.join(inputdir,file) for file in os.listdir(inputdir) if os.path.isfile(os.path.join(inputdir,file))]
+        fileslist = [join(inputdir,file) for file in os.listdir(inputdir) if isfile(join(inputdir,file))]
     else:
-        print(indent + f'INFO | Only the files listed in {fileslist} will be processed')
+        printv(f'INFO | Only the files listed in {fileslist} will be processed', verbose=verbose, indent=indent)
         with open(fileslist,'r') as file:
             temp = file.read().splitlines()
-        fileslist = [os.path.join(inputdir,file) if (os.path.dirname(file) == '') else file for file in temp]
+        fileslist = [join(inputdir,file) if (os.path.dirname(file) == '') else file for file in temp]
 
     if (maskfile is not None) and (len(maskfile) == 0):
         maskfile = None
 
     if len(outputdir) == 0:
         outputdir = inputdir
-    outputdir = os.path.join(outputdir,'processed')
+    else:
+        outputdir = os.path.expanduser(outputdir)
+    outputdir = join(outputdir,'processed')
     try:
         os.mkdir(outputdir)
     except:
@@ -331,6 +335,7 @@ def apply(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=N
               'outputdir': outputdir,
               'store_time': store_time,
               'parallel': parallel,
+              'verbose': verbose,
               'indent': indent,
               'mask_filepath': maskfile,
              }
@@ -348,7 +353,7 @@ def apply(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=N
     # see `parallel_island.sh`
     random.shuffle(fileslist)
 
-    print(indent + f'Processing {len(fileslist)} files on {cpu} CPUs')
+    printv(f'Processing {len(fileslist)} files on {cpu} CPUs', verbose=verbose, indent=indent)
 
     start = time.time()
 
@@ -360,8 +365,8 @@ def apply(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=N
             _ = process_one_file(filepath, **params)
 
     end = time.time()
-    #print()
-    print(indent + f'TIME : {round(end - start,0)}s')
+
+    printv(f'TIME : {round(end - start,0)}s', verbose=verbose, indent=indent)
 
     return outputdir
 
@@ -371,17 +376,17 @@ def apply(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=N
 def compute_status(inputdir, outputdir, fileslistpath=None):
 
     if fileslistpath is None:
-        files2process = [file for file in os.listdir(inputdir)]
+        files2process = [file for file in os.listdir(inputdir) if isfile(join(inputdir,file))]
     else:
         file = open(fileslistpath,'r')
         fileslist = file.read().splitlines()
         file.close()
-        files2process = [os.path.basename(file) for file in fileslist]
+        files2process = [os.path.basename(file) for file in fileslist if isfile(file)]
 
-    processedfiles = [file for file in os.listdir(outputdir) if 'time' not in file]
+    processedfiles = [file for file in os.listdir(outputdir) if isfile(join(outputdir,file)) and ('time' not in file) and ('filter' not in file)]
     processedfiles = pd.DataFrame(np.array(processedfiles).reshape(-1,1), columns=['filename'])
     processedfiles = processedfiles['filename'].str.split('_').str[:-1].str.join('_')
-    processedfiles = processedfiles.unique()
+    processedfiles = list(processedfiles.unique())
 
     return files2process, processedfiles
 
@@ -403,9 +408,9 @@ def list_unprocessed_files(inputdir, outputdir):
     files2process, processedfiles = compute_status(inputdir, outputdir)
     remaining_files = list(set(files2process) - set(processedfiles))
 
-    remaining_files = [str(os.path.join(inputdir,file)) for file in remaining_files]
+    remaining_files = [str(join(inputdir,file)) for file in remaining_files]
 
-    with open(os.path.join(os.path.dirname(outputdir),'remaining_files.txt'),'w') as f:
+    with open(join(os.path.dirname(outputdir),'remaining_files.txt'),'w') as f:
         f.write('\n'.join(remaining_files))
 
     return True
@@ -416,19 +421,29 @@ def list_unprocessed_files(inputdir, outputdir):
 ## Times
 
 @export
-def concat_times(outputdir, outputfile='time', delete=True, overwrite=False):
+def concat_times(outputdir, outputfile='time.csv', delete=True, overwrite=False):
 
-    files2process = [os.path.join(outputdir,file) for file in os.listdir(outputdir) if 'time_' in file]
+    files2process = [join(outputdir,file) for file in os.listdir(outputdir) if 'time_' in file]
 
     if os.path.dirname(outputfile) == '':
-        outputfile = os.path.join(outputdir,outputfile)
+        directory = join(outputdir,'stats')
+        try:
+            os.mkdir(directory)
+        except FileExistsError:
+            pass
+        outputfile = join(directory,outputfile)
 
-    if os.path.isfile(outputfile):
+    if isfile(outputfile):
         if not overwrite:
-            count = 1
-            while os.path.isfile(outputfile + str(count)):
+            count = 0
+            outputfile_temp = outputfile
+            outputfile = outputfile.split('.')
+            while isfile(outputfile_temp):
                 count += 1
-            outputfile = outputfile + str(count)
+                outputfile_temp = outputfile[0] + f'{count:02}'
+                if len(outputfile) == 2:
+                    outputfile_temp += f'.{outputfile[1]}'
+            outputfile = outputfile_temp
         else:
             print(f'WARNING | {ouputfile} will be overwritten')
 
@@ -465,7 +480,7 @@ def concat_times(outputdir, outputfile='time', delete=True, overwrite=False):
 def land_sea_statistics(outputdir, outputfile='statistics', sep='\t', overwrite=False):
 
     sep = sep.encode('utf-8').decode('unicode_escape')
-    files = [os.path.join(outputdir,file) for file in os.listdir(outputdir) if ('split' in file) and ('time' not in file)]
+    files = [join(outputdir,file) for file in os.listdir(outputdir) if ('split' in file) and ('time' not in file)]
 
     # Compute statistics
 
@@ -515,12 +530,17 @@ def land_sea_statistics(outputdir, outputfile='statistics', sep='\t', overwrite=
     # Store
 
     if os.path.dirname(outputfile) == '':
-        outputfile = os.path.join(outputdir,outputfile)
+        directory = join(outputdir,'stats')
+        try:
+            os.mkdir(directory)
+        except FileExistsError:
+            pass
+        outputfile = join(directory,outputfile)
 
-    if os.path.isfile(outputfile):
+    if isfile(outputfile):
         if not overwrite:
             count = 1
-            while os.path.isfile(outputfile + str(count)):
+            while isfile(outputfile + str(count)):
                 count += 1
             outputfile = outputfile + str(count)
         else:
@@ -546,7 +566,7 @@ def plot_time(time, show=True, store=True, outputfile='time.png', outputdir='./'
     sns.boxplot(y='time', data=time, notch=True, showcaps=False, medianprops={'color':'coral'}, whis=[1,99], showmeans=True, ax=axarr[0])
     #sns.swarmplot(y='time', data=time, color='black', alpha=0.5, ax=axarr[0])
     axarr[0].set_ylabel('')
-    axarr[0].set_xlabel('time (seconds)')
+    axarr[0].set_xlabel('time per file (seconds)')
 
     sns.countplot(x='hour_rounded', data=time, color='teal', ax=axarr[1])
     axarr[1].set_xlabel('time per file (hours)')
@@ -557,7 +577,12 @@ def plot_time(time, show=True, store=True, outputfile='time.png', outputdir='./'
     if store:
 
         if os.path.dirname(outputfile) == '':
-            outputfile = os.path.join(outputdir,outputfile)
+            directory = join(outputdir,'images')
+            try:
+                os.mkdir(directory)
+            except FileExistsError:
+                pass
+            outputfile = join(directory,outputfile)
 
         #fig = axarr.get_figure()
         fig.savefig(outputfile, bbox_inches='tight', dpi=96)
@@ -587,7 +612,12 @@ def plot_coastVStime(time, stats, show=True, store=True, outputfile='coastVStime
     if store:
 
         if os.path.dirname(outputfile) == '':
-            outputfile = os.path.join(outputdir,outputfile)
+            directory = join(outputdir,'images')
+            try:
+                os.mkdir(directory)
+            except FileExistsError:
+                pass
+            outputfile = join(directory,outputfile)
 
         fig.savefig(outputfile, bbox_inches='tight', dpi=96)
 
@@ -632,7 +662,7 @@ if __name__ == '__main__':
 
     if len(outputdir) == 0:
         outputdir = './'
-    outputdir = os.path.join(outputdir,'processed')
+    outputdir = join(outputdir,'processed')
 
     if (cpu is None) or (cpu == -1):
         cpu = len(os.sched_getaffinity(0))
