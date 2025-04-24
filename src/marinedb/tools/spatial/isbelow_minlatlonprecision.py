@@ -7,27 +7,31 @@ import pandas as pd
 
 # Internal import
 
+from marinedb.utils.allexport import export
+from marinedb.utils.printverbose import printv
+
 from marinedb.tools import getcolumnname
 from marinedb.tools.spatial import isbelow_minfloatprecision as mfp
-
-from marinedb.utils.allexport import export
 
 # Global variable
 
 __all__ = [] # populated using the @export decorato
 
 @export
-def apply(df, keylat, keylon, value, flag=False, dropna=False, indent=''):
+def apply(df, latkey, lonkey, value, flag=False, dropna=False, verbose=True, indent=''):
 
-    df, keylat, _ = getcolumnname.apply(df, keylat, '', inplace=True)
-    df, keylon, _ = getcolumnname.apply(df, keylon, '', inplace=True)
+    df, latkey, _ = getcolumnname.apply(df, latkey, '', inplace=True)
+    df, lonkey, _ = getcolumnname.apply(df, lonkey, '', inplace=True)
 
     # Apply `isbelow_minfloatprecision` separately to latitude and longitude
 
-    print(indent + f'* isbelow_minlatlonprecision | isbelow_minfloatprecision for {keylat}')
-    df = mfp.apply(df, keylat, value, flag=True, dropna=dropna, indent=(indent + '  '))
-    print(indent + f'* isbelow_minlatlonprecision | isbelow_minfloatprecision for {keylon}')
-    df = mfp.apply(df, keylon, value, flag=True, dropna=dropna, indent=(indent + '  '))
+    printv('', verbose=verbose)
+    printv(f"* Apply `isbelow_minfloatprecision` to '{latkey}'", verbose=verbose, indent=indent)
+    df = mfp.apply(df, latkey, value, flag=True, dropna=dropna, indent=(indent + '  '))
+    printv('', verbose=verbose)
+    printv(f"* Apply `isbelow_minfloatprecision` to '{lonkey}'", verbose=verbose, indent=indent)
+    df = mfp.apply(df, lonkey, value, flag=True, dropna=dropna, indent=(indent + '  '))
+    printv('', verbose=verbose)
 
     columns = list(df.columns)
     flag_columns = [col for col in columns if ('flag' in col) and ('isbelow_minfloatprecision' in col)]
@@ -39,8 +43,12 @@ def apply(df, keylat, keylon, value, flag=False, dropna=False, indent=''):
     # Check whether the float precision of latitude and longitude is below `value`
 
     isbelow_minlatlonprecision = (df[flag_columns[0]] & df[flag_columns[1]])
-    ismissing = (pd.isnull(df[keylat]) | pd.isnull(df[keylon]))
+    isbelow_minlatlonprecision = isbelow_minlatlonprecision.astype('boolean')
+    ismissing = (pd.isnull(df[latkey]) | pd.isnull(df[lonkey]))
     isbelow_minlatlonprecision[ismissing] = pd.NA
+
+    printv(f'* Flag and/or filter', verbose=verbose, indent=indent)
+    printv('', verbose=verbose)
 
     if flag:
 
@@ -49,10 +57,10 @@ def apply(df, keylat, keylon, value, flag=False, dropna=False, indent=''):
         ## Precision
         precision = df[precision_columns].max(axis=1).astype('Int64')
         precision[ismissing] = pd.NA
-        df[f'{keylat}_{keylon}_floatprecision_generatedby_isbelow_minlatlonprecision'] = precision
+        df[f'{latkey}_{lonkey}_floatprecision_generatedby_isbelow_minlatlonprecision'] = precision
 
         ## Flag
-        df[f'flag_{keylat}_{keylon}_isbelow_minlatlonprecision_{str(value)}'] = isbelow_minlatlonprecision
+        df[f'flag_{latkey}_{lonkey}_isbelow_minlatlonprecision_{str(value)}'] = isbelow_minlatlonprecision
 
         ## Clean
         df.drop(columns=dropcolumns, inplace=True)
