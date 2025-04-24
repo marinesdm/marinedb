@@ -4,6 +4,8 @@
 # Internal import
 
 from marinedb.utils.allexport import export
+from marinedb.utils.printverbose import printv
+
 from marinedb.tools.temporal import parsedate
 from marinedb.tools.temporal import splitdate
 
@@ -12,17 +14,20 @@ from marinedb.tools.temporal import splitdate
 __all__ = [] # populated using the @export decorator
 
 @export
-def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, format=None, inplace=False, flag=True, stdnan=True, parallel=False, cpu=None, drop_interval=False, strategy='overlap', maxinterval_number=1, maxinterval_level='years', split='all', drop_mismatch=True, indent=''):
+def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, format=None, inplace=False, flag=True, stdnan=True, parallel=False, cpu=None, drop_interval=False, strategy='overlap', maxinterval_number=1, maxinterval_level='years', split='all', drop_mismatch=True, verbose=True, indent=''):
 
     params = {
               'yearkey' : yearkey,
               'monthkey' : monthkey,
               'daykey' : daykey,
               'drop_empty' : False,
+              'verbose': verbose,
               'indent': indent + '   '
              }
 
-    print(indent + '** parsedate')
+    printv('', verbose=verbose)
+    printv('** parsedate', verbose=verbose, indent=indent)
+    printv('', verbose=verbose)
 
     # Parse raw date strings
 
@@ -36,7 +41,8 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, format=None, in
 
     df = parsedate.apply(df, datekey, **params, **params_parsedate)
 
-    print(indent + '** splitdate')
+    printv('** splitdate', verbose=verbose, indent=indent)
+    printv('', verbose=verbose)
 
     # Process date intervals
 

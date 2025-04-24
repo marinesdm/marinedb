@@ -8,6 +8,8 @@ import pandas as pd
 # Internal import
 
 from marinedb.utils.allexport import export
+from marinedb.utils.printverbose import printv
+
 from marinedb.tools import modifyissuecolumn
 
 # Global variable
@@ -158,10 +160,10 @@ def isvaliddate(df, yearkey, monthkey, daykey):
     return df
 
 @export
-def apply(df, datekey=None, yearkey=None, monthkey=None, daykey=None, format='ISO8601', drop_inconsistent=False, drop_ambiguous=False, drop_empty=False, indent=''):
+def apply(df, datekey=None, yearkey=None, monthkey=None, daykey=None, format='ISO8601', drop_inconsistent=False, drop_ambiguous=False, drop_empty=False, verbose=True, indent=''):
 
     if (datekey is None) and (yearkey is None) and (monthkey is None) and (daykey is None):
-        print(indent + 'INFO | No column specified, the dataframe is returned as is.')
+        printv('INFO | No column specified, the dataframe is returned as is', verbose=verbose, indent=indent)
         return df
 
     if (yearkey is None) and (monthkey is not None):
