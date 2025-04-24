@@ -54,8 +54,4 @@ def apply(df, key, values):
     else:
         values = astype(values)
 
-#    print('value:',values) #DEBUG
-#    print('df dtype:',df[key].dtypes) #DEBUG
-#    print('dtype:',dtype) #DEBUG
-
     return df, values

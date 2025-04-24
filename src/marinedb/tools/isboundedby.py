@@ -48,6 +48,7 @@ def apply(df, key, operator, value, flag=False, dropna=False, indent=''):
     else:
         raise ValueError("`isboundedby.py` | the comparison operator in `value` should be '<', '>', or a combination of '=' and '<' or '>'.")
 
+    isboundedby = isboundedby.astype('boolean')
     ismissing = pd.isnull(df[key])
     isboundedby[ismissing] = pd.NA
 

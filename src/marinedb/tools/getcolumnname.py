@@ -30,7 +30,8 @@ def apply(df, key, modulename, inplace, minimize_columns=True):
     # as indicated by the naming pattern '{basekey}_processedby_...'
 
     basekey = key.split('_processedby_')[0]
-    processedkey = [col for col in df.columns if (f'{basekey}_processedby' in col)]
+    pattern = f'{basekey}_processedby'
+    processedkey = [col for col in df.columns if (col[:len(pattern)] == pattern)]
 
     if len(processedkey) > 1:
         processedkey = sorted(processedkey, key=len)
