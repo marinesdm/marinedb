@@ -16,24 +16,18 @@ from marinedb.utils.allexport import export
 __all__ = [] # populated using the @export decorator
 
 @export
-def apply(df, key, values, flag=False, flagname_mapping=None, dropna=False, indent=''):
+def apply(df, key, values, flag=False, minimize_flagname=False, flagname_mapping=None, dropna=False, verbose=True, indent=''):
 
     df, key, _ = getcolumnname.apply(df, key, '', inplace=True)
-#    columns = set(df.columns)
 
     # Run `doesnotcontain` on the `key` column
 
     try:
-        df = doesnotcontain.apply(df, key, values, flag=True, flagname_mapping=flagname_mapping, indent=indent)
+        df = doesnotcontain.apply(df, key, values, flag=True, minimize_flagname=minimize_flagname, flagname_mapping=flagname_mapping, dropna=False, verbose=verbose, indent=indent)
     except ValueError as err:
         raise ValueError(f"`contains.py` | {str(err).split('|')[-1]}")
 
-#    # Retrieve the `doesnotcontain` flag column
-#    doesnotcontain_flagcolumn = list(set(df.columns) - columns)
-#    assert len(doesnotcontain_flagcolumn) == 1
-#    doesnotcontain_flagcolumn = doesnotcontain_flagcolumn[0]
-
-    doesnotcontain_flagcolumn = [col in df.columns if (f'flag_{key}_doesnotcontain' in col)]
+    doesnotcontain_flagcolumn = [col for col in df.columns if (f'flag_{key}_doesnotcontain' in col)]
     assert len(doesnotcontain_flagcolumn) == 1
     doesnotcontain_flagcolumn = doesnotcontain_flagcolumn[0]
     value_str = doesnotcontain_flagcolumn.split('_')[-1]
