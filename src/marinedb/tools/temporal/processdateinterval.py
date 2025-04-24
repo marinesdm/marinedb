@@ -8,8 +8,10 @@ import warnings
 
 # Internal import
 
-from marinedb.tools import getcolumnname
 from marinedb.utils.allexport import export
+from marinedb.utils.printverbose import printv
+
+from marinedb.tools import getcolumnname
 from marinedb.tools.temporal import convertdatetype
 
 # Global variable
@@ -80,7 +82,7 @@ def apply_strategy(df, key, index, strategy):
     return df
 
 @export
-def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_number=1, maxinterval_level='years', inplace=False, flag=True, drop_empty=False, indent=''):
+def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_number=1, maxinterval_level='years', inplace=False, flag=True, drop_empty=False, verbose=True, indent=''):
 
     # maxinterval_number=-1 : process all date intervals regardless of width
     # strategy in ['start', 'end', 'overlap'] : a different strategy could be implemented (e.g. take the median date)
@@ -104,11 +106,11 @@ def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_numb
         raise ValueError(f"`processdateinterval.py` | `maxinterval_level` must be 'years', 'months' or 'days', not '{maxinterval_level}'")
 
     if (strategy == 'overlap'):
-        print(indent + f"INFO | Since strategy='{strategy}', maxinterval_number={maxinterval_number} and maxinterval_level='{maxinterval_level}' will be ignored")
+        printv(f"INFO | Since strategy='{strategy}', maxinterval_number={maxinterval_number} and maxinterval_level='{maxinterval_level}' will be ignored", verbose=verbose, indent=indent)
 
     if drop_interval:
         flag = False
-        print(indent + f"INFO | As drop_interval='{drop_interval}', `flag` will be ignored")
+        printv(f"INFO | As drop_interval='{drop_interval}', `flag` will be ignored", verbose=verbose, indent=indent)
 
     df, datekey, outputkey = getcolumnname.apply(df, datekey, 'processdateinterval', inplace=inplace)
 
@@ -132,10 +134,11 @@ def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_numb
 
     # Find intervals
 
-    print(indent + f'* Find date intervals')
+    printv(f'* Find date intervals', verbose=verbose, indent=indent)
 
     flagname = f'flag_{basedatekey}_isdateinterval'
     df[flagname] = False
+    df[flagname] = df[flagname].astype('boolean')
 
     isdatemissing = pd.isnull(df[datekey])
     df.loc[~isdatemissing,flagname] = df.loc[~isdatemissing,datekey].astype('string').str.contains('/') # interval format: YYYY[-MM[-DD]]/YYYY[-MM[-DD]]
@@ -168,13 +171,13 @@ def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_numb
 
         # Convert intervals to date
 
-        print(indent + f'* Replace date intervals with {strategy} date')
+        printv(f'* Replace date intervals with {strategy} date', verbose=verbose, indent=indent)
 
         tempcol = ['start_str','end_str','start','end']
         df.loc[df[flagname],['start_str','end_str']] = df.loc[df[flagname],datekey].astype('string').str.split('/').tolist()
         df[['start','end']] = df[['start_str','end_str']].astype('string').values
-        df = convertdatetype.apply(df, datekey='start', format='ISO8601', indent=indent)
-        df = convertdatetype.apply(df, datekey='end', format='ISO8601', indent=indent)
+        df = convertdatetype.apply(df, datekey='start', format='ISO8601', verbose=verbose, indent=indent)
+        df = convertdatetype.apply(df, datekey='end', format='ISO8601', verbose=verbose, indent=indent)
         # Note: unknown month and day are replaced with '01'
         # i.e., the first day of the known month or January
 
