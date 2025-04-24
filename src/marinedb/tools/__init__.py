@@ -8,15 +8,21 @@ import pandas as pd
 
 # Internal imports
 
-from . import *
-from .spatial import *
-from .temporal import *
-from .taxonomic import *
-from .marineloc import *
+from marinedb.tools import contains, doesnotcontain, dropvalues, isboundedby, isin, notisin, isna
+from marinedb.tools.spatial import *
+from marinedb.tools.temporal import *
+from marinedb.tools.taxonomic import *
+from marinedb.tools.marineloc import *
 
-__all__ = ['contains', 'doesnotcontain','dropvalues','isboundedby','isin','isna','notisin','marineloc','doeslateqlon','isbelow_minlatlonprecision','iszero','lettersonly','taxasubset','parsedate','processdateinterval','splitdate','temporal']
+from marinedb.utils.printverbose import printv
 
-def apply(df, config_dict, indent=indent, store_stats=True, outputfile_stats='cleaning_stats.txt'):
+
+# Global variable
+
+__all__ = ['contains', 'doesnotcontain','dropvalues','isboundedby','isin','isna','notisin','doeslateqlon','isbelow_minlatlonprecision','iszero','lettersonly','taxasubset','parsedate','processdateinterval','splitdate','temporal']
+
+
+def apply(df, config_dict, verbose=True, indent='', store_stats=True, outputfile_stats='cleaning_stats.txt'):
 
     header = []
     stats = []
@@ -42,28 +48,31 @@ def apply(df, config_dict, indent=indent, store_stats=True, outputfile_stats='cl
 
                 colname = [key for key in proc_params.keys() if 'key' in key]
                 if len(colname) != 0:
-                    print(indent + f'* {", ".join(colname)}')
+                    printv(f'* {", ".join(colname)}', verbose=verbose, indent=indent)
                     procstep_string = f'{"-".join(colname)}'
                 else:
-                    print(indent + f'* dataframe')
+                    printv(f'* dataframe', verbose=verbose, indent=indent)
                     procstep_string = 'dataframe'
-                print(indent + f'** {proc_name}')
-                procstep_string = '_'.join(procstep_string, proc_name)
+                printv(f'** {proc_name}', verbose=verbose, indent=indent)
+#                printv('', verbose=verbose, indent=indent)
+                procstep_string = '_'.join([procstep_string, proc_name])
 
                 proc_params['indent'] = indent + '   '
-                df = eval(f"{proc_name}.apply(df, indent='   ', **proc_params)")
+                df = eval(f"{proc_name}.apply(df, **proc_params)")
 
             else:
 
-                print(indent + f'* {colname}')
-                print(indent + f'** {proc_name}')
+                printv(f'* {colname}', verbose=verbose, indent=indent)
+                printv(indent + f'** {proc_name}', verbose=verbose, indent=indent)
+#                printv('', verbose=verbose, indent=indent)
+                procstep_string = '_'.join([colname, proc_name])
+
                 proc_params['indent'] = indent + '   '
+                df = eval(f"{proc_name}.apply(df, colname, **proc_params)")
 
-                df = eval(f"{proc_name}.apply(df, colname, indent='   ', **proc_params)")
-
-            print()
+#            printv('', verbose=verbose, indent=indent)
             length_after = len(df)
-            print(indent + f'{proc_name} | before: {length_before}, after: {length_after}')
+            printv(f'{proc_name} | before: {length_before}, after: {length_after}', verbose=verbose, indent=indent + '   ')
             if store_stats:
                 header += [f'{procstep_string}' + '_before', f'{procstep_string}' + '_after']
                 stats += [length_before, length_after]
@@ -71,12 +80,12 @@ def apply(df, config_dict, indent=indent, store_stats=True, outputfile_stats='cl
             columns_after = set(df.columns)
             new_columns = columns_after - columns_before
             if len(new_columns) != 0:
-                print(f'    {proc_name} | new columns: {list(new_columns)}')
-            print()
+                printv(f'{proc_name} | new column(s): {list(new_columns)}', verbose=verbose, indent=indent + '   ')
+            printv('', verbose=verbose, indent=indent)
 
     if store_stats:
         stats = pd.DataFrame([stats], columns=header, dtype=int)
-        if os.path.exists(outputfile_stats):
+        if os.path.isfile(outputfile_stats):
             stats.to_csv(outputfile_stats, sep='\t', index=False, header=False, mode='a')
         else:
             stats.to_csv(outputfile_stats, sep='\t', index=False)
