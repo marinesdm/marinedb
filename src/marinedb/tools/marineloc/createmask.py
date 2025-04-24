@@ -12,6 +12,7 @@ import os
 # Internal import
 
 from marinedb.utils.allexport import export
+from marinedb.utils.printverbose import printv
 
 # Global variable
 
@@ -20,9 +21,9 @@ __all__ = [] # populated using the @export decorator
 GLOBEMASK_PATH = files('marinedb.tools.data').joinpath('globe_mask.npz')
 
 @export
-def apply(kernel_type='square', kernel_size=51, outputdir='./', indent=''):
+def apply(kernel_type='square', kernel_size=51, outputdir='./', verbose=True, indent=''):
 
-    print(indent + f'* Load the land/sea mask from {GLOBEMASK_PATH}')
+    printv(f'* Load the land/sea mask from {GLOBEMASK_PATH}', verbose=verbose, indent=indent)
 
     data = np.load(GLOBEMASK_PATH)
     mask_globe = data['mask'].copy()
@@ -35,7 +36,7 @@ def apply(kernel_type='square', kernel_size=51, outputdir='./', indent=''):
     # i.e., those that are not on the coast
     # note: the morphological gradient is the difference between dilation and erosion of an image
 
-    print(indent + '* Generate the land/sea/coast mask')
+    printv('* Generate the land/sea/coast mask', verbose=verbose, indent=indent)
 
     if kernel_type == 'square':
         # square kernel
@@ -56,7 +57,7 @@ def apply(kernel_type='square', kernel_size=51, outputdir='./', indent=''):
 
     outputfile = os.path.join(outputdir,'globe_mask_coastline.npz')
 
-    print(indent + f'* Save the land/sea/coast mask to {outputfile}')
+    printv(f'* Save the land/sea/coast mask to {outputfile}', verbose=verbose, indent=indent)
 
     np.savez_compressed(outputfile, lat=lat_globe, lon=lon_globe, mask=full_mask_globe)
 
