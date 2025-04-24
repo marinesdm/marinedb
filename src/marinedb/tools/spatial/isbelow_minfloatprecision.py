@@ -10,6 +10,7 @@ import pandas as pd
 # Internal import
 
 from marinedb.utils.allexport import export
+from marinedb.utils.printverbose import printv
 
 from marinedb.tools import getcolumnname
 
@@ -28,7 +29,7 @@ def get_floatprecision(series_flt):
     return pd.Series(precision)
 
 @export
-def apply(df, key, value, flag=False, dropna=False, indent=''):
+def apply(df, key, value, flag=False, dropna=False, verbose=True, indent=''):
 
     if not isinstance(value,int):
         raise ValueError(f'`isbelow_minfloatprecision.py` | `value` must be an integer (value={value})')
@@ -37,21 +38,22 @@ def apply(df, key, value, flag=False, dropna=False, indent=''):
 
     # Compute the number of digits after the decimal point
 
-    print(indent + f'* isbelow_minfloatprecision | count the number of decimal places')
+    printv(f'* Count the number of decimal places', verbose=verbose, indent=indent)
 
     precision_column = f'{key}_floatprecision_generatedby_isbelow_minfloatprecision'
     if precision_column in df.columns:
-        print(indent + f'INFO | {precision_column} column already exists and will be used')
+        printv(f'INFO | {precision_column} column already exists and will be used', verbose=verbose, indent=indent)
     else:
         df[precision_column] = get_floatprecision(df[key]).astype('Int64')
 
     # Check whether the float precision of `key` is below `value`
 
     isbelow_minfloatprecision = (df[precision_column] < value)
+    isbelow_minfloatprecision = isbelow_minfloatprecision.astype('boolean')
     ismissing = pd.isnull(df[key].astype('Float64'))
     isbelow_minfloatprecision[ismissing] = pd.NA
 
-    print(indent + f'* isbelow_minfloatprecision | flag and/or filter')
+    printv(f'* Flag and/or filter', verbose=verbose, indent=indent)
 
     if flag:
 
