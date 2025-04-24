@@ -9,6 +9,8 @@ import pandas as pd
 # Internal import
 
 from marinedb.utils.allexport import export
+from marinedb.utils.printverbose import printv
+
 from marinedb.tools import getcolumnname
 
 # Global variable
@@ -16,13 +18,16 @@ from marinedb.tools import getcolumnname
 __all__ = [] # populated using the @export decorator
 
 @export
-def apply(df, key, values, flag=False, flagname_mapping=None, indent='', dropna=False): #mappingfile=None):
+def apply(df, key, values, flag=False, minimize_flagname=False, flagname_mapping=None, dropna=False, verbose=True, indent=''):
 
-#    if (flagname_mapping is not None) and (mappingfile is not None):
-#        raise Exception('`doesnotcontain.py` | either `flagname_mapping` or `mappingfile` may be provided, but not both')
+    if (flagname_mapping is not None) and (len(flagname_mapping) == 0):
+        flagname_mapping = None
 
     if (not flag) and (flagname_mapping is not None):
-        print(indent + f'INFO | Since `flag` is {flag}, `flagname_mapping` will be ignored')
+        printv(f'INFO | Since `flag` is {flag}, `flagname_mapping` will be ignored', verbose=verbose, indent=indent)
+        flagname_mapping = None
+    if (not minimize_flagname) and (flagname_mapping is not None):
+        printv(f'INFO | Since `minimize_flagname` is {minimize_flagname}, `flagname_mapping` will be ignored', verbose=verbose, indent=indent)
         flagname_mapping = None
 
     if (flagname_mapping is not None):
@@ -33,7 +38,11 @@ def apply(df, key, values, flag=False, flagname_mapping=None, indent='', dropna=
                 with open(flagname_mapping,'r') as file:
                     flagname_mapping = json.load(file)
             except ValueError:
-                raise ValueError('`doesnotcontain.py` | if a string, `flagname_mapping` must be a path to a valid JSON file')
+                raise ValueError('`doesnotcontain.py` | If a string, `flagname_mapping` must be a path to a valid JSON file')
+
+    if minimize_flagname and (flagname_mapping is None):
+        flagname_mapping = {val: idx for idx, val in enumerate(values)}
+        printv(f'INFO | `flagname_mapping` is set to {flagname_mapping}', verbose=verbose, indent=indent)
 
     df, key, _ = getcolumnname.apply(df, key, '', inplace=True)
 
@@ -49,6 +58,7 @@ def apply(df, key, values, flag=False, flagname_mapping=None, indent='', dropna=
     df['tempcol'] = df['tempcol'].astype('string')
 
     doesnotcontain = (~df['tempcol'].str.contains(rf'{searchfor}', regex=True, na=dropna))
+    doesnotcontain = doesnotcontain.astype('boolean')
     ismissing = pd.isnull(df['tempcol'])
 
     df.drop(columns='tempcol', inplace=True)
@@ -56,11 +66,6 @@ def apply(df, key, values, flag=False, flagname_mapping=None, indent='', dropna=
     if flag:
 
         # Flag rows where the `key` column DOES NOT contain values in `values`
-
-#        if (mappingfile is not None) or (flagname_mapping is not None):
-#            if mappingfile is not None:
-#                with open(mappingfile,'r') as file:
-#                    rename_values = json.load(file)
 
         if flagname_mapping is not None:
             temp = flagname_mapping.copy()

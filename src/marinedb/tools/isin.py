@@ -8,6 +8,8 @@ import pandas as pd
 # Internal import
 
 from marinedb.utils.allexport import export
+from marinedb.utils.printverbose import printv
+
 from marinedb.tools import getcolumnname
 from marinedb.tools import aligndtypes
 
@@ -16,10 +18,16 @@ from marinedb.tools import aligndtypes
 __all__ = [] # populated using the @export decorator
 
 @export
-def apply(df, key, values, flag=False, flagname_mapping=None, dropna=False, indent=''):
+def apply(df, key, values, flag=False, minimize_flagname=False, flagname_mapping=None, dropna=False, verbose=True, indent=''):
+
+    if (flagname_mapping is not None) and (len(flagname_mapping) == 0):
+        flagname_mapping = None
 
     if (not flag) and (flagname_mapping is not None):
-        print(indent + f'INFO | Since `flag` is {flag}, `flagname_mapping` will be ignored')
+        printv(f'INFO | Since `flag` is {flag}, `flagname_mapping` will be ignored', verbose=verbose, indent=indent)
+        flagname_mapping = None
+    if (not minimize_flagname) and (flagname_mapping is not None):
+        printv(f'INFO | Since `minimize_flagname` is {minimize_flagname}, `flagname_mapping` will be ignored', verbose=verbose, indent=indent)
         flagname_mapping = None
 
     if (flagname_mapping is not None):
@@ -32,6 +40,10 @@ def apply(df, key, values, flag=False, flagname_mapping=None, dropna=False, inde
             except ValueError:
                 raise ValueError('`isin.py` | if a string, `flagname_mapping` must be a path to a valid JSON file')
 
+    if minimize_flagname and (flagname_mapping is None):
+        flagname_mapping = {val: idx for idx, val in enumerate(values)}
+        printv(f'INFO | `flagname_mapping` is set to {flagname_mapping}', verbose=verbose, indent=indent)
+
     df, key, _ = getcolumnname.apply(df, key, '', inplace=True)
 
     # Ensure that the objects being compared are of the same type
@@ -43,6 +55,7 @@ def apply(df, key, values, flag=False, flagname_mapping=None, dropna=False, inde
     # Filtering condition
 
     condition = df[key].isin(values)
+    condition = condition.astype('boolean')
     ismissing = pd.isnull(df[key])
     condition[ismissing] = pd.NA
 
