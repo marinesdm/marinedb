@@ -15,8 +15,10 @@ from importlib.resources import files
 # Internal import
 
 from marinedb.utils import tqdmjoblib
-from marinedb.tools import getcolumnname
 from marinedb.utils.allexport import export
+from marinedb.utils.printverbose import printv
+
+from marinedb.tools import getcolumnname
 from marinedb.tools import modifyissuecolumn
 from marinedb.tools.temporal import isdatemismatch
 from marinedb.tools.temporal import convertdatetype
@@ -186,7 +188,7 @@ def gbif_dateparser(df, datekey, index, format=None):
 
     return result
 
-def parallel_dateparser(df, datekey, datestr_index, cpu, format=None, indent=''):
+def parallel_dateparser(df, datekey, datestr_index, cpu, format=None, verbose=True, indent=''):
 
     ndates = len(datestr_index)
     batch_size = 1000
@@ -196,32 +198,48 @@ def parallel_dateparser(df, datekey, datestr_index, cpu, format=None, indent='')
 
     nbatch = len(index_slides)
     cpu = min(cpu, nbatch)
-    print(indent + f'* Parse date | {ndates} dates to process ({nbatch} batches)')
-    print(indent + f'INFO | {cpu} CPUs will be used')
+    printv(f"* Parse {datekey.split('_processedby_')[0]} | {ndates} dates to process ({nbatch} batches)", verbose=verbose, indent=indent)
+    printv(f'INFO | {cpu} CPUs will be used', verbose=verbose, indent=indent)
 
     if cpu != 1:
-        with tqdmjoblib.apply(tqdm(desc=indent + 'Progress', total=nbatch)) as progress_bar:
-            parallel = Parallel(n_jobs=cpu, prefer='threads')
-            # the outputs are returned in the same order as the submissions
+        parallel = Parallel(n_jobs=cpu, prefer='threads')
+        # Note: the outputs are returned in the same order as the submissions
+        if verbose:
+            with tqdmjoblib.apply(tqdm(desc=indent + 'Progress', total=nbatch)) as progress_bar:
+                results = parallel(delayed(gbif_dateparser)(df, datekey, datestr_index[start:end], format=format) for start,end in index_slides)
+        else:
             results = parallel(delayed(gbif_dateparser)(df, datekey, datestr_index[start:end], format=format) for start,end in index_slides)
         results = list(itertools.chain(*results))
 
     if cpu == 1:
         results = []
-        for start,end in tqdm(index_slides,desc=indent + 'Progress'):
+        if verbose:
+            process = tqdm(index_slides, desc=indent + 'Progress')
+        else:
+            process = index_slides
+        for start,end in process:
             results += gbif_dateparser(df, datekey, datestr_index[start:end], format=format)
+
+    printv('', verbose=verbose)
 
     return results
 
-def assemble_date(df, datekey, outputkey, yearkey=None, monthkey=None, daykey=None, stdnan=True, parallel=False, cpu=None, indent=''):
+def assemble_date(df, datekey, outputkey, yearkey=None, monthkey=None, daykey=None, stdnan=True, parallel=False, cpu=None, verbose=True, indent=''):
 
     if (yearkey is None):
         return df
 
     basedatekey = datekey.split('_processedby_')[0].upper()
+    _, yearkey, _ = getcolumnname.apply(df, yearkey, '', inplace=True)
+    if (monthkey is not None):
+        _, monthkey, _ = getcolumnname.apply(df, monthkey, '', inplace=True)
+    if (daykey is not None):
+        _, daykey, _ = getcolumnname.apply(df, daykey, '', inplace=True)
 
     print_colnames = [yearkey, monthkey, daykey]
-    print_colnames = [col for col in print_colnames if col is not None]
+    print_colnames = [col.split('_processedby_')[0] for col in print_colnames if col is not None]
+    printv(f'* Build date from {", ".join(print_colnames)} columns', verbose=verbose, indent=indent)
+#    printv('', verbose=verbose)
 
     # Exclude lines with a missing or unlikely year value
 
@@ -245,7 +263,7 @@ def assemble_date(df, datekey, outputkey, yearkey=None, monthkey=None, daykey=No
         tempcol.append(daykey)
         joincol.append(daykey)
 
-    df = convertdatetype.apply(df, yearkey=yearkey, monthkey=monthkey, daykey=daykey, drop_inconsistent=False, drop_ambiguous=False, drop_empty=False, indent=indent)
+    df = convertdatetype.apply(df, yearkey=yearkey, monthkey=monthkey, daykey=daykey, drop_inconsistent=False, drop_ambiguous=False, drop_empty=False, verbose=verbose, indent=indent)
     df[tempcol] = df[tempcol].astype('string')
     if (monthkey is not None):
         isonedigit = (df[monthkey].fillna('_MISSING_').str.len()==1)
@@ -257,7 +275,7 @@ def assemble_date(df, datekey, outputkey, yearkey=None, monthkey=None, daykey=No
     # Exclude lines where date and year/month/day values mismatch
 
     tempcol.append('issue_isdatemismatch')
-    df = isdatemismatch.apply(df, datekey, yearkey, *joincol, stdnan=stdnan, cvttype=False, parallel=parallel, cpu=cpu, drop_empty=False, indent=indent)
+    df = isdatemismatch.apply(df, datekey, yearkey, *joincol, stdnan=stdnan, cvttype=False, parallel=parallel, cpu=cpu, drop_empty=False, verbose=False, indent=indent)
     isissue = (~pd.isnull(df['issue_isdatemismatch']))
     df.loc[isissue,'issue_isdatemismatch'] = df.loc[isissue,'issue_isdatemismatch'].str.replace('TEMPORARYPARSEDATE_','',case=True)
     df.loc[isissue,'issue_parsedate'] = df.loc[isissue,'issue_parsedate'].str.cat(df.loc[isissue,'issue_isdatemismatch'], sep=';', na_rep='')
@@ -280,7 +298,6 @@ def assemble_date(df, datekey, outputkey, yearkey=None, monthkey=None, daykey=No
 
     ## Build the date from available year, month, and day values
 
-    print(indent + f'* Build date from {", ".join(print_colnames)} columns')
     df.loc[date2process, outputkey] = df.loc[date2process, yearkey].str.cat(df.loc[date2process, joincol], sep='-', na_rep='')
     df.loc[date2process, outputkey] = df.loc[date2process, outputkey].str.strip('- ')
 
@@ -294,7 +311,7 @@ def assemble_date(df, datekey, outputkey, yearkey=None, monthkey=None, daykey=No
     return df
 
 @export
-def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, format=None, inplace=False, stdnan=True, parallel=False, cpu=None, drop_empty=False, indent=''):
+def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, format=None, inplace=False, stdnan=True, parallel=False, cpu=None, drop_empty=False, verbose=True, indent=''):
 
     if (yearkey is None) and (monthkey is not None):
         raise Exception(f'`parsedate.py` | `monthkey`={monthkey} but `yearkey` is None')
@@ -315,7 +332,7 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, format=None, in
 
     isdate = (~pd.isnull(df[datekey]))
     datestr_index = list(isdate[isdate].index)
-    df.loc[datestr_index,[outputkey,'issue_parsedate']] = parallel_dateparser(df, datekey, datestr_index, format=format, cpu=cpu, indent=indent)
+    df.loc[datestr_index,[outputkey,'issue_parsedate']] = parallel_dateparser(df, datekey, datestr_index, format=format, cpu=cpu, verbose=verbose, indent=indent)
     condition = pd.isnull(df.loc[isdate,[outputkey,'issue_parsedate']]).all(axis=1)
     if condition.any():
         error_index = list(df[condition].index)
@@ -324,12 +341,14 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, format=None, in
     # If no concatenated date is present or parsing fails,
     # construct the date from available year, month and day columns
 
-    df = assemble_date(df, datekey, outputkey=outputkey, yearkey=yearkey, monthkey=monthkey, daykey=daykey, stdnan=stdnan, parallel=parallel, cpu=cpu, indent=indent)
+    df = assemble_date(df, datekey, outputkey=outputkey, yearkey=yearkey, monthkey=monthkey, daykey=daykey, stdnan=stdnan, parallel=parallel, cpu=cpu, verbose=verbose, indent=indent)
 
     df['issue_parsedate'] = df['issue_parsedate'].astype('string')
     df[outputkey] = df[outputkey].astype('string')
 
     if drop_empty and pd.isnull(df['issue_parsedate']).all():
         df.drop(columns=['issue_parsedate'], inplace=True)
+
+    printv('', verbose=verbose)
 
     return df
