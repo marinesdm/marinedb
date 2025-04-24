@@ -20,6 +20,8 @@ from importlib.resources import files
 from marinedb.utils import tqdmjoblib
 from marinedb.utils import standardizenan
 from marinedb.utils.allexport import export
+from marinedb.utils.printverbose import printv
+
 from marinedb.tools.temporal import convertdatetype
 
 # Global variables
@@ -319,7 +321,7 @@ def get_mismatchissue(df, batch, paramsK, paramsV, verbose=False, indent=''):
     return result
 
 @export
-def apply(df, datekey, yearkey, monthkey=None, daykey=None, stdnan=True, cvttype=True, parallel=False, cpu=None, drop_empty=False, indent=''):
+def apply(df, datekey, yearkey, monthkey=None, daykey=None, stdnan=True, cvttype=True, parallel=False, cpu=None, drop_empty=False, verbose=True, indent=''):
 
     # WARNING:
     # This code detects mismatches between a date string and year, month, and/or day values.
@@ -365,13 +367,13 @@ def apply(df, datekey, yearkey, monthkey=None, daykey=None, stdnan=True, cvttype
 
     if stdnan:
         # prevent mismatches caused by unrecognized missing values
-        print(indent + '* Apply standardizenan')
+        printv('* Apply standardizenan', verbose=verbose, indent=indent)
         df = standardizenan.apply(df, key=paramsV)
 
     if cvttype:
         # prevent mismatches caused by invalid year/month/day strings
-        print(indent + '* Apply convertdatetype')
-        df = convertdatetype.apply(df, yearkey=yearkey, monthkey=monthkey, daykey=daykey, drop_inconsistent=False, drop_ambiguous=False, drop_empty=drop_empty, indent=indent)
+        printv('* Apply convertdatetype', verbose=verbose, indent=indent)
+        df = convertdatetype.apply(df, yearkey=yearkey, monthkey=monthkey, daykey=daykey, drop_inconsistent=False, drop_ambiguous=False, drop_empty=drop_empty, verbose=verbose, indent=indent)
 
     # Check for mismatches between the date string and the year, month, or day strings
 
@@ -389,17 +391,20 @@ def apply(df, datekey, yearkey, monthkey=None, daykey=None, stdnan=True, cvttype
         nbatch = len(batches)
         cpu = min(cpu, nbatch)
 
-        print(indent + f'* Process | {ndates} lines to process ({nbatch} batches)')
-        print(indent + f'INFO | {cpu} CPUs will be used')
+        printv(f'* Process | {ndates} lines to process ({nbatch} batches)', verbose=verbose, indent=indent)
+        printv(f'INFO | {cpu} CPUs will be used', verbose=verbose, indent=indent)
 
-        with tqdmjoblib.apply(tqdm(desc=indent + 'Progress', total=nbatch)) as progress_bar:
+        if verbose:
+            with tqdmjoblib.apply(tqdm(desc=indent + 'Progress', total=nbatch)) as progress_bar:
+                results = Parallel(n_jobs=cpu)(delayed(get_mismatchissue)(df, batch, paramsK, paramsV, verbose=False, indent=indent) for batch in batches)
+        else:
             results = Parallel(n_jobs=cpu)(delayed(get_mismatchissue)(df, batch, paramsK, paramsV, verbose=False, indent=indent) for batch in batches)
         results = list(itertools.chain(*results))
 
         df.loc[isdateindex,'issue_isdatemismatch'] = results
 
     else:
-        df.loc[isdateindex,'issue_isdatemismatch'] = get_mismatchissue(df, isdateindex, paramsK, paramsV, verbose=True, indent=indent)
+        df.loc[isdateindex,'issue_isdatemismatch'] = get_mismatchissue(df, isdateindex, paramsK, paramsV, verbose=verbose, indent=indent)
 
     # Clean columns
 
