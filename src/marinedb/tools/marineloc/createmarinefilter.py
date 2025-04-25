@@ -4,7 +4,7 @@
 # External import
 
 import os
-#import glob
+import time
 import argparse
 import numpy as np
 import pandas as pd
@@ -13,6 +13,8 @@ from tqdm import tqdm
 # Internal import
 
 from marinedb.utils.allexport import export
+from marinedb.utils.printverbose import printv
+
 from marinedb.tools.marineloc import island
 
 # Global variable
@@ -30,7 +32,7 @@ def write(df, txt_filename, sep='\t', init=False):
 
     return True
 
-def extract_marine_locations(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=None, outputdir='', store_time=True, parallel=False, cpu=None, indent=''):
+def extract_marine_locations(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=None, outputdir='', store_time=True, parallel=False, cpu=None, verbose=True, indent=''):
 
     params = {
               'fileslist': fileslist,
@@ -43,10 +45,11 @@ def extract_marine_locations(inputdir, latkey, lonkey, idxkey, sep='\t', filesli
               'parallel': parallel,
               'cpu': cpu,
               'store_time': store_time,
+              'verbose': verbose,
               'indent': indent
              }
 
-    print(indent + f'* Extract marine coordinates')
+    printv(f'* Extract marine coordinates', verbose=verbose, indent=indent)
 
     params['indent'] += '  '
 
@@ -54,11 +57,19 @@ def extract_marine_locations(inputdir, latkey, lonkey, idxkey, sep='\t', filesli
 
     return outputdir
 
-def extract_marine_indices(inputdir, outputfile='marine_filter', sep='\t', indent=''):
+def extract_marine_indices(inputdir, outputfile='marine_filter', sep='\t', verbose=True, indent=''):
 
-    print(indent + f'* Extract indices corresponding to marine coordinates')
+    printv(f'* Extract indices corresponding to marine coordinates', verbose=verbose, indent=indent)
+
+    start = time.time()
 
     sep = sep.encode('utf-8').decode('unicode_escape')
+
+    if 'filter' not in outputfile:
+        temp = outputfile.split('.')
+        outputfile = temp[0] + '_filter'
+        if len(temp) == 2:
+            outputfile += f'.{temp[1]}'
 
     if len(os.path.dirname(outputfile)) == 0:
         outputfile = os.path.join(inputdir,outputfile)
@@ -66,10 +77,10 @@ def extract_marine_indices(inputdir, outputfile='marine_filter', sep='\t', inden
     # If a file has been processed multiple times,
     # consider only one corresponding `island.py` output file
 
-    files = sorted([os.path.join(inputdir,file) for file in os.listdir(inputdir) if ('time' not in file) and ('filter' not in file)])
+    files = sorted([os.path.join(inputdir,file) for file in os.listdir(inputdir) if os.path.isfile(os.path.join(inputdir,file)) and ('time' not in file) and ('filter' not in file)])
     Nfiles = len(files)
 
-    print(indent + f'** Deduplicate entries across the {Nfiles} files in {inputdir}')
+    printv(f'* Deduplicate entries across the {Nfiles} files in {inputdir}', verbose=verbose, indent=indent + '  ')
 
     files2process = pd.DataFrame(files, columns=['filepath'])
     files2process['basename'] = ['_'.join(os.path.basename(file).split('_')[:-1]) for file in files2process['filepath']] # format: 'inputfilename_device'
@@ -79,12 +90,16 @@ def extract_marine_indices(inputdir, outputfile='marine_filter', sep='\t', inden
 
     # Keep only the indices corresponding to locations not classified as land
 
-    print(indent + f'** Extract indices from {len(files)} files')
+    printv(f'* Extract indices from {len(files)} files', verbose=verbose, indent=indent + '  ')
 
     init_array = True
     init_storage = True
 
-    for file in tqdm(files, total=len(files), desc=indent + 'Progress'):
+    if verbose:
+        process = tqdm(files, total=len(files), desc=indent + '  Progress')
+    else:
+        process = files
+    for file in process:
 
         df_file = pd.read_csv(file, header=0, sep=sep, engine='python')
         df_file = df_file[~df_file['island']]
@@ -110,10 +125,14 @@ def extract_marine_indices(inputdir, outputfile='marine_filter', sep='\t', inden
         marinedata['index'] = marinedata['index'].astype(int)
         write(marinedata, outputfile, init=init_storage, sep=sep)
 
+    end = time.time()
+
+    printv(f'TIME : {round(end - start,0)}s', verbose=verbose, indent=indent + '  ')
+
     return outputfile
 
 @export
-def apply(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=None, outputdir='', store_time=True, parallel=False, cpu=None, outputfile='marine_filter', indent=''):
+def apply(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=None, outputdir='', store_time=True, parallel=False, cpu=None, outputfile='marine_filter', verbose=True, indent=''):
 
     params_marineloc = {
                         'inputdir': inputdir,
@@ -127,17 +146,19 @@ def apply(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=N
                         'parallel': parallel,
                         'cpu': cpu,
                         'store_time': store_time,
+                        'verbose': verbose,
                         'indent': indent
                        }
 
     outputdir = extract_marine_locations(**params_marineloc)
 
-    print()
+    printv('', verbose=verbose)
 
     params_marineidx = {
                         'inputdir': outputdir,
                         'outputfile': outputfile,
                         'sep': sep,
+                        'verbose': verbose,
                         'indent': indent
                        }
 
