@@ -11,30 +11,34 @@ import numpy as np
 
 from marinedb.utils import readfile
 from marinedb.utils.allexport import export
+from marinedb.utils.printverbose import printv
 
 # Global variables
 
 __all__ = [] # populated using the @export decorator
 
 
-def store(data, outputpath, indent=''):
+def store(data, outputfile, verbose=True, indent=''):
 
-    print(indent + f'>>> save {len(data)} marine data to {outputpath}')
+    printv(f'>>> save {len(data)} marine data to {outputfile}', verbose=verbose, indent=indent)
 
-    with open(outputpath, 'a') as outputfile:
-        outputfile.writelines(data)
+    with open(outputfile, 'a') as file:
+        file.writelines(data)
 
     return True
 
 @export
-def apply(inputfile, filterfile, inputfile_sep='\t', filter_sep='\t', outputpath='', indent=''):
+def apply(inputfile, filterfile, inputfile_sep='\t', filter_sep='\t', outputfile='', verbose=True, indent=''):
 
     inputfile_sep = inputfile_sep.encode('utf-8').decode('unicode_escape')
     filter_sep = filter_sep.encode('utf-8').decode('unicode_escape')
 
-    if len(outputpath) == 0:
-        outputpath = inputfile.split('.')[:-1][0]
-        outputpath = outputpath + '_marine'
+    if len(outputfile) == 0:
+        temp = inputfile.split('.')
+        assert len(temp) <= 2
+        outputfile = temp[0] + '_marine'
+        if len(temp) == 2:
+            outputfile += f'.{temp[1]}'
 
     data = []
     count = 1
@@ -66,16 +70,14 @@ def apply(inputfile, filterfile, inputfile_sep='\t', filter_sep='\t', outputpath
 
             # Create the header for the outputfile
 
-            with open(outputpath, 'w') as outputfile:
-                outputfile.write(inputfile_sep.join(header))
+            with open(outputfile, 'w') as file:
+                file.write(inputfile_sep.join(header))
 
             # Read the input file until all entries matching the indices from the filter file have been retrieved
 
-            #print()
-            print(indent + f'--- Start filtering marine locations ---')
-            print(indent + f'input file: {inputfile}')
-            print(indent + f'filter file: {filterfile}')
-            #print()
+            printv(f'--- Start filtering marine locations ---', verbose=verbose, indent=indent)
+            printv(f'input file: {inputfile}', verbose=verbose, indent=indent)
+            printv(f'filter file: {filterfile}', verbose=verbose, indent=indent)
 
             for idx, line in enumerate(inputdata):
 
@@ -85,21 +87,21 @@ def apply(inputfile, filterfile, inputfile_sep='\t', filter_sep='\t', outputpath
 
                     if len(obs) != Ncolumns:
                         error += 1
-                        print()
-                        print(indent + f'SplittingError: splitting line n°{idx + 2} yields a different number of fields ({len(obs)}) than the header ({Ncolumns}).')
-                        print(indent + f'                line n°{idx + 2} is skipped : {line}')
-                        print()
+                        printv('', verbose=verbose)
+                        printv(f'SplittingError: splitting line n°{idx + 2} yields a different number of fields ({len(obs)}) than the header ({Ncolumns}).', verbose=verbose, indent=indent)
+                        printv(f'line n°{idx + 2} is skipped : {line}', verbose=verbose, indent=indent)
+                        printv('', verbose=verbose)
                     else:
                         data.append(inputfile_sep.join(obs))
 
                     ## Save data every 50,000 lines
 
-                    if (count%50000) == 0:
-                        store(data, outputpath, indent=indent)
+                    if (count%100000) == 0:
+                        store(data, outputfile, verbose=verbose, indent=indent)
                         data.clear()
 
-                    if (count%100000) == 0:
-                        print(indent + f'Processing | {count} lines done (input file: line {idx})')
+                    if (count%1000000) == 0:
+                        printv(f'Processing | {count} lines done (input file: line {idx})', verbose=verbose, indent=indent)
 
                     ## Next filter index
 
@@ -110,24 +112,21 @@ def apply(inputfile, filterfile, inputfile_sep='\t', filter_sep='\t', outputpath
                     index = int(index.strip('\n').split(filter_sep)[index_idx])
                     count += 1
 
-    store(data, outputpath, indent=indent)
+    store(data, outputfile, verbose=verbose, indent=indent)
     end = time.time()
 
     if index != '':
-        #print()
-        print(indent + f'WARNING | Some filter indices remain unprocessed. An issue may have occurred.')
+        printv(f'WARNING | Some filter indices remain unprocessed. An issue may have occurred.', verbose=verbose, indent=indent)
 
-    #print()
-    print(indent + f'--- End filtering marine location ---')
-    #print()
-    print(indent + f'TIME : {np.round(end-start,0)}s')
-    print(indent + f'COUNT: {count} marine data')
+    printv(f'--- End filtering marine location ---', verbose=verbose, indent=indent)
 
+    printv(f'TIME : {np.round(end-start,0)}s', verbose=verbose, indent=indent)
+    printv(f'COUNT: {count} marine data', verbose=verbose, indent=indent)
     if error != 0:
-        print(indent + f'ERROR:')
-        print(indent + f'SplittingError: {error} observations produced a different number of fields upon splitting compared to the header, and were consequently ignored.')
+        printv(f'ERROR:', verbose=verbose, indent=indent)
+        printv(f'SplittingError: {error} observations produced a different number of fields upon splitting compared to the header, and were consequently ignored.', verbose=verbose, indent=indent)
 
-    return outputpath
+    return outputfile
 
 if __name__ == '__main__':
 
@@ -143,8 +142,8 @@ if __name__ == '__main__':
     filterfile = args.filter_file
     inputfile_sep = args.inputfile_delimiter.encode('utf-8').decode('unicode_escape')
     filter_sep = args.filter_delimiter.encode('utf-8').decode('unicode_escape')
-    outputpath = args.output_file
+    outputfile = args.output_file
 
     print(f'`filtermarinelocations.py` | Retrieve data from the input file corresponding to the indices in the filter file')
 
-    _ = apply(inputfile, filterfile, inputfile_sep=inputfile_sep, filter_sep=filter_sep, outputpath=outputpath)
+    _ = apply(inputfile, filterfile, inputfile_sep=inputfile_sep, filter_sep=filter_sep, outputfile=outputfile)
