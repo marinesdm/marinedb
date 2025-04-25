@@ -421,12 +421,12 @@ def list_unprocessed_files(inputdir, outputdir):
 ## Times
 
 @export
-def concat_times(outputdir, outputfile='time.csv', delete=True, overwrite=False):
+def concat_times(inputdir, outputfile='time.csv', delete=True, overwrite=False):
 
-    files2process = [join(outputdir,file) for file in os.listdir(outputdir) if 'time_' in file]
+    files2process = [join(inputdir,file) for file in os.listdir(inputdir) if 'time_' in file]
 
     if os.path.dirname(outputfile) == '':
-        directory = join(outputdir,'stats')
+        directory = join(inputdir,'stats')
         try:
             os.mkdir(directory)
         except FileExistsError:
@@ -477,10 +477,10 @@ def concat_times(outputdir, outputfile='time.csv', delete=True, overwrite=False)
 ## Land/sea/coast statistics
 
 @export
-def land_sea_statistics(outputdir, outputfile='statistics', sep='\t', overwrite=False):
+def land_sea_statistics(inputdir, outputfile='statistics', sep='\t', overwrite=False):
 
     sep = sep.encode('utf-8').decode('unicode_escape')
-    files = [join(outputdir,file) for file in os.listdir(outputdir) if ('split' in file) and ('time' not in file)]
+    files = [join(inputdir,file) for file in os.listdir(inputdir) if ('split' in file) and ('time' not in file)]
 
     # Compute statistics
 
@@ -530,7 +530,7 @@ def land_sea_statistics(outputdir, outputfile='statistics', sep='\t', overwrite=
     # Store
 
     if os.path.dirname(outputfile) == '':
-        directory = join(outputdir,'stats')
+        directory = join(inputdir,'stats')
         try:
             os.mkdir(directory)
         except FileExistsError:
@@ -555,20 +555,20 @@ def land_sea_statistics(outputdir, outputfile='statistics', sep='\t', overwrite=
 ## Plot
 
 @export
-def plot_time(time, show=True, store=True, outputfile='time.png', outputdir='./'):
+def plot_time(df_time, show=True, store=True, outputfile='time.png', outputdir='./'):
 
-    time['hour_rounded'] = np.round((time['time']/60)/60,0)
-    time['hour_rounded'] = time['hour'].astype('int')
+    df_time['hour_rounded'] = np.round((df_time['time']/60)/60,0)
+    df_time['hour_rounded'] = df_time['hour'].astype('int')
 
     fig, axarr = plt.subplots(1,2,figsize=(15,8), width_ratios=[1,4])
     plt.tight_layout(pad=4)
 
-    sns.boxplot(y='time', data=time, notch=True, showcaps=False, medianprops={'color':'coral'}, whis=[1,99], showmeans=True, ax=axarr[0])
-    #sns.swarmplot(y='time', data=time, color='black', alpha=0.5, ax=axarr[0])
+    sns.boxplot(y='time', data=df_time, notch=True, showcaps=False, medianprops={'color':'coral'}, whis=[1,99], showmeans=True, ax=axarr[0])
+    #sns.swarmplot(y='time', data=df_time, color='black', alpha=0.5, ax=axarr[0])
     axarr[0].set_ylabel('')
     axarr[0].set_xlabel('time per file (seconds)')
 
-    sns.countplot(x='hour_rounded', data=time, color='teal', ax=axarr[1])
+    sns.countplot(x='hour_rounded', data=df_time, color='teal', ax=axarr[1])
     axarr[1].set_xlabel('time per file (hours)')
 
     if show:
@@ -592,12 +592,12 @@ def plot_time(time, show=True, store=True, outputfile='time.png', outputdir='./'
     return True
 
 @export
-def plot_coastVStime(time, stats, show=True, store=True, outputfile='coastVStime.png', outputdir='./'):
+def plot_coastVStime(df_time, df_stats, show=True, store=True, outputfile='coastVStime.png', outputdir='./'):
 
-    stats = stats.drop_duplicates(subset=['filename_input'],keep='first')
-    time = time[['time','filename_input']].groupby('filename_input').agg({'time':'mean'}).reset_index()
+    df_stats = df_stats.drop_duplicates(subset=['filename_input'],keep='first')
+    df_time = df_time[['time','filename_input']].groupby('filename_input').agg({'time':'mean'}).reset_index()
 
-    table = pd.merge(time,stats[['filename_input','mask_2','pct_coast']],how='inner',on='filename_input')
+    table = pd.merge(df_time,df_stats[['filename_input','mask_2','pct_coast']],how='inner',on='filename_input')
 
     ax = table.plot.scatter(x='mask_2',y='time',alpha=0.6,figsize=(30,20),s=20)
     ax.set_xlabel('number of coastal locations')
