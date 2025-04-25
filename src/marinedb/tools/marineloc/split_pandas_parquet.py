@@ -41,7 +41,8 @@ def split_pandas(inputfile, columns=None, sep='\t', chunksize=CHUNKSIZE, outputd
     basename = os.path.basename(inputfile).split('.')[0]
     with pd.read_csv(inputfile, **params) as reader:
         for i,chunk in enumerate(reader):
-            chunk = chunk.reset_index()
+            if 'index' not in chunk.columns:
+                chunk = chunk.reset_index()
             chunkpath = os.path.join(outputdir, basename + '_split%04d' % i)
             printv(f'>>> store {chunkpath}', verbose=verbose, indent=indent + '  ')
             chunk.to_csv(chunkpath, sep=sep, index=False)
