@@ -16,14 +16,24 @@ from marinedb.tools import isin
 __all__ = [] # populated using the @export decorator
 
 @export
-def apply(df, key, values, flag=False, flagname_mapping=None, dropna=False, indent=''):
+def apply(df, key, values, flag=False, minimize_flagname=False, flagname_mapping=None, dropna=False, verbose=True, indent='', outputdir='./'):
 
     df, key, _ = getcolumnname.apply(df, key, '', inplace=True)
 
     # Run `isin` on the `key` column
 
+    params = {
+              'flag': True,
+              'minimize_flagname': minimize_flagname,
+              'flagname_mapping': flagname_mapping,
+              'dropna': False,
+              'verbose': verbose,
+              'indent': indent,
+              'outputdir': outputdir
+             }
+
     try:
-        df = isin.apply(df, key, values, flag=True, flagname_mapping=flagname_mapping, indent=indent)
+        df = isin.apply(df, key, values, **params)
     except Exception as err:
         raise Exception(f"`notisin.py` | {str(err).split('|')[-1]}")
 
