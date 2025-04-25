@@ -8,9 +8,12 @@ import pandas as pd
 
 # Internal import
 
+from marinedb.utils.printverbose import printv
+
 from marinedb.tools.marineloc import createmask
 from marinedb.tools.marineloc import createmarinefilter
 from marinedb.tools.marineloc import filtermarinelocations
+from marinedb.tools.marineloc import split_pandas_parquet
 
 # Global variables
 
@@ -18,107 +21,116 @@ __all__ = ['apply']
 
 CHUNKSIZE = 100000
 
-def apply(datafile, latkey, lonkey, idxkey='', uncompressed_chunks_dir='',  sep='\t', fileslist=None, kernel_type=None, kernel_size=None, maskfile=None, outputdir='', store_time=True, parallel=False, cpu=None, filterfile='marine_filter', outputfile='', indent=''):
+def apply(datafile, latkey='', lonkey='', idxkey='', uncompressed_chunks_dir='',  sep='\t', fileslist=None, kernel_type=None, kernel_size=None, maskfile=None, chunksize=CHUNKSIZE, split_type='', outputdir='', store_time=True, parallel=False, cpu=None, filterfile='marine_filter', outputfile='', verbose=True, indent=''):
 
-    # Split the file into CHUNKSIZE-line chunks
+    sep = sep.encode('utf-8').decode('unicode_escape')
 
-    if (len(uncompressed_chunks_dir) == 0):
-        uncompressed_chunks_dir = os.path.join(os.path.dirname(datafile), 'split')
+    if (len(filterfile) == 0) or ((len(filterfile) != 0) and (not os.path.isfile(filterfile))):
 
-    if (not os.path.isdir(uncompressed_chunks_dir)):
-        os.mkdir(uncompressed_chunks_dir)
+        if len(latkey) == 0:
+            raise ValueError(f'`marineloc.py` | `latkey` must be specified when no `filterfile` is provided')
+        if len(lonkey) == 0:
+            raise ValueError(f'`marineloc.py` | `lonkey` must be specified when no `filterfile` is provided')
 
-    if (len(os.listdir(uncompressed_chunks_dir)) == 0):
+        # Split the file into CHUNKSIZE-line chunks
 
-        print(indent + f'* Split {datafile} into {CHUNKSIZE}-lines chunks')
-        print()
+        issplitdir = (len(uncompressed_chunks_dir) != 0)
+        if not issplitdir:
+            uncompressed_chunks_dir = os.path.dirname(datafile)
 
-        isindex = (len(idxkey) != 0)
-        if not isindex:
+        isnotempty = os.path.isdir(uncompressed_chunks_dir) and (len(os.listdir(uncompressed_chunks_dir)) != 0)
+        issplit = issplitdir and isnotempty
+        if not issplit:
+            columns = [latkey, lonkey]
+            uncompressed_chunks_dir = split_pandas_parquet.apply(datafile, split_type=split_type, columns=columns, sep=sep, chunksize=chunksize, outputdir=uncompressed_chunks_dir, verbose=verbose, indent=indent)
             idxkey = 'index'
+            printv('', verbose=verbose)
+        else:
+            if len(idxkey) == 0:
+                raise ValueError('`marineloc.py` | `idxkey` must be specified when `datafile` has already been split into multiple files')
 
-        i = 0
-        basename = os.path.basename(datafile).split('.')[0]
-        with pd.read_csv(datafile, sep='\t', chunksize=CHUNKSIZE) as reader:
-            for chunk in reader:
-                if not isindex:
-                    chunk = chunk.reset_index()
-                chunkpath = os.path.join(uncompressed_chunks_dir, basename + '_split%04d' % i)
-                print(indent + '   ' + f'>>> store {chunkpath}')
-                chunk[[latkey, lonkey, idxkey]].to_csv(chunkpath, sep='\t', index=False)
-                i += 1
-        print()
-    else:
-        if len(idxkey) == 0:
-            raise ValueError('`marineloc.py` | `idxkey` must be specified when `datafile` has already been split into multiple files')
-
-    if len(outputdir) == 0:
-        outputdir = os.path.join(uncompressed_chunks_dir,'marineloc')
+        if len(outputdir) == 0:
+            outputdir = os.path.join(uncompressed_chunks_dir,'marineloc')
+        else:
+            outputdir = os.path.join(outputdir, 'marineloc')
         try:
             os.mkdir(outputdir)
         except FileExistsError:
             pass
 
-    # Generate a mask differentiating land, sea, and coast
+        # Generate a mask differentiating land, sea, and coast
 
-    if (kernel_type is not None) and (kernel_size is not None):
+        if (kernel_type is not None) and (kernel_size is not None):
 
-        print(indent + '** createmask')
-        print()
+            printv('** createmask', verbose=verbose, indent=indent)
+            printv('', verbose=verbose)
 
-        if maskfile is not None:
+            if (maskfile is not None) and (len(maskfile) != 0) and os.path.isfile(maskfile):
 
-            print(indent + 'INFO | Since `maskfile` is provided, `mask_type` and `mask_size` will be ignored')
+                printv('INFO | Since `maskfile` is provided, `mask_type` and `mask_size` will be ignored', verbose=verbose, indent=indent)
 
-        else:
+            else:
 
-            params_mask = {
-                           'kernel_type': kernel_type,
-                           'kernel_size': kernel_size,
-                           'outputdir': outputdir,
-                           'indent': indent + '   '
-                          }
+                params_mask = {
+                               'kernel_type': kernel_type,
+                               'kernel_size': kernel_size,
+                               'outputdir': outputdir,
+                               'verbose': verbose,
+                               'indent': indent + '   '
+                              }
 
-            maskfile = createmask.apply(**params_mask)
+                maskfile = createmask.apply(**params_mask)
 
-            print()
+                printv('', verbose=verbose)
 
-    # Extract indices corresponding to marine occurrences
+        # Extract indices corresponding to marine occurrences
 
-    print(indent + '** createmarinefilter')
-    print()
+        printv('** createmarinefilter', verbose=verbose, indent=indent)
+        printv('', verbose=verbose)
 
-    params_marinefilter = {
-                           'inputdir': uncompressed_chunks_dir,
-                           'fileslist': fileslist,
-                           'latkey': latkey,
-                           'lonkey': lonkey,
-                           'idxkey': idxkey,
-                           'sep': sep,
-                           'maskfile': maskfile,
-                           'outputdir': outputdir,
-                           'outputfile': filterfile,
-                           'parallel': parallel,
-                           'cpu': cpu,
-                           'store_time': store_time,
-                           'indent': indent + '   '
-                          }
+        params_marinefilter = {
+                               'inputdir': uncompressed_chunks_dir,
+                               'fileslist': fileslist,
+                               'latkey': latkey,
+                               'lonkey': lonkey,
+                               'idxkey': idxkey,
+                               'sep': sep,
+                               'maskfile': maskfile,
+                               'outputdir': outputdir,
+                               'outputfile': filterfile,
+                               'parallel': parallel,
+                               'cpu': cpu,
+                               'store_time': store_time,
+                               'verbose': verbose,
+                               'indent': indent + '   '
+                              }
 
-    filterfile = createmarinefilter.apply(**params_marinefilter)
+        filterfile = createmarinefilter.apply(**params_marinefilter)
 
-    print()
+        printv('', verbose=verbose)
 
     # Filter for marine occurrences
 
-    print(indent + '** filtermarinelocations')
-    print()
+    printv('** filtermarinelocations', verbose=verbose, indent=indent)
+    printv('', verbose=verbose)
 
+    if len(outputdir) != 0:
+        if len(outputfile) == 0:
+            temp = os.path.basename(inputfile).split('.')
+            outputfile = temp[0] + '_marine'
+            if len(temp) == 2:
+                outputfile += f'.{temp[1]}'
+            outputfile = os.path.join(outputdir, outputfile)
+        if len(os.path.dirname(outputfile)) == 0:
+            outputfile = os.path.join(outputdir, outputfile)
+    print(outputfile)
     params_filterdata = {
                          'inputfile': datafile,
                          'filterfile': filterfile,
                          'inputfile_sep': sep,
                          'filter_sep': sep,
-                         'outputpath': outputfile,
+                         'outputfile': outputfile,
+                         'verbose': verbose,
                          'indent': indent  + '   '
                         }
 
