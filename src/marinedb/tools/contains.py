@@ -16,14 +16,24 @@ from marinedb.utils.allexport import export
 __all__ = [] # populated using the @export decorator
 
 @export
-def apply(df, key, values, flag=False, minimize_flagname=False, flagname_mapping=None, dropna=False, verbose=True, indent=''):
+def apply(df, key, values, flag=False, minimize_flagname=False, flagname_mapping=None, dropna=False, verbose=True, indent='', outputdir='./'):
 
     df, key, _ = getcolumnname.apply(df, key, '', inplace=True)
 
     # Run `doesnotcontain` on the `key` column
 
+    params = {
+              'flag': True,
+              'minimize_flagname': minimize_flagname,
+              'flagname_mapping': flagname_mapping,
+              'dropna': False,
+              'verbose': verbose,
+              'indent': indent,
+              'outputdir': outputdir
+             }
+
     try:
-        df = doesnotcontain.apply(df, key, values, flag=True, minimize_flagname=minimize_flagname, flagname_mapping=flagname_mapping, dropna=False, verbose=verbose, indent=indent)
+        df = doesnotcontain.apply(df, key, values, **params)
     except ValueError as err:
         raise ValueError(f"`contains.py` | {str(err).split('|')[-1]}")
 
