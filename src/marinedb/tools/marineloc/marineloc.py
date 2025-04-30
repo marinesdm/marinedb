@@ -50,7 +50,8 @@ def apply(datafile, latkey='', lonkey='', idxkey='', uncompressed_chunks_dir='',
                 raise ValueError('`marineloc.py` | `idxkey` must be specified when `datafile` has already been split into multiple files')
 
         if len(outputdir) == 0:
-            outputdir = os.path.join(uncompressed_chunks_dir,'marineloc')
+            uncompressed_chunks_dir_wo_split = '/'.join(uncompressed_chunks_dir.split('/')[:-1])
+            outputdir = os.path.join(uncompressed_chunks_dir_wo_split,'marineloc')
         else:
             outputdir = os.path.join(outputdir, 'marineloc')
         try:
@@ -115,6 +116,14 @@ def apply(datafile, latkey='', lonkey='', idxkey='', uncompressed_chunks_dir='',
     printv('', verbose=verbose)
 
     if len(outputdir) != 0:
+
+        if 'marineloc' not in outputdir.split('/'):
+            outputdir = os.path.join(outputdir, 'marineloc')
+            try:
+                os.mkdir(outputdir)
+            except FileExistsError:
+                pass
+
         if len(outputfile) == 0:
             temp = os.path.basename(inputfile).split('.')
             outputfile = temp[0] + '_marine'
@@ -123,7 +132,7 @@ def apply(datafile, latkey='', lonkey='', idxkey='', uncompressed_chunks_dir='',
             outputfile = os.path.join(outputdir, outputfile)
         if len(os.path.dirname(outputfile)) == 0:
             outputfile = os.path.join(outputdir, outputfile)
-    print(outputfile)
+
     params_filterdata = {
                          'inputfile': datafile,
                          'filterfile': filterfile,
