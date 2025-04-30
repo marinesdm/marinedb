@@ -162,6 +162,19 @@ def isvaliddate(df, yearkey, monthkey, daykey):
 @export
 def apply(df, datekey=None, yearkey=None, monthkey=None, daykey=None, format='ISO8601', drop_inconsistent=False, drop_ambiguous=False, drop_empty=False, verbose=True, indent=''):
 
+    if (datekey is not None) and (datekey not in df.columns):
+        printv(f"INFO | Since '{datekey}' was not found in the columns, it will be ignored", verbose=verbose, indent=indent)
+        datekey = None
+    if (yearkey is not None) and (yearkey not in df.columns):
+        printv(f"INFO | Since '{yearkey}' was not found in the columns, it will be ignored", verbose=verbose, indent=indent)
+        yearkey = None
+    if (monthkey is not None) and (monthkey not in df.columns):
+        printv(f"INFO | Since '{monthkey}' was not found in the columns, it will be ignored", verbose=verbose, indent=indent)
+        monthkey = None
+    if (daykey is not None) and (daykey not in df.columns):
+        printv(f"INFO | Since '{daykey}' was not found in the columns, it will be ignored", verbose=verbose, indent=indent)
+        daykey = None
+
     if (datekey is None) and (yearkey is None) and (monthkey is None) and (daykey is None):
         printv('INFO | No column specified, the dataframe is returned as is', verbose=verbose, indent=indent)
         return df
