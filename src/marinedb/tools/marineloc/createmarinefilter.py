@@ -34,6 +34,8 @@ def write(df, txt_filename, sep='\t', init=False):
 
 def extract_marine_locations(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=None, outputdir='', store_time=True, parallel=False, cpu=None, verbose=True, indent=''):
 
+    sep = sep.encode('utf-8').decode('unicode_escape')
+
     params = {
               'fileslist': fileslist,
               'latkey': latkey,
@@ -101,7 +103,7 @@ def extract_marine_indices(inputdir, outputfile='marine_filter', sep='\t', verbo
         process = files
     for file in process:
 
-        df_file = pd.read_csv(file, header=0, sep=sep, engine='python')
+        df_file = pd.read_csv(file, sep=sep, engine='python')
         df_file = df_file[~df_file['island']]
 
         if init_array and len(df_file) != 0:
@@ -133,6 +135,8 @@ def extract_marine_indices(inputdir, outputfile='marine_filter', sep='\t', verbo
 
 @export
 def apply(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=None, outputdir='', store_time=True, parallel=False, cpu=None, outputfile='marine_filter', verbose=True, indent=''):
+
+    sep = sep.encode('utf-8').decode('unicode_escape')
 
     params_marineloc = {
                         'inputdir': inputdir,

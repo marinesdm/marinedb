@@ -20,6 +20,8 @@ CHUNKSIZE = 100000
 
 def split_pandas(inputfile, columns=None, sep='\t', chunksize=CHUNKSIZE, outputdir='./', verbose=True, indent=''):
 
+    sep = sep.encode('utf-8').decode('unicode_escape')
+
     if 'split' not in outputdir.split('/')[-2:]:
         outputdir = os.path.join(outputdir, 'split')
     try:

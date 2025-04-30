@@ -60,8 +60,6 @@ def apply(df, key, values, flag=False, minimize_flagname=False, flagname_mapping
         value_update = {val: (start_idx + idx) for idx, val in enumerate(value_update)}
         flagname_mapping.update(value_update)
         printv(f'INFO | `flagname_mapping` is set to {flagname_mapping}', verbose=verbose, indent=indent)
-#        value_str = '-'.join([str(val) for val in values])
-#        outputfile = os.path.join(outputdir,f'{key}_doesnotcontain_{value_str}_mapping.json')
         printv(f'INFO | Save `flagname_mapping` to {outputfile}', verbose=verbose, indent=indent)
         with open(outputfile, 'w', encoding='utf-8') as file:
             json.dump(flagname_mapping, file, ensure_ascii=False, indent=4)

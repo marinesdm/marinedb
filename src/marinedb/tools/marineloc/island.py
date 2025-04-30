@@ -253,7 +253,7 @@ def process_one_file(filepath, latkey, lonkey, idxkey, sep='\t', outputdir='./',
 
     printv('* Processing ' + filepath, verbose=verbose_func, indent=indent)
 
-    data = pd.read_csv(filepath, sep=sep)
+    data = pd.read_csv(filepath, sep=sep, engine='python')
     data_processed = island(data[latkey], data[lonkey], verbose=verbose_func, indent=indent)
     data_processed['index'] = data[idxkey].values
 
@@ -280,6 +280,8 @@ def process_one_file(filepath, latkey, lonkey, idxkey, sep='\t', outputdir='./',
 
 @export
 def apply(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=None, outputdir='', store_time=True, parallel=False, cpu=None, verbose=True, indent=''):
+
+    sep = sep.encode('utf-8').decode('unicode_escape')
 
     inputdir = os.path.expanduser(inputdir)
     if not os.path.isdir(inputdir):
@@ -480,6 +482,7 @@ def concat_times(inputdir, outputfile='time.csv', delete=True, overwrite=False):
 def land_sea_statistics(inputdir, outputfile='statistics', sep='\t', overwrite=False):
 
     sep = sep.encode('utf-8').decode('unicode_escape')
+
     files = [join(inputdir,file) for file in os.listdir(inputdir) if ('split' in file) and ('time' not in file)]
 
     # Compute statistics
