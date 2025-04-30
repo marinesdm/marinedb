@@ -162,7 +162,7 @@ def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_numb
         if drop_empty and pd.isnull(df['issue_processdateinterval']).all():
             dropcolumns += ['issue_processdateinterval']
         if not flag:
-            dropcolumns += flagname
+            dropcolumns += [flagname]
         df.drop(columns=dropcolumns, inplace=True)
 
         return df
