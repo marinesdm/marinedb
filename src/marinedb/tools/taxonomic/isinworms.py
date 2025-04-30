@@ -1850,12 +1850,10 @@ def drop(df, drop_conditions, verbose=True, indent=''):
         length_before = len(df)
         df = dropvalues.apply(df, **drop_conditions)
 
-        printv('', verbose=verbose)
-
     return df
 
 @export
-def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, worms_dtypes=None, matchfilter=None, acceptedfilter=None, check_ambiguity=True, fuzzy=True, fixed_allowedMismatch=False, fixed_allowedMismatch_withNaN=1, fixed_allowedMismatch_withoutNaN=2, verbatimcolumn=None, verbatimauthorshiponly=None, keep_fossil=False, min_length=3, doublecheck=True, inplace=False, resume=True, resume_mode='soft', store=True, overwrite_createwormsfilters=False, outputdir='./', outputfile='', parallel=True, max_attempt=3, store_parallel=True, overwrite_parallel_createwormsfilters=False, resume_parallel=True, drop_nomatch=True, drop_uncertain=False, drop_conditions=None, verbose=True, indent='', overwrite_isinworms=False):
+def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, worms_dtypes=None, matchfilter=None, acceptedfilter=None, check_ambiguity=True, fuzzy=True, fixed_allowedMismatch=False, fixed_allowedMismatch_withNaN=1, fixed_allowedMismatch_withoutNaN=2, verbatimcolumn=None, verbatimauthorshiponly=None, keep_fossil=False, min_length=3, doublecheck=True, inplace=False, resume=True, resume_mode='soft', store=True, overwrite_createwormsfilters=False, outputdir_createwormsfilters='./', outputdir_isinworms='./', outputfile='', parallel=True, max_attempt=3, store_parallel=True, overwrite_parallel_createwormsfilters=False, resume_parallel=True, drop_nomatch=True, drop_uncertain=False, drop_conditions=None, verbose=True, indent='', overwrite_isinworms=False):
 
     Nobs = len(df)
 
@@ -1933,7 +1931,7 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
 
 
     params_store = {
-                    'outputdir': outputdir,
+                    'outputdir': outputdir_createwormsfilters,
                     'store': store,
                     'overwrite': overwrite_createwormsfilters,
                    }
@@ -2130,9 +2128,9 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
     if store:
 
         if len(outputfile) == 0:
-            outputfile = os.path.join(outputdir,'marinedata_processedby_isinworms.txt')
+            outputfile = os.path.join(outputdir_isinworms, 'marinedata_processedby_isinworms.txt')
         if len(os.path.dirname(outputfile)) == 0:
-            outputfile = os.path.join(outputdir,outputfile)
+            outputfile = os.path.join(outputdir_isinworms, outputfile)
 
         if os.path.isfile(outputfile):
             if not overwrite_isinworms:
@@ -2140,6 +2138,7 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
                     header = f.readline().strip('\n').split('\t')
                 df = df[header]
             else:
+                printv('', verbose=verbose)
                 printv(f'WARNING | {outputfile} already exists and will be overwritten', verbose=verbose, indent=indent)
         else:
             overwrite_isinworms = True
