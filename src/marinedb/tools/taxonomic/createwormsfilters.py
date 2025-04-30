@@ -78,13 +78,19 @@ WORMSCALL = [
 
 ## Instantiate a client and objects to serve as arguments for the WoRMS functions
 
-cl = Client('https://www.marinespecies.org/aphia.php?p=soap&wsdl=1', timeout=4000)
+def setup():
 
-scinames = cl.factory.create('scientificnames')
-scinames['_arrayType'] = 'string[]'
+    global cl
+    global scinames
+    global aphiaID
 
-aphiaID = cl.factory.create('aphiaids')
-aphiaID['_arrayType'] = 'int[]'
+    cl = Client('https://www.marinespecies.org/aphia.php?p=soap&wsdl=1', timeout=4000)
+
+    scinames = cl.factory.create('scientificnames')
+    scinames['_arrayType'] = 'string[]'
+
+    aphiaID = cl.factory.create('aphiaids')
+    aphiaID['_arrayType'] = 'int[]'
 
 
 ### Get unique raw scientific names ###
@@ -1744,6 +1750,9 @@ def process_subspecies(worms_acceptedfilter, parallel, wormscall=WORMSCALL, verb
 @export
 def create_WoRMSrecognizedfilter(unique_rawscinames, wormscall=WORMSCALL, identification_level='species', min_length=3, doublecheck=True, store=True, outputdir='./', outputfile='worms_matchfilter.txt', overwrite=False, resume=True, resume_mode='soft', parallel=True, cpu=2, max_attempt=3, store_parallel=True, overwrite_parallel=False, resume_parallel=True, verbose=True, indent=''):
 
+    if 'cl' not in globals():
+        setup()
+
     if parallel:
 
         if (store != store_parallel):
@@ -1817,6 +1826,10 @@ def create_WoRMSrecognizedfilter(unique_rawscinames, wormscall=WORMSCALL, identi
 
 @export
 def create_WoRMSacceptedfilter(unaccepted_aphiaID, wormscall=WORMSCALL, species_only=True, store=True, outputdir='./', outputfile='worms_acceptedfilter.txt', overwrite=False, resume=True, resume_mode='soft', parallel=True, cpu=2, max_attempt=3, store_parallel=True, overwrite_parallel=False, resume_parallel=True, verbose=True, indent=''):
+
+    if 'cl' not in globals():
+        print('error') #debug
+        setup()
 
     if parallel:
 
@@ -1933,7 +1946,9 @@ def create_WoRMSacceptedfilter(unaccepted_aphiaID, wormscall=WORMSCALL, species_
 
 @export
 def create_WoRMSfilter(filepath, colname, wormscall=WORMSCALL, identification_level='species', min_length=3, doublecheck=True, store=True, outputdir='./', overwrite=False, resume=True, resume_mode='soft', parallel=True, max_attempt=3, store_parallel=True, overwrite_parallel=False, resume_parallel=True, verbose=True, indent=''):
-
+    print('cl' in globals()) #debug
+    setup()
+    print('cl' in globals()) #debug
     # Parameters
 
     ## Global variables
@@ -1958,10 +1973,21 @@ def create_WoRMSfilter(filepath, colname, wormscall=WORMSCALL, identification_le
             raise ValueError(f'`createwormsfilters.py` | parallel={parallel} and store={store} but store_parallel={store_parallel}')
 
         if (overwrite != overwrite_parallel):
+            print(overwrite, overwrite_parallel)
+            print(type(overwrite))
+            print(type(overwrite_parallel))
             raise ValueError(f'`createwormsfilters.py` | parallel={parallel} and overwrite={overwrite} but overwrite_parallel={overwrite_parallel}')
 
     if (resume_mode != 'soft') and (resume_mode != 'hard'):
         raise ValueError(f"`createwormsfilters.py` | `resume_mode` must be 'soft' or 'hard'")
+
+    if 'createwormsfilters' not in outputdir.split('/'):
+        outputdir = os.path.join(outputdir, 'createwormsfilters')
+        try:
+            os.mkdir(outputdir)
+        except FileExistsError:
+            pass
+
 
     params_store = {
                    'store':store,
