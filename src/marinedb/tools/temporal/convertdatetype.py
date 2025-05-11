@@ -36,7 +36,7 @@ def get_basekey(key, columns):
     return basekey
 
 @export
-def astype_Int64(df, key, drop_empty=True):
+def astype_Int64(df, key, drop_empty=True, verbose=True, indent=''):
 
     basekey = get_basekey(key, list(df.columns))
 
@@ -63,13 +63,13 @@ def astype_Int64(df, key, drop_empty=True):
     return df
 
 @export
-def convert_year(df, yearkey, drop_ambiguous=False, drop_empty=True, indent=''):
+def convert_year(df, yearkey, drop_ambiguous=False, drop_empty=True, verbose=True, indent=''):
 
     baseyearkey = get_basekey(yearkey, list(df.columns))
 
     # Convert to integers
 
-    df = astype_Int64(df, yearkey, drop_empty=drop_empty)
+    df = astype_Int64(df, yearkey, drop_empty=drop_empty, verbose=verbose, indent=indent)
 
     # Invalid years
 
@@ -95,13 +95,13 @@ def convert_year(df, yearkey, drop_ambiguous=False, drop_empty=True, indent=''):
     return df
 
 @export
-def convert_month(df, monthkey, drop_empty=True, indent=''):
+def convert_month(df, monthkey, drop_empty=True, verbose=True, indent=''):
 
     basemonthkey = get_basekey(monthkey, list(df.columns))
 
     # Convert to integers
 
-    df = astype_Int64(df, monthkey, drop_empty=drop_empty)
+    df = astype_Int64(df, monthkey, drop_empty=drop_empty, verbose=verbose, indent=indent)
 
     # Invalid months
 
@@ -116,13 +116,13 @@ def convert_month(df, monthkey, drop_empty=True, indent=''):
     return df
 
 @export
-def convert_day(df, daykey, drop_empty=True, indent=''):
+def convert_day(df, daykey, drop_empty=True, verbose=True, indent=''):
 
     basedaykey = get_basekey(daykey, list(df.columns))
 
     # Convert to integers
 
-    df = astype_Int64(df, daykey, drop_empty=drop_empty)
+    df = astype_Int64(df, daykey, drop_empty=drop_empty, verbose=verbose, indent=indent)
 
     # Invalid days
 
@@ -231,13 +231,14 @@ def apply(df, datekey=None, yearkey=None, monthkey=None, daykey=None, format='IS
     # Convert the year, month, and day columns to integers
 
     if yearkey is not None:
-        df = convert_year(df, yearkey, drop_ambiguous=drop_ambiguous, drop_empty=drop_empty)
+        df = convert_year(df, yearkey, drop_ambiguous=drop_ambiguous, drop_empty=drop_empty, verbose=verbose, indent=indent)
     if monthkey is not None:
-        df = convert_month(df, monthkey, drop_empty=drop_empty)
+        df = convert_month(df, monthkey, drop_empty=drop_empty, verbose=verbose, indent=indent)
     if daykey is not None:
-        df = convert_day(df, daykey, drop_empty=drop_empty)
+        df = convert_day(df, daykey, drop_empty=drop_empty, verbose=verbose, indent=indent)
     if (yearkey is not None) and (monthkey is not None) and (daykey is not None):
         df = isvaliddate(df, yearkey, monthkey, daykey)
+        df.loc[df['issue_convertdatetype'].astype('string').str.contains('COMBINATION_INVALID'), daykey] = pd.NA
 
     # Ensure hierarchical consistency
 
