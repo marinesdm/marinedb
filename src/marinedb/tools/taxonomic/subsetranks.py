@@ -24,7 +24,7 @@ def add_alternativeranks(ranks, eqranks):
     return ranks + add
 
 @export
-def apply(identification_level, lower=False, strict=True, indent=''):
+def apply(identification_level, lower=False, strict=True, verbose=True, indent=''):
 
     # Load `taxonomicRanks.yaml` file
 
