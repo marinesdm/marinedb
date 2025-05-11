@@ -66,22 +66,34 @@ def isnan(value, nan_values=None, letters_only=False):
 
     return False
 
+def stdnan(value, nan_values=None, letters_only=False):
+    if isnan(value, nan_values=nan_values, letters_only=letters_only):
+        return pd.NA
+    return value
+
 @export
 def apply(df, key=None, nan_values=None, letters_only=False):
 
     visnan = np.vectorize(isnan)
 
-    if key is None:
+    if (key is None) or (len(key) == 0):
 
-        # Convert all missing values in the dataset to pd.NA
-        df = pd.DataFrame(np.where(visnan(df, nan_values=nan_values, letters_only=letters_only), pd.NA, df), columns=df.columns)
+        # Convert all missing values to pd.NA
 
-    elif len(key) == 0: # empty list or ''
-
-        return df
+        if isinstance(df, pd.Series):
+            df = pd.Series(np.where(visnan(df, nan_values=nan_values, letters_only=letters_only), pd.NA, df))
+        elif isinstance(df, pd.DataFrame):
+            df = pd.DataFrame(np.where(visnan(df, nan_values=nan_values, letters_only=letters_only), pd.NA, df), columns=df.columns)
+        else:
+            raise TypeError(f"`standardizenan.py` | '{type(df).__name__}' type not supported")
+#    elif len(key) == 0: # empty list or ''
+#
+#        return df
 
     else:
+
         # Convert all missing values in `key` columns to pd.NA
+
         df[key] = np.where(visnan(df[key], nan_values=nan_values, letters_only=letters_only), pd.NA, df[key])
 
     return df
