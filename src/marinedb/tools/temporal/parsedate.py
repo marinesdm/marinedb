@@ -29,7 +29,7 @@ __all__ = [] # populated using the @export decorator
 
 JAR_PATH = files('marinedb.tools.temporal').joinpath('gbif-date-parser-20250214.jar')
 
-TIMEOUT = 600 #seconds
+TIMEOUT = 3600 #seconds
 
 def execute_java(multiple_datestr):
 
@@ -43,7 +43,7 @@ def execute_java(multiple_datestr):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
-    p.wait(timeout=TIMEOUT)
+#    p.wait(timeout=TIMEOUT)
 
     keys = []
     stdout = []
@@ -239,7 +239,6 @@ def assemble_date(df, datekey, outputkey, yearkey=None, monthkey=None, daykey=No
     print_colnames = [yearkey, monthkey, daykey]
     print_colnames = [col.split('_processedby_')[0] for col in print_colnames if col is not None]
     printv(f'* Build date from {", ".join(print_colnames)} columns', verbose=verbose, indent=indent)
-#    printv('', verbose=verbose)
 
     # Exclude lines with a missing or unlikely year value
 
@@ -281,7 +280,7 @@ def assemble_date(df, datekey, outputkey, yearkey=None, monthkey=None, daykey=No
     df.loc[isissue,'issue_parsedate'] = df.loc[isissue,'issue_parsedate'].str.cat(df.loc[isissue,'issue_isdatemismatch'], sep=';', na_rep='')
     df.loc[isissue,'issue_parsedate'] = df.loc[isissue,'issue_parsedate'].str.strip(' ;')
 
-    date2process = date2process & (pd.isnull(df['issue_isdatemismatch']) | (~df['issue_isdatemismatch'].str.contains(r'MISMATCH|' + f'COMBINATION_INVALID', regex=True)))
+    date2process = date2process & (pd.isnull(df['issue_isdatemismatch']) | (~df['issue_isdatemismatch'].str.contains('MISMATCH', regex=True)))
 
     # Exclude lines with a missing or incomplete year value
 
@@ -290,7 +289,7 @@ def assemble_date(df, datekey, outputkey, yearkey=None, monthkey=None, daykey=No
 
     if (daykey is not None):
 
-        # Exclude lines where the day is specified but the month is missing
+        # Replace the date with a missing value where the day is specified but the month is missing
 
         df.loc[(~pd.isnull(df[daykey])) & pd.isnull(df[monthkey]), daykey] = pd.NA
 
@@ -319,9 +318,9 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, format=None, in
         raise Exception(f'`parsedate.py` | `daykey`={daykey} but `monthkey` is None')
 
     if parallel and cpu is None:
-        cpu=len(os.sched_getaffinity(0))
+        cpu = len(os.sched_getaffinity(0))
     if not parallel:
-        cpu=1
+        cpu = 1
 
     df, datekey, outputkey = getcolumnname.apply(df, datekey, 'parsedate', inplace=inplace)
 
