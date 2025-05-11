@@ -1,6 +1,10 @@
 #!/usr/bin/python
 # coding: utf-8
 
+# External import
+
+import gzip
+
 # Internal import
 
 from marinedb.utils import isgzip
