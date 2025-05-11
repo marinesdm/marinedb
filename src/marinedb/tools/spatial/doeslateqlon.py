@@ -16,7 +16,7 @@ from marinedb.tools import getcolumnname
 __all__ = [] # populated using the @export decorator
 
 @export
-def apply(df, latkey, lonkey, flag=False, eps=1e-5, dropna=False, indent=''):
+def apply(df, latkey, lonkey, flag=False, eps=1e-5, dropna=False, verbose=True, indent=''):
 
     # flag = True/False: whether to flag or drop observations that do not meet the condition
     # default eps: 1e-5
