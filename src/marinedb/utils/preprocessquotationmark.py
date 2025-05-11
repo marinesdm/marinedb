@@ -21,6 +21,9 @@ def apply(target):
 
     if isinstance(target,str):
 
+        if pd.isnull(target):
+            return target
+
         target = regexstrip.apply(target, pattern=r'["\s]+')
         target = regexstrip.apply(target, pattern=r"['\s]+")
 
