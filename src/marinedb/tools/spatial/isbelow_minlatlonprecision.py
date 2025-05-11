@@ -27,10 +27,10 @@ def apply(df, latkey, lonkey, value, flag=False, dropna=False, verbose=True, ind
 
     printv('', verbose=verbose)
     printv(f"* Apply `isbelow_minfloatprecision` to '{latkey}'", verbose=verbose, indent=indent)
-    df = mfp.apply(df, latkey, value, flag=True, dropna=dropna, indent=(indent + '  '))
+    df = mfp.apply(df, latkey, value, flag=True, dropna=dropna, verbose=verbose, indent=(indent + '  '))
     printv('', verbose=verbose)
     printv(f"* Apply `isbelow_minfloatprecision` to '{lonkey}'", verbose=verbose, indent=indent)
-    df = mfp.apply(df, lonkey, value, flag=True, dropna=dropna, indent=(indent + '  '))
+    df = mfp.apply(df, lonkey, value, flag=True, dropna=dropna, verbose=verbose, indent=(indent + '  '))
     printv('', verbose=verbose)
 
     columns = list(df.columns)
