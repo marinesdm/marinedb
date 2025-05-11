@@ -30,6 +30,7 @@ from marinedb.utils.allexport import export
 from marinedb.utils.printverbose import printv
 from marinedb.utils import preprocessquotationmark
 
+from marinedb.tools import isin
 from marinedb.tools import dropvalues
 from marinedb.tools import getcolumnname
 from marinedb.tools.taxonomic import createwormsfilters as cwf
@@ -63,6 +64,8 @@ RANK_MAPPING = {
                 'phylum':'phylum',
                 'kingdom':'kingdom'
                }
+
+RANK_MAPPING_RENAMED = RANK_MAPPING
 
 ## WoRMS fields
 
@@ -545,7 +548,7 @@ def match_TaxaByAuthorship(verbatim, candidates, verbatimauthorshiponly=False, d
         pass
     verbatim = unidecode(verbatim.strip())
 
-    speidx = candidates.columns.to_list().index(RANK_MAPPING['scientificname'])
+    speidx = candidates.columns.to_list().index(RANK_MAPPING_RENAMED['scientificname'])
     wormsspecies = unidecode(candidates.iloc[0,speidx].strip())
     # note: Only the species name in the first line is considered.
     # In most cases, WoRMS candidates share the same species name.
@@ -1041,7 +1044,7 @@ def match_TaxaByHigherRanks(ranks1, ranks2, fuzzy=True, fixed_allowedMismatch=Fa
 
 def match_TaxaByFullClassification(data_classif, worms_classif, check_ambiguity=True, verbatimcolumn=None, verbatimauthorshiponly=None, fuzzy=True, fixed_allowedMismatch=False, fixed_allowedMismatch_withNaN=1, fixed_allowedMismatch_withoutNaN=2, keep_fossil=False):
 
-    higherranks = list(set(RANK_MAPPING.values()) - set([RANK_MAPPING['scientificname']]))
+    higherranks = list(set(RANK_MAPPING_RENAMED.values()) - set([RANK_MAPPING_RENAMED['scientificname']]))
     wormscolumns = list(worms_classif.columns)
     colnames = ['taxamatch_generatedby_isinworms','classif_matchtype_generatedby_isinworms'] + wormscolumns
 
@@ -1119,7 +1122,7 @@ def match_TaxaByFullClassification(data_classif, worms_classif, check_ambiguity=
         match_index = match.index.tolist()
         candidates = worms_classif.loc[match_index,:]
 
-        unique_wormsspecies = candidates[RANK_MAPPING['scientificname']].unique()
+        unique_wormsspecies = candidates[RANK_MAPPING_RENAMED['scientificname']].unique()
 
         if (match['match'].sum() != 1) and (len(unique_wormsspecies) > 1): #DEBUG !=1
 
@@ -1131,8 +1134,8 @@ def match_TaxaByFullClassification(data_classif, worms_classif, check_ambiguity=
 
             ## Compute the Levenstein ratio between each unique WoRMS species name and the name of the species being processed
 
-            indexBywormsspecies = candidates[[RANK_MAPPING['scientificname']]].groupby([RANK_MAPPING['scientificname']]).indices
-            dataspecies = data_classif.loc[0,RANK_MAPPING['scientificname']]
+            indexBywormsspecies = candidates[[RANK_MAPPING_RENAMED['scientificname']]].groupby([RANK_MAPPING_RENAMED['scientificname']]).indices
+            dataspecies = data_classif.loc[0,RANK_MAPPING_RENAMED['scientificname']]
             for wormsspecies in unique_wormsspecies:
                 match.loc[indexBywormsspecies[wormsspecies],['speciesratio','Nspeciesmatch']] = elementwise_LevensteinRatio(wormsspecies, dataspecies)
 
@@ -1371,15 +1374,15 @@ def match_TaxaByFullClassification(data_classif, worms_classif, check_ambiguity=
 
             candidates = candidates[candidates['match_type'].isin(['exact','exact_subgenus','phonetic','near_1','near_2','near_3'])]
 
-            noranks = pd.isnull(candidates[RANK_MAPPING['kingdom']])
-            datakingdom = data_classif.loc[0,RANK_MAPPING['kingdom']]
+            noranks = pd.isnull(candidates[RANK_MAPPING_RENAMED['kingdom']])
+            datakingdom = data_classif.loc[0,RANK_MAPPING_RENAMED['kingdom']]
             if any(~noranks) and (datakingdom != 'incertae sedis'):
 
                 candidates_withranks = candidates[~noranks]
                 if fuzzy:
-                    isequalkingdom = [(Levenshtein.ratio(kingdom, datakingdom) >= 0.7) for _,kingdom in enumerate(candidates_withranks[RANK_MAPPING['kingdom']])]
+                    isequalkingdom = [(Levenshtein.ratio(kingdom, datakingdom) >= 0.7) for _,kingdom in enumerate(candidates_withranks[RANK_MAPPING_RENAMED['kingdom']])]
                 else:
-                    isequalkingdom = (candidates_withranks[RANK_MAPPING['kingdom']] == datakingdom)
+                    isequalkingdom = (candidates_withranks[RANK_MAPPING_RENAMED['kingdom']] == datakingdom)
                 candidates_withranks = candidates_withranks[isequalkingdom]
 
                 candidates = pd.concat([candidates_withranks,candidates.loc[noranks,candidates_withranks.columns]],axis=0)
@@ -1540,7 +1543,7 @@ def apply_matchfilter(classification, matchfilter=None, check_ambiguity=True, fu
 
     ## Match species name
 
-    unique_species = classification[RANK_MAPPING['scientificname']].unique().tolist()
+    unique_species = classification[RANK_MAPPING_RENAMED['scientificname']].unique().tolist()
 
     if matchfilter is None:
 
@@ -1576,7 +1579,7 @@ def apply_matchfilter(classification, matchfilter=None, check_ambiguity=True, fu
 
     ## Match higher ranks & authorship
 
-    matchfilter = matchfilter.rename(columns=RANK_MAPPING)
+    matchfilter = matchfilter.rename(columns=RANK_MAPPING_RENAMED)
     filter = matchfilter.groupby(['group'])
 
     params = {
@@ -1592,24 +1595,24 @@ def apply_matchfilter(classification, matchfilter=None, check_ambiguity=True, fu
 
     if verbatimcolumn is None:
         # no authorship
-        datacolumns = list(RANK_MAPPING.values())
+        datacolumns = list(RANK_MAPPING_RENAMED.values())
     else:
         if isinstance(verbatimcolumn,str):
             verbatimcolumn = [verbatimcolumn]
         # use authorship, if any
-        datacolumns = list(set(list(RANK_MAPPING.values()) + verbatimcolumn))
+        datacolumns = list(set(list(RANK_MAPPING_RENAMED.values()) + verbatimcolumn))
 
     colnames = COLNAMES + ['taxamatch_generatedby_isinworms','classif_matchtype_generatedby_isinworms']
     if check_ambiguity:
         colnames += ['issue_isinworms']
 
-    coldiff = list(set(colnames) - set(RANK_MAPPING.values()))
+    coldiff = list(set(colnames) - set(RANK_MAPPING_RENAMED.values()))
     classification[coldiff] = pd.NA
 
 #    process = tqdm(range(nclassification), desc=indent + 'Progress')
     for idx in range(nclassification):
 
-        spe = tuple([classification.loc[idx,RANK_MAPPING['scientificname']]])
+        spe = tuple([classification.loc[idx,RANK_MAPPING_RENAMED['scientificname']]])
 
         worms_classif = filter.get_group(spe).reset_index(drop=True)
         data_classif = pd.DataFrame([classification.loc[idx,datacolumns].tolist()]*len(worms_classif),columns=datacolumns).reset_index(drop=True)
@@ -1684,7 +1687,7 @@ def call_create_WoRMSacceptedfilter(valid_aphiaID, store=True, outputdir='./', o
 
     return matchfilter
 
-def apply_acceptedfilter(classification, acceptedfilter=None, store=True, outputdir='./', overwrite=False, parallel=False, verbose=True, indent='', **params_dict):
+def apply_acceptedfilter(classification, acceptedfilter=None, keep_fossil=False, store=True, outputdir='./', overwrite=False, parallel=False, verbose=True, indent='', **params_dict):
 
     if len(classification) == 0:
         return classification
@@ -1760,20 +1763,31 @@ def apply_acceptedfilter(classification, acceptedfilter=None, store=True, output
                 acceptedfilter = pd.concat([acceptedfilter,addacceptedfilter.loc[:,acceptedfilter.columns]], axis=0)
 
         if len(acceptedfilter['group'].unique()) != len(acceptedfilter): #DEBUG
-            raise Exception(f'`isinworms.py` | accepted classification filter must not contain duplicates for the `valid_aphiaID` column.')
+            raise Exception(f'`isinworms.py` | Accepted classification filter must not contain duplicates for the `valid_aphiaID` column.')
 
         # Match `valid_aphiaID`
 
-        acceptedfilter = acceptedfilter.rename(columns=RANK_MAPPING)
+        acceptedfilter = acceptedfilter.rename(columns=RANK_MAPPING_RENAMED)
         filter = acceptedfilter.set_index(['group'])
         filter = filter.loc[classification.loc[unaccepted_idx,'valid_AphiaID'].values,:].reset_index()
 
         classification.loc[unaccepted_idx, COLNAMES] = filter[COLNAMES].values
 
+        # Remove above species taxa
+
         isabovespecies = (classification['match_type'] == 'match_abovespecies')
 #        print(classification.loc[isabovespecies,:]) #debug
         classification.loc[isabovespecies,'classif_matchtype_generatedby_isinworms'] += '_taxonNoSpecies'
         classification.loc[isabovespecies,'taxamatch_generatedby_isinworms'] = 'nomatch'
+
+        # Remove fossils
+
+        if not keep_fossil:
+
+            classification['isExtinct'] = classification['isExtinct'].astype('Int64')
+            isfossil = (classification['isExtinct'] == 1)
+            classification.loc[isfossil,'classif_matchtype_generatedby_isinworms'] += '_fossil'
+            classification.loc[isfossil,'taxamatch_generatedby_isinworms'] = 'nomatch'
 
     return classification
 
@@ -1831,6 +1845,7 @@ def clean_taxonomy(classification, matchfilter=None, acceptedfilter=None, check_
 
     params = {
               'acceptedfilter': acceptedfilter,
+              'keep_fossil': keep_fossil,
               'verbose': verbose,
               'indent': indent
              }
@@ -1841,19 +1856,77 @@ def clean_taxonomy(classification, matchfilter=None, acceptedfilter=None, check_
 
     return classification
 
-def drop(df, drop_conditions, verbose=True, indent=''):
+def drop(df, drop_nomatch, drop_uncertain, rankcolumns_mapping, wormscolumns_mapping, drop_conditions=None, verbose=True, indent=''):
 
-    if len(drop_conditions) != 0:
+    if drop_nomatch:
+
+        # Delete taxa that do not match any classification in WoRMS
+
+        if drop_conditions is None:
+            drop_conditions = {}
+        drop_conditions['taxamatch_generatedby_isinworms'] = ['nomatch']
+
+    if drop_uncertain:
+
+        # Delete taxa that cannot be matched with certainty to a WoRMS classification
+
+        if drop_conditions is None:
+            drop_conditions = {}
+            drop_conditions['taxamatch_generatedby_isinworms'] = ['uncertain']
+        else:
+            if 'taxamatch_generatedby_isinworms' in drop_conditions.keys():
+                drop_conditions['taxamatch_generatedby_isinworms'].append('uncertain')
+            else:
+                drop_conditions['taxamatch_generatedby_isinworms'] = ['uncertain']
+
+    if drop_conditions is not None:
+
+        # Delete taxa matching the specified `drop_conditions`
+
+        temp = copy.deepcopy(drop_conditions)
+        for key in drop_conditions.keys():
+            if key in rankcolumns_mapping.keys():
+                temp[rankcolumns_mapping[key]] = temp.pop(key)
+            elif key in wormscolumns_mapping.keys():
+                temp[wormscolumns_mapping[key]] = temp.pop(key)
+
+        drop_conditions = temp
+
+    if drop_conditions is not None:
 
         printv(f'* Delete taxa matching the specified conditions', verbose=verbose, indent=indent)
-#        print(drop_conditions)
-        length_before = len(df)
         df = dropvalues.apply(df, **drop_conditions)
 
     return df
 
+def flag(df, flag_nomatch, flag_uncertain, verbose=True, indent=''):
+
+    flag_conditions = []
+
+    if flag_nomatch:
+
+        # Flag taxa that do not match any classification in WoRMS
+
+        printv(f'* Flag taxa that do not match any classification in WoRMS', verbose=verbose, indent=indent)
+
+        flag_conditions.append('nomatch')
+
+    if flag_uncertain:
+
+        # Flag taxa that cannot be matched with certainty to a WoRMS classification
+
+        printv(f'* Flag taxa that cannot be matched with certainty to a WoRMS classification', verbose=verbose, indent=indent)
+
+        flag_conditions.append('uncertain')
+
+    if len(flag_conditions) != 0:
+
+        df = isin.apply(df, key='taxamatch_generatedby_isinworms', values=flag_conditions, flag=True, verbose=verbose, indent=indent)
+
+    return df
+
 @export
-def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, worms_dtypes=None, matchfilter=None, acceptedfilter=None, check_ambiguity=True, fuzzy=True, fixed_allowedMismatch=False, fixed_allowedMismatch_withNaN=1, fixed_allowedMismatch_withoutNaN=2, verbatimcolumn=None, verbatimauthorshiponly=None, keep_fossil=False, min_length=3, doublecheck=True, inplace=False, resume=True, resume_mode='soft', store=True, overwrite_createwormsfilters=False, outputdir_createwormsfilters='./', outputdir_isinworms='./', outputfile='', parallel=True, max_attempt=3, store_parallel=True, overwrite_parallel_createwormsfilters=False, resume_parallel=True, drop_nomatch=True, drop_uncertain=False, drop_conditions=None, verbose=True, indent='', overwrite_isinworms=False):
+def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, worms_dtypes=None, matchfilter=None, acceptedfilter=None, check_ambiguity=True, fuzzy=True, fixed_allowedMismatch=False, fixed_allowedMismatch_withNaN=1, fixed_allowedMismatch_withoutNaN=2, verbatimcolumn=None, verbatimauthorshiponly=None, keep_fossil=False, min_length=3, doublecheck=True, inplace=False, resume=True, resume_mode='soft', store=True, overwrite_createwormsfilters=False, outputdir_createwormsfilters='./', outputdir_isinworms='./', outputfile='', parallel=True, max_attempt=3, store_parallel=True, overwrite_parallel_createwormsfilters=False, resume_parallel=True, drop_conditions=None, flag_nomatch=False, flag_uncertain=False, verbose=True, indent='', overwrite_isinworms=False):
 
     Nobs = len(df)
 
@@ -1861,7 +1934,7 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
 
     ## Global variables
 
-    global WORMSCALL, WORMS_DTYPES, RANK_MAPPING
+    global WORMSCALL, WORMS_DTYPES, RANK_MAPPING, COLNAMES
 
     if wormscall is not None:
         WORMSCALL = wormscall
@@ -1871,7 +1944,7 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
 
     diff = set(RANK_MAPPING.values()) - set(df.columns)
     if len(diff) != 0:
-        raise Exception(f'`isinworms.py` | {list(diff)} (`RANK_MAPPING`) not in {df.columns} columns')
+        raise Exception(f'`isinworms.py` | `RANK_MAPPING`: {list(diff)} not in {list(df.columns)} columns')
 
     wormsranks = ['scientificname','genus','family','order','cls','phylum','kingdom']
 
@@ -1882,8 +1955,8 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
     if len(missing_keys) != 0:
         raise Exception(f'`isinworms.py` | {missing_keys} WoRMS keys are missing in `WORMSCALL`')
 
-    if (wormscall is not None) or (rank_mapping is not None):
-        COLNAMES = list(set(list(set(WORMSCALL) - set(RANK_MAPPING.keys())) + list(RANK_MAPPING.values())))
+#    if (wormscall is not None) or (rank_mapping is not None):
+#        COLNAMES = list(set(list(set(WORMSCALL) - set(RANK_MAPPING.keys())) + list(RANK_MAPPING.values())))
 
     if worms_dtypes is not None:
         WORMS_DTYPES = worms_dtypes
@@ -1892,9 +1965,9 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
     for key in delkeys:
         del WORMS_DTYPES[key]
 
-    missing_dtypes = set(WORMSCALL) - set(WORMS_DTYPES.keys())
-    if len(missing_dtypes) != 0:
-        printv(f'INFO | No dtype specified for: {list(missing_dtypes)}', verbose=verbose, indent=indent)
+#    missing_dtypes = set(WORMSCALL) - set(WORMS_DTYPES.keys())
+#    if len(missing_dtypes) != 0:
+#        printv(f'INFO | No dtype specified for: {list(missing_dtypes)}', verbose=verbose, indent=indent)
 
     ## Arguments
 
@@ -1909,6 +1982,12 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
 
     if (drop_conditions is not None) and (not isinstance(drop_conditions, dict)):
         raise TypeError(f'`isinworms.py` | `drop_conditions` must be a dictionary')
+
+#    if drop_nomatch and flag_nomatch:
+#        raise ValueError(f'`isinworms.py` | drop_nomatch={drop_nomatch} but flag_nomatch={flag_nomatch}')
+
+#    if drop_uncertain and flag_uncertain:
+#        raise ValueError(f'`isinworms.py` | drop_uncertain={drop_uncertain} but flag_uncertain={flag_uncertain}')
 
     params = {
               'matchfilter': matchfilter,
@@ -1945,16 +2024,24 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
                        'overwrite_parallel': overwrite_parallel_createwormsfilters
                       }
 
-    rankcolumns = list(RANK_MAPPING.values())
-    wormscolumns = list(set(WORMSCALL) - set(RANK_MAPPING.keys()))
+#    rankkeys = list(RANK_MAPPING.keys())
+#    rankcolumns = list(itemgetter(*rankkeys)(RANK_MAPPING))
+#    print(rankkeys) #debug
+#    print(rankcolumns) #debug
+#    rankcolumns = list(RANK_MAPPING.values())
+#    wormscolumns = list(set(WORMSCALL) - set(RANK_MAPPING.keys()))
 
     rankcolumns_mapping = {}
-    for rank in rankcolumns:
-        df, rank, rankmap = getcolumnname.apply(df, rank, 'isinworms', inplace)
-        rankcolumns_mapping[rank] = rankmap
+    for key,rank in RANK_MAPPING.items():
+        df, rankin, rankout = getcolumnname.apply(df, rank, 'isinworms', inplace)
+        RANK_MAPPING_RENAMED[key] = rankin
+        rankcolumns_mapping[rankin] = rankout
 
+    rankcolumns = list(RANK_MAPPING_RENAMED.values())
+    wormscolumns = list(set(WORMSCALL) - set(RANK_MAPPING_RENAMED.keys()))
     wormscolumns_mapping = {column : column + '_generatedby_isinworms' for column in wormscolumns}
-    WORMS_DTYPES = {wormscolumns_mapping[column]:WORMS_DTYPES[column] for column in WORMS_DTYPES.keys()}
+    WORMS_DTYPES_RENAMED = {wormscolumns_mapping[column]:WORMS_DTYPES[column] for column in WORMS_DTYPES.keys()}
+    COLNAMES = list(set(WORMSCALL) - set(RANK_MAPPING_RENAMED.keys())) + list(RANK_MAPPING_RENAMED.values())
 
     if verbatimcolumn is not None:
 
@@ -1971,6 +2058,8 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
 
         if isinstance(verbatimcolumn,str):
             verbatimcolumn = [verbatimcolumn]
+        for i,col in enumerate(verbatimcolumn):
+            df, verbatimcolumn[i], _ = getcolumnname.apply(df, col, '', inplace=True)
 
         columns = list(set(rankcolumns + verbatimcolumn))
 
@@ -1980,7 +2069,7 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
 
         columns = rankcolumns
 
-    if Nobs==0:
+    if Nobs == 0:
 
         # no observations
 
@@ -2003,15 +2092,15 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
     # Pre-process the raw scientific names
     # to avoid quotation mark problems with pandas
 
-    tempspecies = rankcolumns_mapping[RANK_MAPPING['scientificname']]
-    df[tempspecies] = preprocessquotationmark.apply(df[RANK_MAPPING['scientificname']])
-    speidx = columns.index(RANK_MAPPING['scientificname'])
+    tempspecies = rankcolumns_mapping[RANK_MAPPING_RENAMED['scientificname']]
+    df[tempspecies] = preprocessquotationmark.apply(df[RANK_MAPPING_RENAMED['scientificname']])
+    speidx = columns.index(RANK_MAPPING_RENAMED['scientificname'])
     columns[speidx] = tempspecies
 
     # Get unique classifications
 
     dfByClassification = df.loc[~pd.isnull(df[tempspecies]), columns].fillna('_MISSING_').groupby(columns, dropna=False) #get_group() doesn't work with NaN
-    columns[speidx] = RANK_MAPPING['scientificname']
+    columns[speidx] = RANK_MAPPING_RENAMED['scientificname']
     taxonomy = pd.DataFrame(list(dfByClassification.groups.keys()), columns=columns)
 
     # Get WoRMS-accepted classifications associated with these classifications, if any
@@ -2029,6 +2118,14 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
 #        print('check:', taxonomy.loc[idx_test,:])
 #        print('check:', classification.loc[idx_test,:])
 
+    # Convert WORMS-specific column dtypes
+
+    for key, value in WORMS_DTYPES.items():
+        if 'int' in value.lower():
+            classification[key] = classification[key].astype('Float64').astype(value)
+        else:
+            classification[key] = classification[key].astype(value)
+
     # Standardize taxonomy
 
     ## Prepare the dataframe
@@ -2044,12 +2141,12 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
 
     wormscolumns = list(wormscolumns_mapping.values())
     df[wormscolumns] = pd.NA
-    df[wormscolumns] = df[wormscolumns].astype(WORMS_DTYPES)
+    df[wormscolumns] = df[wormscolumns].astype(WORMS_DTYPES_RENAMED)
 
     rankcolumns = list(rankcolumns_mapping.values())
     if not inplace:
         df[rankcolumns] = pd.NA
-    df[rankcolumns] = df[rankcolumns].astype('string')
+#    df[rankcolumns] = df[rankcolumns].astype('string')
 
     ## Apply the standardized taxonomy
 
@@ -2073,12 +2170,11 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
     else:
         process = classification_indexes
     for idx in process:
-
         group = tuple(taxonomy.loc[idx,columns].values)
         indexes = dfByClassification.get_group(group).index
         df.loc[indexes, target_columns] = classification.loc[idx, classification_columns].values
 
-    df[wormscolumns] = df[wormscolumns].astype(WORMS_DTYPES)
+#    df[wormscolumns] = df[wormscolumns].astype(WORMS_DTYPES_RENAMED)
     if check_ambiguity:
         df['issue_isinworms'] = df['issue_isinworms'].astype('string')
 
@@ -2088,40 +2184,8 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
 
     # Filter taxa
 
-    if drop_nomatch:
-
-        # Delete taxa that do not match any classification in WoRMS
-
-        if drop_conditions is None:
-            drop_conditions = {}
-        drop_conditions['taxamatch_generatedby_isinworms'] = ['nomatch']
-
-    if drop_uncertain:
-
-        # Delete taxa that cannot be matched with certainty to a WoRMS classification
-
-        if drop_conditions is None:
-            drop_conditions = {}
-            drop_conditions['taxamatch_generatedby_isinworms'] = ['uncertain']
-        else:
-            if 'taxamatch_generatedby_isinworms' in drop_conditions.keys():
-                drop_conditions['taxamatch_generatedby_isinworms'].append('uncertain')
-            else:
-                drop_conditions['taxamatch_generatedby_isinworms'] = ['uncertain']
-
-    if drop_conditions is not None:
-
-        # Delete taxa matching the specified `drop_conditions`
-
-        temp = copy.deepcopy(drop_conditions)
-        for key in drop_conditions.keys():
-            if key in rankcolumns_mapping.keys():
-                temp[rankcolumns_mapping[key]] = temp.pop(key)
-            elif key in wormscolumns_mapping.keys():
-                temp[wormscolumns_mapping[key]] = temp.pop(key)
-
-        drop_conditions = temp
-        df = drop(df, drop_conditions, verbose=verbose, indent=indent)
+    df = drop(df, drop_nomatch=(not flag_nomatch), drop_uncertain=(not flag_uncertain), drop_conditions=drop_conditions, rankcolumns_mapping=rankcolumns_mapping, wormscolumns_mapping=wormscolumns_mapping, verbose=verbose, indent=indent)
+    df = flag(df, flag_nomatch, flag_uncertain, verbose=verbose, indent=indent)
 
     # Store
 
@@ -2143,6 +2207,7 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
         else:
             overwrite_isinworms = True
 
+        printv('', verbose=verbose)
         writedataframe.to_txt(df, outputfile, init=overwrite_isinworms, verbose=verbose, indent=indent)
 
     printv('', verbose=verbose)
