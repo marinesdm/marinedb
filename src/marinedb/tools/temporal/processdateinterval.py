@@ -134,6 +134,7 @@ def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_numb
 
     # Find intervals
 
+    printv('', verbose=verbose)
     printv(f'* Find date intervals', verbose=verbose, indent=indent)
 
     flagname = f'flag_{basedatekey}_isdateinterval'
@@ -171,6 +172,7 @@ def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_numb
 
         # Convert intervals to date
 
+        printv('', verbose=verbose)
         printv(f'* Replace date intervals with {strategy} date', verbose=verbose, indent=indent)
 
         tempcol = ['start_str','end_str','start','end']
