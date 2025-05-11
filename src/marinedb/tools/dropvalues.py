@@ -17,7 +17,7 @@ from marinedb.tools import aligndtypes
 __all__ = [] # populated using the @export decorator
 
 @export
-def apply(df, dropna=False, indent='', **conditions):
+def apply(df, dropna=False, verbose=True, indent='', **conditions):
 
     OR_condition = None
 

@@ -31,7 +31,7 @@ def value_mapping(str_value):
 
 
 @export
-def apply(df, key, operator, value, flag=False, dropna=False, indent=''):
+def apply(df, key, operator, value, flag=False, dropna=False, verbose=True, indent=''):
 
     df, key, _ = getcolumnname.apply(df, key, '', inplace=True)
 
