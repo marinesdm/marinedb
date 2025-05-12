@@ -10,11 +10,15 @@ import yaml
 import time
 import copy
 import math
+import glob
 import inspect
 import argparse
 import numpy as np
 import pandas as pd
+from itertools import groupby
 from os.path import expanduser
+from operator import itemgetter
+from joblib import Parallel, delayed
 
 # Internal import
 
@@ -25,11 +29,12 @@ from marinedb.tools.marineloc import marineloc
 from marinedb.tools.taxonomic import createwormsfilters as cwf
 
 from marinedb.utils import readfile
+from marinedb.utils import tqdmjoblib
 from marinedb.utils import writedataframe
 from marinedb.utils import standardizenan
 from marinedb.utils import getdefaultargs
-from marinedb.utils import preprocessquotationmark
 from marinedb.utils.printverbose import printv
+from marinedb.utils import preprocessquotationmark
 
 # Global variable
 
@@ -61,8 +66,10 @@ SUPPORTED_FUNCTIONS = ['marineloc',
                        'splitdate',
                        'temporal']
 
-BATCH_SIZE = 100000 #issues if too big
+BATCH_SIZE = 50000
+#MIN_CPU_PER_SUBPROCESS = 2
 
+# Parse the configuration file
 
 def get_key(onekeydict):
     if isinstance(onekeydict, str):
@@ -76,58 +83,8 @@ def get_key(onekeydict):
     else:
         raise TypeError(f'`clean.py` | {type(onekeydict).__name__} is not a supported type')
 
-
 def get_keys(list_onekeydict):
     return [get_key(onekeydict) for onekeydict in list_onekeydict]
-
-def get_procfunc(config):
-
-    config_proc = config['processing']
-
-    procfuncs = set()
-    for i, procstep in enumerate(config['processing']):
-        colname = get_key(procstep)
-        for j, func in enumerate(procstep[colname]):
-            procfuncs.update([get_key(func)])
-
-    return list(procfuncs)
-
-def overwrite_outputdirarg(config, inputdir, outputdir):
-
-    isprint = False
-
-    config_proc = config['processing']
-
-    for i, procstep in enumerate(config['processing']):
-        colname = get_key(procstep)
-        for j, func in enumerate(procstep[colname]):
-            funcname = get_key(func)
-            if funcname == 'createwormsfilters':
-                funcargs = list(inspect.signature(eval(f'tools.{funcname}.create_WoRMSfilter')).parameters.keys())
-            else:
-                funcargs = list(inspect.signature(eval(f'tools.{funcname}.apply')).parameters.keys())
-            if 'outputdir' in funcargs:
-                if funcname in ['marineloc', 'createwormsfilters']:
-                    print(f"INFO | '{colname}': override the `outputdir` argument in `{funcname}` with the `inputdir_path` value from the configuration file")
-                    config['processing'][i][colname][j][funcname]['outputdir'] = inputdir
-                    isprint = True
-                else:
-                    print(f"INFO | '{colname}': override the `outputdir` argument in `{funcname}` with the `outputdir_path` value from the configuration file")
-                    config['processing'][i][colname][j][funcname]['outputdir'] = outputdir
-                    isprint = True
-            elif 'outputdir_createwormsfilters' in funcargs:
-                print(f"INFO | '{colname}': override the `outputdir_createwormsfilters` argument in `{funcname}` with the `inputdir_path` value from the configuration file")
-                config['processing'][i][colname][j][funcname]['outputdir_createwormsfilters'] = inputdir
-                isprint = True
-            elif 'outputdir_isinworms' in funcargs:
-                print(f"INFO | '{colname}': override the `outputdir_isinworms` argument in `{funcname}` with the `outputdir_path` value from the configuration file")
-                config['processing'][i][colname][j][funcname]['outputdir_isinworms'] = outputdir
-                isprint = True
-
-    if isprint:
-        print()
-
-    return config
 
 def get_dtypes(config):
 
@@ -147,24 +104,183 @@ def get_dtypes(config):
 
     return dtypes_mapping
 
+def get_column_mapping(config):
+
+    config_variables = config['variables']
+    colnames_mapping = {}
+
+    for coldict in config_variables:
+
+        if isinstance(coldict, str):
+            colnames_mapping[coldict] = coldict
+
+        else:
+            colname_old = get_key(coldict)
+            colname_new = get_key(coldict[colname_old])
+            colnames_mapping[colname_old] = colname_new
+
+    return colnames_mapping
+
+# Update the configuration file
+
+def get_procfunc(config):
+
+    config_proc = config['processing']
+
+    procfuncs = set()
+    for i, procstep in enumerate(config['processing']):
+        colname = get_key(procstep)
+        for j, func in enumerate(procstep[colname]):
+            procfuncs.update([get_key(func)])
+
+    return list(procfuncs)
+
+def overwrite_outputdir(config, inputdir, outputdir):
+
+    isprint = False
+
+    config_proc = config['processing']
+
+    for i, procstep in enumerate(config['processing']):
+        colname = get_key(procstep)
+        for j, func in enumerate(procstep[colname]):
+            funcname = get_key(func)
+            funcargs = list(inspect.signature(eval(f'tools.{funcname}.apply')).parameters.keys())
+            if 'outputdir' in funcargs:
+                if funcname in ['marineloc', 'createwormsfilters']:
+                    print(f"INFO | '{colname}': override the `outputdir` argument in `{funcname}` with the `inputdir_path` value from the configuration file")
+                    config['processing'][i][colname][j][funcname]['outputdir'] = inputdir
+                    isprint = True
+                else:
+                    print(f"INFO | '{colname}': override the `outputdir` argument in `{funcname}` with the `outputdir_path` value from the configuration file")
+                    config['processing'][i][colname][j][funcname]['outputdir'] = outputdir
+                    isprint = True
+            if 'outputdir_createwormsfilters' in funcargs:
+                print(f"INFO | '{colname}': override the `outputdir_createwormsfilters` argument in `{funcname}` with the `inputdir_path` value from the configuration file")
+                config['processing'][i][colname][j][funcname]['outputdir_createwormsfilters'] = inputdir
+                isprint = True
+            if 'outputdir_isinworms' in funcargs:
+                print(f"INFO | '{colname}': override the `outputdir_isinworms` argument in `{funcname}` with the `outputdir_path` value from the configuration file")
+                config['processing'][i][colname][j][funcname]['outputdir_isinworms'] = outputdir
+                isprint = True
+
+    if isprint:
+        print()
+
+    return config
+
+def overwrite_cpu(config, cpu_subprocess):
+
+    anyparallel = False
+
+    for i, procstep in enumerate(config['processing']):
+        colname = get_key(procstep)
+        for j, func in enumerate(procstep[colname]):
+            funcname = get_key(func)
+            if funcname not in ['marineloc', 'createwormsfilters', 'isinworms']:
+                funcparams = getdefaultargs.apply(eval(f'tools.{funcname}.apply'))
+                if ('parallel' in funcparams.keys()):
+                    params = config['processing'][i][colname][j][funcname]
+                    if ('parallel' in params.keys()) and (params['parallel']):
+                        config['processing'][i][colname][j][funcname]['cpu'] = cpu_subprocess
+                        anyparallel = True
+                    if ('parallel' not in params.keys()) and (funcparams['parallel']):
+                        config['processing'][i][colname][j][funcname]['cpu'] = cpu_subprocess
+                        anyparallel = True
+
+    return config, anyparallel
+
+def set_cpu(config, parallel, cpu_main=None, cpu_max=None):
+
+    if cpu_max is None:
+        cpu_max = len(os.sched_getaffinity(0))
+
+    if (cpu_main == -1):
+        cpu_main = cpu_max
+
+    if ((cpu_main is not None) and (cpu_main > 1)) and (not parallel):
+        raise ValueError(f'`clean.py` | cpu_main={cpu_main} > 1 but parallel={parallel}')
+
+#    if (cpu_main is None) and (cpu_subprocess is None):
+#        if parallel:
+#            cpu_subprocess = 1
+#         else:
+#            cpu_main = 1
+
+    if (cpu_main is None):
+        if parallel:
+            cpu_main = cpu_max
+        else:
+            cpu_main = 1
+
+    if (cpu_main > 1):
+
+        # Avoid nested parallelism when using joblib
+
+        cpu_main = min(cpu_main, cpu_max)
+        cpu_subprocess = 1
+        config, anyparallel = overwrite_cpu(config, cpu_subprocess)
+        if anyparallel:
+            print(f'INFO | Since parallel={parallel} and cpu={cpu_main}, each subprocess is restricted to a single CPU to prevent nested parallelism')
+#            print()
+
+    if (cpu_main == 1):
+
+        parallel = False
+
+        cpu_subprocess = cpu_max
+        config, anyparallel = overwrite_cpu(config, cpu_subprocess)
+        if anyparallel:
+            print(f'INFO | Since the main process is not parallelized (cpu={cpu_main}), {cpu_subprocess} CPUs are allocated for parallelized subprocesses')
+#            print()
+
+
+#    if (cpu_main is None) and (cpu_subprocess is None):
+#        # i.e parallel=False
+#        cpu_main = 1
+
+#    if (cpu_main is None) and (cpu_subprocess is None):
+#        raise Exception('`clean.py` | Either `cpu_main` or `cpu_subprocess` must be specified')
+#        cpu_subprocess = math.floor(math.sqrt(cpu_max)) - 1
+
+#    if (cpu_main is None): # or (cpu_main == -1):
+#
+#        cpu_subprocess = min(cpu_subprocess, cpu_max)
+#        cpu_main = math.floor(cpu_max/cpu_subprocess)
+#
+#        config, anyparallel = overwrite_cpu(config, cpu_subprocess)
+#        if anyparallel:
+#            print(f'INFO | `cpu` set to {cpu_main}/{cpu_max} to leave {cpu_subprocess} CPUs available per parallel subprocess')
+#            print()
+#        else:
+#            cpu_main = cpu_max
+
+#    if (cpu_subprocess is None):
+#
+#        cpu_main = min(cpu_main, cpu_max)
+#        cpu_subprocess = math.floor(cpu_max/cpu_main)
+#        config, anyparallel = overwrite_cpu(config, cpu_subprocess)
+#        if anyparallel:
+#            print(f'INFO | Since `cpu` is set to {cpu_main}/{cpu_max}, each subprocess will use {cpu_subprocess} CPUs')
+#            print()
+
+    return parallel, cpu_main
 
 def update_config(df, config, addcolumns=None):
-#    print('config variables before:')
-#    print(config['variables']) #debug
 
     config_updated = copy.deepcopy(config)
 
     config_variables = []
     base_colmapping = {}
     for idx, coldict in enumerate(config['variables']):
-        print('coldict:', coldict)
+
         add = None
         colname_old = get_key(coldict)
 
         # Retrieve column names post-processing
 
         _, colname_proc, _ = getcolumnname.apply(df, colname_old, '', inplace=True)
-        print(colname_proc)
+
         if ('processedby' in colname_proc):
 
             # The column has been modified, with modifications
@@ -197,11 +313,9 @@ def update_config(df, config, addcolumns=None):
 
             config_variables.append(coldict)
 
-#           del config['variables'][idx]
-
         if add is not None:
 
-            # Update the `variables`section in `config` to include
+            # Update the `variables` section in `config` to include
             # the settings for the post-processing column
 
             config_variables.append(add)
@@ -229,28 +343,10 @@ def update_config(df, config, addcolumns=None):
                 config_variables.append(add)
 
     config_updated['variables'] = config_variables
-#    print('config variables after:')
-#    print(config_updated['variables']) #debug
+
     return config_updated
 
-
-def rename_columns(config):
-
-    config_variables = config['variables']
-    colnames_mapping = {}
-
-    for coldict in config_variables:
-
-        if isinstance(coldict, str):
-            colnames_mapping[coldict] = coldict
-
-        else:
-            colname_old = get_key(coldict)
-            colname_new = get_key(coldict[colname_old])
-            colnames_mapping[colname_old] = colname_new
-
-    return colnames_mapping
-
+# Apply configuration settings
 
 def dtypeconversion(df, config, verbose=True, indent=''):
 
@@ -290,7 +386,6 @@ def dtypeconversion(df, config, verbose=True, indent=''):
                     printv(f"WARNING | Failed to convert '{colname_old}' to `{coltype}`", verbose=verbose, indent=indent)
                     coltype = ''
                     isprint = True
-#                    df[colname_old] = df[colname_old].astype(TYPE[coltype]) #debug
 
             else:
 
@@ -314,8 +409,7 @@ def dtypeconversion(df, config, verbose=True, indent=''):
 
     return df
 
-
-def curate_data(df, config, config_updated, init=False, verbose=True, indent=''):
+def curate_data(df, config, config_updated, init=False, verbose=True, indent='',i=None): #debug i
 
     isvariable = ('variables' in config.keys())
 
@@ -345,7 +439,7 @@ def curate_data(df, config, config_updated, init=False, verbose=True, indent='')
 
     # Perform multiple processing steps to curate the dataset
 
-    df = tools.apply(df, config['processing'], verbose=verbose, indent=indent)
+    df = tools.apply(df, config['processing'], verbose=verbose, indent=indent) #, i=i) #debug
 
     # Update `variables` section in `config`
 
@@ -362,7 +456,7 @@ def curate_data(df, config, config_updated, init=False, verbose=True, indent='')
         printv(f'** columnselection', verbose=verbose, indent=indent)
         printv('', verbose=verbose, indent=indent)
 
-        colnames_mapping = rename_columns(config_updated)
+        colnames_mapping = get_column_mapping(config_updated)
         df = df[list(colnames_mapping.keys())]
 
         # Apply dtype conversion
@@ -377,51 +471,83 @@ def curate_data(df, config, config_updated, init=False, verbose=True, indent='')
 
         printv(f'* dataframe', verbose=verbose, indent=indent)
         printv(f'** columnrenaming', verbose=verbose, indent=indent)
-        printv('', verbose=verbose)
+        printv('', verbose=verbose, indent=indent)
 
         df = df.rename(columns=colnames_mapping)
 
-    if init:
-        colnames = list(df.columns)
-        Nlines = math.ceil(len(colnames)/4)
-        for line in range(Nlines):
-            string = indent + '   ' + ' '.join(colnames[line*4:line*4+4])
-            printv(string, verbose=verbose, indent=indent)
-        printv('', verbose=verbose, indent=indent)
+#    if init:
+#        colnames = list(df.columns)
+#        Nlines = math.ceil(len(colnames)/4)
+#        for line in range(Nlines):
+#            string = indent + '   ' + ' '.join(colnames[line*4:line*4+4])
+#            printv(string, verbose=verbose, indent=indent)
+#        printv('', verbose=verbose, indent=indent)
 
     return df, config, config_updated
 
-def process_one_dataframe(df, columns, config, config_updated, outputfile, cpu_idx=None, verbose=True, init=False, indent=''):
+def process_one_dataframe(df, config, config_updated, outputfile, columns=None, cpu_idx=None, init=False, verbose=True, indent=''):
+
+    if cpu_idx is not None:
+
+        temp = outputfile.split('.')
+        outputfile = temp[0] + '_temp%05d' % cpu_idx
+        if len(temp) == 2:
+            outputfile += f'.{temp[1]}'
+
+        init = True
+        verbose = False
+
+    nlines = len(df)
 
     start = time.time()
 
-    df, config, config_updated = curate_data(df, config, config_updated, init=init, verbose=verbose, indent=indent)
+    df, config, config_updated = curate_data(df, config, config_updated, init=init, verbose=verbose, indent=indent, i=cpu_idx) #debug i
 
     # Store data
 
-    if cpu_idx is not None:
-        temp = outputfile.split('.')
-        outputfile = temp[0] + '%02d' % cpu_idx
-        if len(temp) == 2:
-            outputfile += temp[1]
+    if columns is None:
+        columns = list(df.columns)
 
     writedataframe.to_txt(df[columns], outputfile, init=init, verbose=verbose, indent=indent)
 
     end = time.time()
+
     if cpu_idx is not None:
-        printv(f'CPU n°{cpu_idx}: {len(df)} lines done | TIME : {np.round(end-start,0)}s', verbose=verbose, indent=indent)
+        printv(f'CPU n°{cpu_idx}: {len(df)} lines done | TIME : {np.round(end-start,0)}s', verbose=True, indent=indent)
+        printv('', verbose=True)
     else:
-        printv(f'>>>>>> {len(df)} lines done | TIME : {np.round(end-start,0)}s', verbose=verbose)
+        printv(f'>>>>>> {nlines} lines done | TIME : {np.round(end-start,0)}s', verbose=verbose)
         printv('', verbose=verbose)
 
-    return config
+    return config_updated, columns
+
+def minmax_consecutive(numbers):
+
+    minmax_groups = []
+
+    for k, g in groupby(enumerate(numbers), lambda ix: ix[0] - int(ix[1])):
+        group = list(map(itemgetter(1), g))
+        minmax_groups += [min(group), max(group)]
+
+    return minmax_groups
+
+def resume_processing(outputdir):
+
+    fileslist = sorted(glob.glob(outputfile.split('.')[0] + '_temp*'))
+    filesnumber = pd.Series(fileslist).str.findall(r'(?<=_temp)[0-9]+')
+    if any(filesnumber.str.len() > 1):
+        bad_filenames = filesnumber[filesnumber.str.len() > 1].str[0].tolist()
+        raise Exception(f"`clean.py` | Unsupported file names: {',';join(bad_filenames)}. The file name must contain exactly one number.")
+    filesnumber = filesnumber.str[0].tolist()
+    
+'index_marinedb'
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Curate marine data')
     parser.add_argument('config_file', type=str, help='path to the yaml configuration file')
     parser.add_argument('--parallel', action=argparse.BooleanOptionalAction, help='whether to parallelize on multiple CPUs', default=False)
-    parser.add_argument('--cpu', type=int, help='number of CPUs to be used', default=None)
+    parser.add_argument('--cpu_max', type=int, help='maximum number of CPUs to be used', default=None)
     args = parser.parse_args()
 
     config = yaml.safe_load(open(args.config_file,'r'))
@@ -459,10 +585,10 @@ if __name__ == '__main__':
          config['outputfile_path'] = inputfile[0] + f'_processedby_marinedb'
          if len(inputfile) == 2:
              config['outputfile_path'] += f'.{inputfile[1]}'
-         print(f"INFO | The processed file will be stored at {config['outputfile_path']}")
+         print(f"INFO | The processed file will be saved as {config['outputfile_path']}")
     if len(os.path.dirname(config['outputfile_path'])) == 0:
         config['outputfile_path'] = os.path.join(config['outputdir_path'], config['outputfile_path'])
-    print(config['outputfile_path'])
+
     if ('processing' not in config.keys()):
         raise KeyError("`clean.py` | The configuration file must include a 'processing' section")
 
@@ -513,7 +639,7 @@ if __name__ == '__main__':
     # For all functions with an `outputdir` argument, substitute the argument
     # with the configuration file's inputdir_path or outputdir_path value
 
-    config = overwrite_outputdirarg(config, config['inputdir_path'], config['outputdir_path'])
+    config = overwrite_outputdir(config, config['inputdir_path'], config['outputdir_path'])
 
     ispreprocessing = False
 
@@ -529,6 +655,8 @@ if __name__ == '__main__':
         marineloc_idx = marineloc_filter[0][0]
         marineloc_params = marineloc_filter[0][1]['tool'][0]['marineloc']
         marineloc_params['indent'] = '   '
+        if args.cpu_max is not None:
+            marineloc_params['cpu'] = args.cpu_max
 
         if not ispreprocessing:
             print('Preprocessing')
@@ -574,7 +702,7 @@ if __name__ == '__main__':
         # Set up the required components to apply the `isinworms` filter
 
         ## Default `createwormsfilters` parameters
-        default_createwormsfilters_params = getdefaultargs.apply(cwf.create_WoRMSfilter)
+        default_createwormsfilters_params = getdefaultargs.apply(cwf.apply)
         default_createwormsfilters_args = list(default_createwormsfilters_params.keys())
 
         ## Extract `createwormsfilters` parameters from the `isinworms` configuration
@@ -635,7 +763,6 @@ if __name__ == '__main__':
                         config['processing'][isinworms_column_idx][isinworms_column][isinworms_idx]['isinworms'][f'{arg}_createwormsfilters'] = createwormsfilters_params[arg]
                     else:
                         config['processing'][isinworms_column_idx][isinworms_column][isinworms_idx]['isinworms'][arg] = createwormsfilters_params[arg]
-            print(config['processing'][isinworms_column_idx][isinworms_column][isinworms_idx]['isinworms'])
 
         else:
 
@@ -645,6 +772,8 @@ if __name__ == '__main__':
         createwormsfilters_params['indent'] = '   '
         createwormsfilters_params['store'] = True
         createwormsfilters_params['store_parallel'] = True
+#        if args.cpu_max is not None:
+#            createwormsfilters_params['cpu'] = args.cpu_max
 
         ## Load existing filters or generate new ones if none are found
 
@@ -655,7 +784,7 @@ if __name__ == '__main__':
         print('** createwormsfilters')
         print()
 
-        worms_matchfilter, worms_acceptedfilter = cwf.create_WoRMSfilter(**createwormsfilters_params)
+        worms_matchfilter, worms_acceptedfilter = cwf.apply(**createwormsfilters_params)
 
         ## Add the filters to `config`
 
@@ -673,14 +802,35 @@ if __name__ == '__main__':
     print('----------')
     print()
 
-    parallel = ars.parallel
-    cpu = args.cpu
-    if not parallel:
-        cpu = 1
-    if (cpu is None) or (cpu == -1):
-        cpu = len(os.sched_getaffinity(0))
-    if cpu == 1:
-        parallel = False
+    parallel = args.parallel
+    cpu_max = args.cpu_max
+
+#    if not parallel:
+#        cpu = 1
+#    if (cpu is None) or (cpu == -1):
+#        cpu = len(os.sched_getaffinity(0))
+#    if cpu == 1:
+#        parallel = False
+#    print('cpu:', cpu)
+#    if cpu != 1:
+#        cpu_max = len(os.sched_getaffinity(0))
+#        cpu_main = math.floor(cpu_max/MIN_CPU_PER_SUBPROCESS)
+#        cpu_subprocess = cpu_max - cpu_main
+#        print('cpu_max:', cpu_max)
+#        print('cpu_main:', cpu_main)
+#        print('cpu_subprocess:',cpu_subprocess)
+#        config, anyparallel = overwrite_cpu(config, MIN_CPU_PER_SUBPROCESS)
+#        if anyparallel:
+#            print(f'INFO | `cpu` set to {cpu_main} to reserve cores for parallel subprocesses')
+#            print()
+#        else:
+#            cpu_main = cpu_max
+#    else:
+#        cpu_main = cpu
+
+    parallel, cpu_main = set_cpu(config, parallel, cpu_main=None, cpu_max=cpu_max)
+    if ('variables' in config.keys()):
+        config['variables'].append('index_marinedb')
 
     open_file, decode_line = readfile.apply(config['inputfile_path'])
 
@@ -695,7 +845,6 @@ if __name__ == '__main__':
         error = []
         config_updated = None
 
-        start = time.time()
         for idx, line in enumerate(data):
 
             # Add observations
@@ -704,65 +853,152 @@ if __name__ == '__main__':
             obs = [preprocessquotationmark.apply(value) for value in obs]
 
             if len(obs) == header_length:
+                obs.insert(0, idx)
                 data2clean.append(obs)
                 batch += 1
             else:
                 error.append(idx+2)
-                print()
                 print(f'SplittingError: splitting line n°{idx+2} yields a different number of fields ({len(obs)}) than the header ({header_length}).')
                 print(f'line n°{idx+2} is skipped : {line}')
+                print()
 
-            if batch == BATCH_SIZE:
-
-                df2clean = pd.DataFrame(data2clean, columns=header)
-
-                # Process data
+            if init and (batch == BATCH_SIZE):
 
                 print(f'--- Processing | {batch} lines ---')
                 print()
-                df2clean, config, config_updated = curate_data(df2clean, config, config_updated, init=init, verbose=True, indent='')
-
-                # Store data
-
-                if init:
-                    columns = list(df2clean.columns)
-
-                writedataframe.to_txt(df2clean[columns], outputfile, init=init, verbose=True, indent='')
-
-                end = time.time()
-                print(f'TIME : {np.round(end-start,0)}s')
+                print(f'INFO | Processing the initial batch separately to configure the environment')
                 print()
+
+                df2clean = pd.DataFrame(data2clean, columns=['index_marinedb']+header)
+                columns = None
+
+                # Process data
+
+#                df2clean, config, config_updated = curate_data(df2clean, config, config_updated, init=init, verbose=True, indent='')
+#                if parallel:
+#                    temp = outputfile.split('.')
+#                    outputfile_first = temp[0] + '0000'
+#                    if len(temp) == 2:
+#                        outputfile_first += f'.{temp[1]}'
+#                else:
+#                    outputfile_first = outputfile
+                if parallel:
+                    cpu_idx = 0
+                else:
+                    cpu_idx = None
+
+                config_updated, columns = process_one_dataframe(df2clean, config, config_updated, outputfile, columns=columns, cpu_idx=cpu_idx, verbose=True, init=init, indent='')
 
                 init = False
                 data2clean.clear()
                 batch = 0
-                start = time.time()
+                nbatch = 0
+
+            if (not init) and (batch == cpu_main*BATCH_SIZE):
+
+                print(f'--- Processing | {batch} lines on {cpu_main} CPUs ---')
+                print()
+
+                df2clean = pd.DataFrame(data2clean, columns=['index_marinedb']+header)
+
+                index_start = list(range(batch))[::BATCH_SIZE]
+                index_end = list(range(BATCH_SIZE,batch))[::BATCH_SIZE] + [batch]
+                index_slices = list(zip(index_start,index_end))
+                assert len(index_slices) == cpu_main #debug
+
+                if cpu_main != 1:
+                    process = Parallel(n_jobs=cpu_main)
+                    chunks = [df2clean.iloc[i:j,:].copy(deep=True) for i,j in index_slices]
+#                    _ = process(delayed(process_one_dataframe)(df2clean.iloc[index[0]:index[1],:].copy(), config, config_updated, outputfile, columns=columns, cpu_idx=i, verbose=False, init=init) for i,index in enumerate(index_slices))
+                    _ = process(delayed(process_one_dataframe)(chunk, config, config_updated, outputfile, columns=columns, cpu_idx=(i+1+nbatch), verbose=False, init=init) for i,chunk in enumerate(chunks))
+                    del chunks
+                else:
+                    _ = process_one_dataframe(df2clean, config, config_updated, outputfile, columns=columns, cpu_idx=None, verbose=True, init=init, indent='')
+
+                data2clean.clear()
+                batch = 0
+                nbatch += cpu_main
 
     if batch != 0:
 
-        df2clean = pd.DataFrame(data2clean, columns=header)
+        cpu_main = math.ceil(batch/BATCH_SIZE)
+        parallel, cpu_main = set_cpu(config, parallel, cpu_main=cpu_main, cpu_max=cpu_max)
+
+        df2clean = pd.DataFrame(data2clean, columns=['index_marinedb']+header)
+
+        index_start = list(range(batch))[::BATCH_SIZE]
+        index_end = list(range(BATCH_SIZE,batch))[::BATCH_SIZE] + [batch]
+        index_slices = list(zip(index_start,index_end))
+        assert len(index_slices) == cpu_main
 
         # Process data
 
-        print(f'--- Processing | {batch} lines ---')
+        print(f'--- Processing | {batch} lines on {cpu_main} CPUs ---')
         print()
 
-        df2clean, config, config_updated = curate_data(df2clean, config, config_updated, init=init, verbose=True, indent='')
+        if cpu_main != 1:
+#            process = Parallel(n_jobs=cpu_main, prefer='threads')
+            process = Parallel(n_jobs=cpu_main)
 
-        # Store data
-
-        writedataframe.to_txt(df2clean[columns], outputfile, init=init, verbose=True, indent='')
-
-        end = time.time()
-        print(f'TIME : {np.round(end-start,0)}s')
+#            chunks = [df2clean.iloc[i:j,:].copy(deep=True) for i,j in index_slices]
+#            _ = process(delayed(process_one_dataframe)(chunk, config, config_updated, outputfile, columns=columns, cpu_idx=i, verbose=False, init=init) for i,chunk in enumerate(chunks))
+            _ = process(delayed(process_one_dataframe)(df2clean.iloc[index[0]:index[1],:].copy(), config, config_updated, outputfile, columns=columns, cpu_idx=(i+1+nbatch), verbose=False, init=init) for i,index in enumerate(index_slices))
+        else:
+            _ = process_one_dataframe(df2clean, config, config_updated, outputfile, columns=columns, cpu_idx=None, verbose=True, init=init, indent='')
 
     print()
     print(f"----- End cleaning {config['inputfile_path']} -----")
     print()
 
     print(f'TIME: {np.round(time.time() - start_cleaning,0)}s')
-
+    print()
     if len(error) != 0:
         print(indent + f'ERROR:')
         print(indent + f'SplittingError: {len(error)} observations produced a different number of fields upon splitting compared to the header, and were consequently ignored.')
         print(f'Refer to lines: {error}')
+
+    if parallel:
+
+        print('Finalization')
+        print('------------')
+        print()
+        print(f'* File aggregation')
+        print(f'  Storing in {outputfile}')
+
+        # Concatenate
+
+        files = sorted(glob.glob(outputfile.split('.')[0] + '_temp*'))
+        init = True
+
+        with open(outputfile, 'a+') as output:
+            for file in files:
+                print(f'  >>> {file}')
+                with open(file, 'r') as input:
+                    lines = input.readlines()
+                    lines = ['\t'.join(line.split('\t')[1:]) for line in lines]
+                    if init:
+                        header = lines[0]
+                        init = False
+                    else:
+                        assert lines[0] == header
+                        lines = lines[1:]
+                    output.writelines(lines)
+#            df = pd.read_csv(file, sep='\t')
+#            print(df)
+#            if init:
+#                df_concat = df.copy()
+#                columns = list(df.columns)
+#                print(columns)
+#                init = False
+#            else:
+#                df_concat = pd.concat([df_concat[columns], df[columns]], axis=0)
+
+        # Store
+#        writedataframe.to_txt(df_concat[columns].reset_index(drop=True), outputfile, init=True, verbose=True)
+
+        # Clean
+
+        for file in files:
+            os.remove(file)
+
+    print()
