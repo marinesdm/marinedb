@@ -3,15 +3,21 @@
 
 # External imports
 
+import os
 import time
+import bisect
 import argparse
-import numpy as np
+import pandas as pd
+import pyarrow.parquet as pq
 
 # Internal import
 
 from marinedb.utils import readfile
+from marinedb.utils import standardizenan
+from marinedb.utils import writedataframe
 from marinedb.utils.allexport import export
 from marinedb.utils.printverbose import printv
+from marinedb.utils import preprocessquotationmark
 
 # Global variables
 
@@ -27,37 +33,228 @@ def store(data, outputfile, verbose=True, indent=''):
 
     return True
 
-@export
-def apply(inputfile, filterfile, inputfile_sep='\t', filter_sep='\t', outputfile='', verbose=True, indent=''):
+def readfirstlast(inputfile):
+
+    with open(inputfile,'rb') as f:
+
+        first_line = f.readline().decode()
+
+        try:
+            f.seek(-2,2)
+            while f.read(1) != b'\n':
+                f.seek(-2,1)
+        except OSError:
+           f.seek(0)
+
+        last_line = f.readline().decode()
+
+    return first_line, last_line
+
+def nextchunk(filter_TextIOWrapper, filter_sep, index_idx, field_idx=None, chunksize=100000):
+
+    lines = [next(filter_TextIOWrapper, '_END_').strip('\n').split(filter_sep) for _ in range(chunksize)]
+    lines = [line for line in lines if (line[0] != '_END_')]
+
+    index = [int(line[index_idx]) for line in lines]
+    if field_idx is None:
+        field = None
+    else:
+        field = [line[field_idx] for line in lines]
+
+    return index, field
+
+def filter_parquet(inputfile, filterfile, controlkey=None, filter_sep='\t', outputfile='', verbose=True, indent=''):
+
+    printv(f'* Filter marine location (`filter_parquet`)', verbose=verbose, indent=indent)
+    printv('', verbose=verbose, indent=indent)
+
+    filter_sep = filter_sep.encode('utf-8').decode('unicode_escape')
+    doublecheck = (controlkey is not None)
+    resume = False
+
+    if os.path.isfile(outputfile):
+        if controlkey is not None:
+            resume = True
+            first_line, last_line = readfirstlast(outputfile)
+            header_outputfile = first_line.strip('\n').split('\t')
+            controlkey_idx = header_outputfile.index(controlkey)
+            start_value = last_line.strip('\n').split('\t')[controlkey_idx]
+            try:
+                start_value = int(float(start_value))
+            except (TypeError, ValueError):
+                pass
+        else:
+            printv(f'WARNING | {outputfile} exists and will be overwritten (to prevent this, specify `controlkey`)', verbose=verbose, indent=indent)
+
+    # Open the filter file
+
+    count = 0
+    init = True
+    init_storage = True
+    isendfile = False
+
+    with open(filterfile, 'r') as filter:
+
+        ## Retrieve the index of the 'index' column in the filter file
+
+        header_filterfile = next(filter).strip('\n').split(filter_sep)
+        index_idx = header_filterfile.index('index')
+
+        ## Retrieve the index of the `controlkey` column from the filter file, if specified
+
+        if doublecheck:
+            filter_controlkey_idx = header_filterfile.index(controlkey)
+        else:
+            filter_controlkey_idx = None
+
+        # Restart processing if interruption
+
+        if resume:
+            printv(f'* Restart processing from {outputfile}', verbose=verbose, indent=indent+'  ')
+            nlines = 0
+            while resume:
+                controlkey_value = next(filter, '_END_')
+                if controlkey_value == '_END_':
+                    return count
+                else:
+                    controlkey_value = controlkey_value.strip('\n').split(filter_sep)[filter_controlkey_idx]
+                    try:
+                        controlkey_value = int(float(controlkey_value))
+                    except (TypeError, ValueError):
+                        pass
+                    if controlkey_value == start_value:
+                        resume = False
+                    else:
+                        nlines += 1
+                if (nlines % 100000) == 0:
+                    printv(f'Processing | {nlines} lines', verbose=verbose, indent=indent+'    ')
+            init_storage = False
+
+        # Read the filter file
+
+        index, validation = nextchunk(filter, filter_sep=filter_sep, index_idx=index_idx, field_idx=filter_controlkey_idx)
+        validation = pd.Series(validation)
+
+        # Open the input file
+
+        parquet_file = pq.ParquetFile(inputfile)
+
+        # Read the input file until all entries matching the indices from the filter file have been retrieved
+
+        for i,batch in enumerate(parquet_file.iter_batches(batch_size=10000)):
+
+            batch_df = batch.to_pandas().convert_dtypes()
+            isindex = True
+            if 'index' not in batch_df.columns:
+                isindex = False
+                batch_df = batch_df.reset_index()
+                batch_df['index'] += 10000*i
+                batch_df['index'] = batch_df['index'].astype('int')
+            max_batch_index = batch_df.loc[batch_df.index[-1],'index']
+
+            if max_batch_index >= index[0]:
+
+                ## Extract rows corresponding to filter indices
+
+                cutoff_index = bisect.bisect_right(index,max_batch_index)
+                subset_index = index[:cutoff_index]
+                if doublecheck:
+                    assert subset_index == sorted(subset_index)
+                batch_df = batch_df.set_index('index').loc[subset_index,:].reset_index()
+                batch_df = standardizenan.apply(batch_df)
+
+                if doublecheck:
+                    assert len(batch_df) == len(subset_index)
+
+                if doublecheck:
+                    subset_validation = standardizenan.apply(validation[:cutoff_index])
+                    ismissing = pd.isnull(batch_df[controlkey]) & pd.isnull(subset_validation)
+                    ismismatch = (~ismissing) & (batch_df[controlkey] != subset_validation)
+                    if any(ismismatch):
+                        mismatch_original = batch_df.loc[ismismatch, controlkey]
+                        mismatch_filter = validation[ismismatch]
+                        mismatch_index = list(ismismatch[ismismatch].index)
+                        raise Exception(f"`filtermarineslocations.py` | Value mismatch at line(s) {','.join(mismatch_index)} between original (e.g {mismatch_original[mismatch_index[0]]}) and filter file (e.g. {mismatch_index[mismatch_index[0]]}). This may indicate a processing error.")
+
+                if not isindex:
+                    batch_df.drop(columns=['index'],inplace=True)
+                if init:
+                    data = batch_df.copy(deep=True)
+                    if init_storage:
+                        header_outputfile = list(data.columns)
+                    init = False
+                else:
+                    data = pd.concat([data, batch_df[header_outputfile].copy(deep=True)], axis=0)
+
+                count += len(batch_df)
+
+                ## Save data every 1,000,000 lines
+
+                if len(data) > 100000:
+                    printv(f'>>> save {len(data)} marine data to {outputfile}', verbose=verbose, indent=indent)
+                    writedataframe.to_txt(data, outputfile, init=init_storage, verbose=False)
+                    init_storage = False
+                    init = True
+                    del data
+
+                if (max_batch_index%1000000) == 0:
+                    printv(f'Processing | {count} lines done (input file: line {max_batch_index})', verbose=verbose, indent=indent)
+
+                ## Next filter indices
+
+                index = index[cutoff_index:]
+                if doublecheck:
+                    validation = validation[cutoff_index:]
+                if (not isendfile) and (len(index) < 10000):
+                    chunksize = (100000 - len(index))
+                    index_add, validation_add = nextchunk(filter, filter_sep=filter_sep, index_idx=index_idx, field_idx=filter_controlkey_idx, chunksize=chunksize)
+                    isendfile = (len(index_add) != chunksize)
+                    index = index + index_add
+                    if doublecheck:
+                        validation = pd.Series(list(validation) + validation_add)
+                    if doublecheck:
+                        assert len(validation) == len(index)
+                if isendfile and (len(index) == 0):
+                    break
+
+    if 'data' in locals():
+        printv(f'>>> save {len(data)} marine data to {outputfile}', verbose=verbose, indent=indent)
+        writedataframe.to_txt(data, outputfile, init=init_storage, verbose=False)
+
+    return count
+
+def filter_uncompressed_gzip(inputfile, filterfile, controlkey=None, inputfile_sep='\t', filter_sep='\t', outputfile='', verbose=True, indent=''):
+
+    printv(f'* Filter marine location (`filter_uncompressed_gzip`)', verbose=verbose, indent=indent)
+    printv('', verbose=verbose, indent=indent)
 
     inputfile_sep = inputfile_sep.encode('utf-8').decode('unicode_escape')
     filter_sep = filter_sep.encode('utf-8').decode('unicode_escape')
-
-    if len(outputfile) == 0:
-        temp = inputfile.split('.')
-        assert len(temp) <= 2
-        outputfile = temp[0] + '_marine'
-        if len(temp) == 2:
-            outputfile += f'.{temp[1]}'
+    doublecheck = (controlkey is not None)
 
     data = []
-    count = 1
+    count = 0
     error = 0
-
-    start = time.time()
 
     # Open the filter file
 
     with open(filterfile, 'r') as filter:
 
-        # Retrieve the index of the 'index' column in the filter file
+        ## Retrieve the index of the 'index' column in the filter file
 
         header = filter.readline().strip('\n').split(filter_sep)
         index_idx = header.index('index')
 
-        # Start reading the filter file
+        if doublecheck:
 
-        index = int(filter.readline().strip('\n').split(filter_sep)[index_idx])
+            ## Retrieve the index of the `controlkey` column in the filter file
+
+            filter_controlkey_idx = header.index(controlkey)
+
+        # Read the filter file
+
+        lines = filter.readline().strip('\n').split(filter_sep)
+        index = int(lines[index_idx])
 
         # Open the input file
 
@@ -68,10 +265,16 @@ def apply(inputfile, filterfile, inputfile_sep='\t', filter_sep='\t', outputfile
             header = decode_line(inputdata.readline()).split(inputfile_sep)
             Ncolumns = len(header)
 
-            # Create the header for the outputfile
+            ## Create the header for the output file
 
             with open(outputfile, 'w') as file:
                 file.write(inputfile_sep.join(header))
+
+            if doublecheck:
+
+                ## Retrieve the index of the `controlkey` column in the data file
+
+                data_controlkey_idx = header.index(controlkey)
 
             # Read the input file until all entries matching the indices from the filter file have been retrieved
 
@@ -86,15 +289,37 @@ def apply(inputfile, filterfile, inputfile_sep='\t', filter_sep='\t', outputfile
                     obs = decode_line(line).split(inputfile_sep)
 
                     if len(obs) != Ncolumns:
+
                         error += 1
                         printv('', verbose=verbose)
                         printv(f'SplittingError: splitting line n°{idx + 2} yields a different number of fields ({len(obs)}) than the header ({Ncolumns}).', verbose=verbose, indent=indent)
                         printv(f'line n°{idx + 2} is skipped : {line}', verbose=verbose, indent=indent)
                         printv('', verbose=verbose)
+
                     else:
+
+                        if doublecheck:
+                            original_value = preprocessquotationmark.apply(obs[data_controlkey_idx])
+                            original_value = standardizenan.stdnan(original_value)
+                            filter_value = preprocessquotationmark.apply(lines[filter_controlkey_idx])
+                            filter_value = standardizenan.stdnan(filter_value)
+                            try:
+                                original_value = int(float(original_value))
+                                filter_value = int(float(filter_value))
+                            except (TypeError, ValueError):
+                                pass
+                            ismissing = pd.isnull(filter_value) and pd.isnull(original_value)
+#                            original_value = stdnan(obs[data_controlkey_idx])
+#                            filter_value = stdnan(preprocessquotationmark(lines[filter_controlkey_idx]))
+#                            ismissing = pd.isnull(original_value) and pd.isnull(filter_value)
+                            if (not ismissing) and (original_value != filter_value):
+                                raise Exception(f'`filtermarineslocations.py` | Value mismatch at line n°{idx} between original ({original_value}) and filter file ({filter_value}). This may indicate a processing error.')
+
                         data.append(inputfile_sep.join(obs))
 
-                    ## Save data every 50,000 lines
+                        count += 1
+
+                    ## Save data every 100,000 lines
 
                     if (count%100000) == 0:
                         store(data, outputfile, verbose=verbose, indent=indent)
@@ -105,45 +330,72 @@ def apply(inputfile, filterfile, inputfile_sep='\t', filter_sep='\t', outputfile
 
                     ## Next filter index
 
-                    index = filter.readline()
-                    if index == '':
+                    lines = filter.readline()
+                    if lines == '':
                         # no more data to retrieve
                         break
-                    index = int(index.strip('\n').split(filter_sep)[index_idx])
-                    count += 1
+                    lines = lines.strip('\n').split(filter_sep)
+                    index = int(lines[index_idx])
 
-    store(data, outputfile, verbose=verbose, indent=indent)
+    if len(data) != 0:
+        store(data, outputfile, verbose=verbose, indent=indent)
+
+    return error, count
+
+@export
+def apply(inputfile, filterfile, inputfile_format='uncompressed_gzip', controlkey=None, inputfile_sep='\t', filter_sep='\t', outputfile='', verbose=True, indent=''):
+
+    inputfile_sep = inputfile_sep.encode('utf-8').decode('unicode_escape')
+    filter_sep = filter_sep.encode('utf-8').decode('unicode_escape')
+
+    if len(outputfile) == 0:
+        temp = inputfile.split('.')
+        assert len(temp) <= 2
+        outputfile = temp[0] + '_marine'
+        if len(temp) == 2:
+            outputfile += f'.{temp[1]}'
+
+    start = time.time()
+
+    if inputfile_format == 'parquet':
+        count = filter_parquet(inputfile, filterfile, controlkey=controlkey, filter_sep=filter_sep, outputfile=outputfile, verbose=verbose, indent=indent)
+    elif (inputfile_format == 'uncompressed_gzip') or (inputfile_format == 'pandas'):
+        error, count = filter_uncompressed_gzip(inputfile, filterfile, controlkey=controlkey, inputfile_sep=inputfile_sep, filter_sep=filter_sep, outputfile=outputfile, verbose=verbose, indent=indent)
+        if error != 0:
+            printv(f'ERROR:', verbose=verbose, indent=indent)
+            printv(f'SplittingError: {error} observations produced a different number of fields upon splitting compared to the header, and were consequently ignored.', verbose=verbose, indent=indent)
+    else:
+        raise ValueError(f"`filtermarinelocations.py` | '{inputfile_format}' not supported for `inputfile_format`. Must be either 'parquet' or 'uncompressed_gzip'")
+
     end = time.time()
 
-    if index != '':
-        printv(f'WARNING | Some filter indices remain unprocessed. An issue may have occurred.', verbose=verbose, indent=indent)
-
-    printv(f'--- End filtering marine location ---', verbose=verbose, indent=indent)
-
-    printv(f'TIME : {np.round(end-start,0)}s', verbose=verbose, indent=indent)
+    printv(f'TIME : {round(end-start,0)}s', verbose=verbose, indent=indent)
     printv(f'COUNT: {count} marine data', verbose=verbose, indent=indent)
-    if error != 0:
-        printv(f'ERROR:', verbose=verbose, indent=indent)
-        printv(f'SplittingError: {error} observations produced a different number of fields upon splitting compared to the header, and were consequently ignored.', verbose=verbose, indent=indent)
 
     return outputfile
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Retrieve data from a file based on a filter file containing the indices of the data to be extracted', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('input_file', type=str, help='path to the file to be processed (default delimiter: tab)')
-    parser.add_argument('filter_file', type=str, help="path to the filter file, which must contain a sorted 'index' column (default delimiter: tab)")
+    parser.add_argument('inputfile_path', type=str, help='path to the file to be processed (default delimiter: tab)')
+    parser.add_argument('filterfile_path', type=str, help="path to the filter file, which must contain a sorted 'index' column (default delimiter: tab)")
+    parser.add_argument('--inputfile_format', type=str, help="file format, either 'pandas' for formats supported by pandas.read_csv, 'parquet' for Parquet files, or 'uncompressed_gzip' for plain text or gzip-compressed files", default='uncompressed_gzip')
     parser.add_argument('--inputfile_delimiter', type=str, help='input file delimiter', default='\t')
     parser.add_argument('--filter_delimiter', type=str, help='filter file delimiter', default='\t')
-    parser.add_argument('--output_file', type=str, help='output file path', default='')
+    parser.add_argument('--control_column', type=str, help='control column name', default=None)
+    parser.add_argument('--outputfile_path', type=str, help='output file path', default='')
     args = parser.parse_args()
 
-    inputfile = args.input_file
-    filterfile = args.filter_file
+    inputfile = args.inputfile_path
+    filterfile = args.filterfile_path
     inputfile_sep = args.inputfile_delimiter.encode('utf-8').decode('unicode_escape')
     filter_sep = args.filter_delimiter.encode('utf-8').decode('unicode_escape')
-    outputfile = args.output_file
+    inputfile_format = args.inputfile_format
+    controlkey = args.control_column
+    outputfile = args.outputfile_path
 
     print(f'`filtermarinelocations.py` | Retrieve data from the input file corresponding to the indices in the filter file')
+    print()
 
-    _ = apply(inputfile, filterfile, inputfile_sep=inputfile_sep, filter_sep=filter_sep, outputfile=outputfile)
+    _ = apply(inputfile, filterfile, inputfile_format=inputfile_format, controlkey=controlkey, inputfile_sep=inputfile_sep, filter_sep=filter_sep, outputfile=outputfile)
+
