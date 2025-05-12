@@ -21,7 +21,7 @@ __all__ = ['apply']
 
 CHUNKSIZE = 100000
 
-def apply(datafile, latkey='', lonkey='', idxkey='', uncompressed_chunks_dir='',  sep='\t', fileslist=None, kernel_type=None, kernel_size=None, maskfile=None, chunksize=CHUNKSIZE, split_type='', outputdir='', store_time=True, parallel=False, cpu=None, filterfile='marine_filter', outputfile='', verbose=True, indent=''):
+def apply(datafile, latkey='', lonkey='', idxkey='', controlkey='', uncompressed_chunks_dir='',  sep='\t', fileslist=None, kernel_type=None, kernel_size=None, maskfile=None, chunksize=CHUNKSIZE, split_type='', outputdir='', store_time=True, parallel=False, cpu=None, filterfile='marine_filter', outputfile='', verbose=True, indent=''):
 
     sep = sep.encode('utf-8').decode('unicode_escape')
 
@@ -42,6 +42,8 @@ def apply(datafile, latkey='', lonkey='', idxkey='', uncompressed_chunks_dir='',
         issplit = issplitdir and isnotempty
         if not issplit:
             columns = [latkey, lonkey]
+            if controlkey is not None:
+                columns.append(controlkey)
             uncompressed_chunks_dir = split_pandas_parquet.apply(datafile, split_type=split_type, columns=columns, sep=sep, chunksize=chunksize, outputdir=uncompressed_chunks_dir, verbose=verbose, indent=indent)
             idxkey = 'index'
             printv('', verbose=verbose)
@@ -95,6 +97,7 @@ def apply(datafile, latkey='', lonkey='', idxkey='', uncompressed_chunks_dir='',
                                'latkey': latkey,
                                'lonkey': lonkey,
                                'idxkey': idxkey,
+                               'controlkey': controlkey,
                                'sep': sep,
                                'maskfile': maskfile,
                                'outputdir': outputdir,
@@ -136,6 +139,8 @@ def apply(datafile, latkey='', lonkey='', idxkey='', uncompressed_chunks_dir='',
     params_filterdata = {
                          'inputfile': datafile,
                          'filterfile': filterfile,
+                         'inputfile_format': split_type,
+                         'controlkey': controlkey,
                          'inputfile_sep': sep,
                          'filter_sep': sep,
                          'outputfile': outputfile,
