@@ -32,7 +32,7 @@ def write(df, txt_filename, sep='\t', init=False):
 
     return True
 
-def extract_marine_locations(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=None, outputdir='', store_time=True, parallel=False, cpu=None, verbose=True, indent=''):
+def extract_marine_locations(inputdir, latkey, lonkey, idxkey, controlkey=None, sep='\t', fileslist=None, maskfile=None, outputdir='', store_time=True, parallel=False, cpu=None, verbose=True, indent=''):
 
     sep = sep.encode('utf-8').decode('unicode_escape')
 
@@ -41,6 +41,7 @@ def extract_marine_locations(inputdir, latkey, lonkey, idxkey, sep='\t', filesli
               'latkey': latkey,
               'lonkey': lonkey,
               'idxkey': idxkey,
+              'controlkey': controlkey,
               'sep': sep,
               'maskfile': maskfile,
               'outputdir': outputdir,
@@ -59,7 +60,7 @@ def extract_marine_locations(inputdir, latkey, lonkey, idxkey, sep='\t', filesli
 
     return outputdir
 
-def extract_marine_indices(inputdir, outputfile='marine_filter', sep='\t', verbose=True, indent=''):
+def extract_marine_indices(inputdir, controlkey=None, outputfile='marine_filter', sep='\t', verbose=True, indent=''):
 
     printv(f'* Extract indices corresponding to marine coordinates', verbose=verbose, indent=indent)
 
@@ -96,6 +97,9 @@ def extract_marine_indices(inputdir, outputfile='marine_filter', sep='\t', verbo
 
     init_array = True
     init_storage = True
+    columns = ['index','mask','latitude','longitude']
+    if controlkey is not None:
+        columns.append(controlkey)
 
     if verbose:
         process = tqdm(files, total=len(files), desc=indent + '  Progress')
@@ -108,22 +112,22 @@ def extract_marine_indices(inputdir, outputfile='marine_filter', sep='\t', verbo
 
         if init_array and len(df_file) != 0:
 
-            marinedata = df_file[['index','mask','latitude','longitude']].values
+            marinedata = df_file[columns].values
             init_array = False
 
         elif len(df_file) != 0:
-            marinedata = np.append(marinedata, df_file[['index','mask','latitude','longitude']].values, axis=0)
+            marinedata = np.append(marinedata, df_file[columns].values, axis=0)
 
         if (not init_array) and (len(marinedata) >= 1000000):
 
-            marinedata = pd.DataFrame(marinedata, columns=['index','mask','latitude','longitude'])
+            marinedata = pd.DataFrame(marinedata, columns=columns)
             marinedata['index'] = marinedata['index'].astype(int)
             write(marinedata, outputfile, init=init_storage, sep=sep)
             init_array = True
             init_storage = False
 
     if len(marinedata) != 0:
-        marinedata = pd.DataFrame(marinedata, columns=['index','mask','latitude','longitude'])
+        marinedata = pd.DataFrame(marinedata, columns=columns)
         marinedata['index'] = marinedata['index'].astype(int)
         write(marinedata, outputfile, init=init_storage, sep=sep)
 
@@ -134,7 +138,7 @@ def extract_marine_indices(inputdir, outputfile='marine_filter', sep='\t', verbo
     return outputfile
 
 @export
-def apply(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=None, outputdir='', store_time=True, parallel=False, cpu=None, outputfile='marine_filter', verbose=True, indent=''):
+def apply(inputdir, latkey, lonkey, idxkey, controlkey=None, sep='\t', fileslist=None, maskfile=None, outputdir='', store_time=True, parallel=False, cpu=None, outputfile='marine_filter', verbose=True, indent=''):
 
     sep = sep.encode('utf-8').decode('unicode_escape')
 
@@ -144,6 +148,7 @@ def apply(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=N
                         'latkey': latkey,
                         'lonkey': lonkey,
                         'idxkey': idxkey,
+                        'controlkey': controlkey,
                         'sep': sep,
                         'maskfile': maskfile,
                         'outputdir': outputdir,
@@ -160,6 +165,7 @@ def apply(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=N
 
     params_marineidx = {
                         'inputdir': outputdir,
+                        'controlkey': controlkey,
                         'outputfile': outputfile,
                         'sep': sep,
                         'verbose': verbose,
@@ -178,6 +184,7 @@ if __name__ == '__main__':
     parser.add_argument('--latitude_column', type=str, help='latitude column name', required=True)
     parser.add_argument('--longitude_column', type=str, help='longitude column name', required=True)
     parser.add_argument('--index_column', type=str, help='index column name', required=True)
+    parser.add_argument('--control_column', type=str, help='control column name', default=None)
     parser.add_argument('--delimiter', type=str, help='delimiter used in the input files', default='\t')
     # Warning: delimiter must be enclosed in quotation marks
     parser.add_argument('--maskfile_path', type=str, help='path to the .npz file containing the land/sea/coast mask', default=None)
@@ -188,7 +195,9 @@ if __name__ == '__main__':
     parser.add_argument('--outputfile_path', type=str, help='path to the file where the filter will be saved', default='./marine_filter')
     args = parser.parse_args()
 
+    print()
     print(f'`createmarinefilter.py` | Extract the indices of marine occurrences from {args.inputdir_path} files')
+    print()
 
     params = {
               'inputdir': args.inputdir_path,
@@ -196,6 +205,7 @@ if __name__ == '__main__':
               'latkey': args.latitude_column,
               'lonkey': args.longitude_column,
               'idxkey': args.index_column,
+              'controlkey': args.control_column,
               'sep': args.delimiter.encode('utf-8').decode('unicode_escape'),
               'maskfile': args.maskfile_path,
               'outputdir': args.outputdir_path,
@@ -211,4 +221,5 @@ if __name__ == '__main__':
 
     end = time.time()
 
+    print()
     print(f'TIME : {round(end - start,0)}s')
