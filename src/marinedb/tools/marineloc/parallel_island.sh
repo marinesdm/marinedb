@@ -35,6 +35,10 @@ while [[ $# -gt 0 ]]; do
           index="$2"
           shift 2
           ;;
+      --control)
+          control="$2"
+          shift 2
+          ;;
       -d|--delimiter)
           delimiter="$2"
           shift 2
@@ -86,6 +90,10 @@ if [[ -z ${delimiter+x} ]]; then
     delimiter="	"
 fi
 
+if [[ -z ${control+x} ]]; then
+    control=""
+fi
+
 if [[ -z ${fileslist+x} ]]; then
     fileslist=""
 fi
@@ -102,4 +110,5 @@ if [[ -z ${outputdir+x} ]]; then
     outputdir=""
 fi
 
-python3 island.py "${inputdir}" --latitude_column "${latitude}" --longitude_column "${longitude}" --index_column "${index}" --fileslist_path "${fileslist}" --delimiter "${delimiter}" --maskfile_path "${maskfile}" --outputdir_path "${outputdir}" --parallel --cpu "${cpu}"
+cd "$(dirname "$0")"
+python3 island.py "${inputdir}" --latitude_column "${latitude}" --longitude_column "${longitude}" --index_column "${index}" --control_column "${control}" --fileslist_path "${fileslist}" --delimiter "${delimiter}" --maskfile_path "${maskfile}" --outputdir_path "${outputdir}" --parallel --cpu "${cpu}"
