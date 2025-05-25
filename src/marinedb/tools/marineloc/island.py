@@ -293,8 +293,8 @@ def process_one_file(filepath, latkey, lonkey, idxkey, sep='\t', outputdir='./',
     if len(glob.glob(procfiles)) > 0:
         return '0\n'
 
-    if cluster_mode:
-        print(f'[{hostname}] {filepath}')
+#    if cluster_mode:
+#        print(f'[{hostname}] {filepath}')
 
     printv('* Processing ' + filepath, verbose=verbose_func, indent=indent)
 
@@ -428,6 +428,8 @@ def apply(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=N
 
     end = time.time()
 
+    if parallel:
+        printv('', verbose=verbose, indent=indent)
     printv(f'TIME : {round(end - start,0)}s', verbose=verbose, indent=indent)
 
     return outputdir
@@ -797,7 +799,7 @@ def plot_process_features(inputdir, delete_times=False, sep='\t', overwrite=Fals
     return times, stats
 
 @export
-def plot_island(df, latkey, lonkey, background=False, show=True, store=True, outputfile='island.png', outputdir='./'):
+def plot_island(df, latkey='latitude', lonkey='longitude', background=False, show=True, store=True, outputfile='island.png', outputdir='./'):
 
     fig, ax = plt.subplots(figsize=(20,15))
 

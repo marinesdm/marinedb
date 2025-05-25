@@ -223,7 +223,7 @@ def filter_parquet(inputfile, filterfile, controlkey=None, filter_sep='\t', outp
 
     return count
 
-def filter_uncompressed_gzip(inputfile, filterfile, controlkey=None, inputfile_sep='\t', filter_sep='\t', outputfile='', verbose=True, indent=''):
+def filter_uncompressed_gzip(inputfile, filterfile, controlkey=None, inputfile_sep='\t', filter_sep='\t', outputfile='', verbose=True, indent='', keep_mask=False):
 
     printv(f'* Filter marine location (`filter_uncompressed_gzip`)', verbose=verbose, indent=indent)
     printv('', verbose=verbose, indent=indent)
@@ -251,6 +251,9 @@ def filter_uncompressed_gzip(inputfile, filterfile, controlkey=None, inputfile_s
 
             filter_controlkey_idx = header.index(controlkey)
 
+        if keep_mask:
+            mask_idx = header.index('mask')
+
         # Read the filter file
 
         lines = filter.readline().strip('\n').split(filter_sep)
@@ -265,22 +268,26 @@ def filter_uncompressed_gzip(inputfile, filterfile, controlkey=None, inputfile_s
             header = decode_line(inputdata.readline()).split(inputfile_sep)
             Ncolumns = len(header)
 
-            ## Create the header for the output file
-
-            with open(outputfile, 'w') as file:
-                file.write(inputfile_sep.join(header))
-
             if doublecheck:
 
                 ## Retrieve the index of the `controlkey` column in the data file
 
                 data_controlkey_idx = header.index(controlkey)
 
+            ## Create the header for the output file
+
+            if keep_mask:
+                header.insert(0,'marinedb_mask')
+
+            with open(outputfile, 'w') as file:
+                file.write(inputfile_sep.join(header))
+
             # Read the input file until all entries matching the indices from the filter file have been retrieved
 
             printv(f'--- Start filtering marine locations ---', verbose=verbose, indent=indent)
             printv(f'input file: {inputfile}', verbose=verbose, indent=indent)
             printv(f'filter file: {filterfile}', verbose=verbose, indent=indent)
+            printv('', verbose=verbose)
 
             for idx, line in enumerate(inputdata):
 
@@ -309,11 +316,11 @@ def filter_uncompressed_gzip(inputfile, filterfile, controlkey=None, inputfile_s
                             except (TypeError, ValueError):
                                 pass
                             ismissing = pd.isnull(filter_value) and pd.isnull(original_value)
-#                            original_value = stdnan(obs[data_controlkey_idx])
-#                            filter_value = stdnan(preprocessquotationmark(lines[filter_controlkey_idx]))
-#                            ismissing = pd.isnull(original_value) and pd.isnull(filter_value)
                             if (not ismissing) and (original_value != filter_value):
                                 raise Exception(f'`filtermarineslocations.py` | Value mismatch at line n°{idx} between original ({original_value}) and filter file ({filter_value}). This may indicate a processing error.')
+
+                        if keep_mask:
+                            obs.insert(0,str(int(float(lines[mask_idx]))))
 
                         data.append(inputfile_sep.join(obs))
 
@@ -394,6 +401,7 @@ if __name__ == '__main__':
     controlkey = args.control_column
     outputfile = args.outputfile_path
 
+    print()
     print(f'`filtermarinelocations.py` | Retrieve data from the input file corresponding to the indices in the filter file')
     print()
 
