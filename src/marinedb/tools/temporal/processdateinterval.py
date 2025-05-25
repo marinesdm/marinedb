@@ -160,10 +160,18 @@ def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_numb
         df[outputkey] = df[outputkey].astype('string')
 
         dropcolumns = []
-        if drop_empty and pd.isnull(df['issue_processdateinterval']).all():
-            dropcolumns += ['issue_processdateinterval']
-        if not flag:
+
+        if flag:
+            df[f'{basedatekey}_intervalwidth_generatedby_processdateinterval'] = pd.NA
+        else:
             dropcolumns += [flagname]
+
+        if drop_empty:
+            if pd.isnull(df['issue_processdateinterval']).all():
+                dropcolumns += ['issue_processdateinterval']
+            if pd.isnull(df[f'{basedatekey}_intervalwidth_generatedby_processdateinterval']).all():
+                dropcolumns += [f'{basedatekey}_intervalwidth_generatedby_processdateinterval']
+
         df.drop(columns=dropcolumns, inplace=True)
 
         return df
@@ -228,6 +236,9 @@ def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_numb
                 df.loc[df[flagname],f'{basedatekey}_intervalwidth_generatedby_processdateinterval'] = df.loc[df[flagname],'end'].dt.to_pydatetime() - df.loc[df[flagname],'start'].dt.to_pydatetime()
                 df.loc[df[flagname],f'{basedatekey}_intervalwidth_generatedby_processdateinterval'] = df.loc[df[flagname],f'{basedatekey}_intervalwidth_generatedby_processdateinterval'].apply(lambda width: width.days)
                 df[f'{basedatekey}_intervalwidth_generatedby_processdateinterval'] = df[f'{basedatekey}_intervalwidth_generatedby_processdateinterval'].astype('Int64')
+
+            if drop_empty and pd.isnull(df[f'{basedatekey}_intervalwidth_generatedby_processdateinterval']).all():
+                tempcol += [f'{basedatekey}_intervalwidth_generatedby_processdateinterval']
 
             # Clean
 
