@@ -114,8 +114,6 @@ def split_uncompressed_gzip(inputfile, sep='\t', columns=None, chunksize=CHUNKSI
         last_index = int(float(last_file.loc[last_file.index[-1], 'index']))
         del last_file
         resume = True
-        print('split_idx:', split_idx) #debug
-        print('last_index:', last_index) #debug
 
     open_file, decode_line = readfile.apply(inputfile)
 
