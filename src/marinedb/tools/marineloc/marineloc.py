@@ -21,7 +21,7 @@ __all__ = ['apply']
 
 CHUNKSIZE = 100000
 
-def apply(datafile, latkey='', lonkey='', idxkey='', controlkey='', uncompressed_chunks_dir='',  sep='\t', fileslist=None, kernel_type=None, kernel_size=None, maskfile=None, chunksize=CHUNKSIZE, split_type='', outputdir='', store_time=True, parallel=False, cpu=None, filterfile='marine_filter', outputfile='', verbose=True, indent=''):
+def apply(inputfile, latkey='', lonkey='', idxkey='', controlkey='', uncompressed_chunks_dir='',  sep='\t', fileslist=None, kernel_type=None, kernel_size=None, maskfile=None, chunksize=CHUNKSIZE, split_type='', outputdir='', store_time=True, parallel=False, cpu=None, filterfile='marine_filter', outputfile='', verbose=True, indent=''):
 
     sep = sep.encode('utf-8').decode('unicode_escape')
 
@@ -36,7 +36,7 @@ def apply(datafile, latkey='', lonkey='', idxkey='', controlkey='', uncompressed
 
         issplitdir = (len(uncompressed_chunks_dir) != 0)
         if not issplitdir:
-            uncompressed_chunks_dir = os.path.dirname(datafile)
+            uncompressed_chunks_dir = os.path.dirname(inputfile)
 
         isnotempty = os.path.isdir(uncompressed_chunks_dir) and (len(os.listdir(uncompressed_chunks_dir)) != 0)
         issplit = issplitdir and isnotempty
@@ -44,12 +44,12 @@ def apply(datafile, latkey='', lonkey='', idxkey='', controlkey='', uncompressed
             columns = [latkey, lonkey]
             if controlkey is not None:
                 columns.append(controlkey)
-            uncompressed_chunks_dir = split_pandas_parquet.apply(datafile, split_type=split_type, columns=columns, sep=sep, chunksize=chunksize, outputdir=uncompressed_chunks_dir, verbose=verbose, indent=indent)
+            uncompressed_chunks_dir = split_pandas_parquet.apply(inputfile, split_type=split_type, columns=columns, sep=sep, chunksize=chunksize, outputdir=uncompressed_chunks_dir, verbose=verbose, indent=indent)
             idxkey = 'index'
             printv('', verbose=verbose)
         else:
             if len(idxkey) == 0:
-                raise ValueError('`marineloc.py` | `idxkey` must be specified when `datafile` has already been split into multiple files')
+                raise ValueError('`marineloc.py` | `idxkey` must be specified when `inputfile` has already been split into multiple files')
 
         if len(outputdir) == 0:
             uncompressed_chunks_dir_wo_split = '/'.join(uncompressed_chunks_dir.split('/')[:-1])
@@ -132,12 +132,12 @@ def apply(datafile, latkey='', lonkey='', idxkey='', controlkey='', uncompressed
             outputfile = temp[0] + '_marine'
             if len(temp) == 2:
                 outputfile += f'.{temp[1]}'
-            outputfile = os.path.join(outputdir, outputfile)
+#            outputfile = os.path.join(outputdir, outputfile)
         if len(os.path.dirname(outputfile)) == 0:
             outputfile = os.path.join(outputdir, outputfile)
 
     params_filterdata = {
-                         'inputfile': datafile,
+                         'inputfile': inputfile,
                          'filterfile': filterfile,
                          'inputfile_format': split_type,
                          'controlkey': controlkey,
