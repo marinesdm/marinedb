@@ -22,7 +22,7 @@ from marinedb.utils.printverbose import printv
 __all__ = ['contains', 'doesnotcontain','dropvalues','isboundedby','isin','isna','notisin','doeslateqlon','isbelow_minlatlonprecision','iszero','lettersonly','taxasubset','parsedate','processdateinterval','splitdate','temporal']
 
 
-def apply(df, config_dict, verbose=True, indent='', store_stats=True, outputdir_marinedb='./', outputfile_marinedb='marinedb_stats.txt'): #,i=None): #DEBUG NONE !!
+def apply(df, config_dict, verbose=True, indent='', store_stats=True, outputdir_marinedb='./', outputfile_marinedb='marinedb_stats.txt'):
 
     if len(os.path.dirname(outputfile_marinedb)) == 0:
         outputfile_marinedb = os.path.join(outputdir_marinedb, outputfile_marinedb)
@@ -31,8 +31,7 @@ def apply(df, config_dict, verbose=True, indent='', store_stats=True, outputdir_
     stats = []
 
     for procstep in config_dict:
-#        if i is not None:
-#            print('here' + str(i)) #debug
+
         colname = list(procstep.keys())[0]
 
         for proc in procstep[colname]:

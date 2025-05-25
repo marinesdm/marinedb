@@ -528,7 +528,7 @@ def format_scinamesForWoRMS(raw_scinames, identification_level='species', min_le
 
         # Two or more candidates for the WoRMS API call
 
-        if (wormsscinames[0].count(' ')>1) and (wormsscinames[1].count(' ') == 1) and (wormsscinames[1] in wormsscinames[0]):
+        if (wormsscinames[0].count(' ') > 1) and (wormsscinames[1].count(' ') == 1) and (wormsscinames[1] in wormsscinames[0]):
 
             # The two-word candidate string corresponds to the start of the three-word candidate string
             # This case is only taken into account in the rest of the code if `doublecheck`
@@ -670,10 +670,9 @@ def connect_matchAphiaRecordsByNames(wormsscinames, max_attempt=10, pause_durati
     while attempt < max_attempt:
         try:
             return cl.service.matchAphiaRecordsByNames(wormsscinames)
-        except Exception as err: #(HTTPError, http.client.RemoteDisconnected, TimeoutError) as err:
+        except Exception as err:
             attempt += 1
             if attempt < max_attempt:
-#                print(f'Failure | attempt n°{attempt}') #DEBUG
                 time.sleep(pause_duration)
                 cl = Client('https://www.marinespecies.org/aphia.php?p=soap&wsdl=1', timeout=4000)
             else:
@@ -686,7 +685,6 @@ def parse_matchAphiaRecordsByNames(sciname, worms_results, wormscall, species_on
 
     match_idx = wormscall.index('match_type')
     classification = []
-#    error=False #DEBUG
 
     if len(worms_results) != 0:
 
@@ -719,16 +717,12 @@ def parse_matchAphiaRecordsByNames(sciname, worms_results, wormscall, species_on
                         taxon[CONTROL_COLUMN] = pd.NA
 
                 classification.append([sciname] + list(itemgetter(*wormscall)(taxon)))
-#                    resc = get_close_matches(taxon['scientificname'],[sciname],cutoff=0.5) # DEBUG
-#                    if len(resc)==0: #DEBUG
-#                        print(f"ERROR: sciname={sciname} & worms={taxon['scientificname']}") #DEBUG
-#                        error=True #DEBUG
+
     else:
         values = [sciname] + [pd.NA]*len(wormscall)
         values[match_idx+1] = 'nomatch'
         classification.append(values)
 
-#    return classification, error #DEBUG
     return classification
 
 def match50_WoRMSBySciname(wormsscinames, wormscall, species_only=True, retry_mode=False):
@@ -738,12 +732,7 @@ def match50_WoRMSBySciname(wormsscinames, wormscall, species_only=True, retry_mo
 
     scinames['scientificname'] = wormsscinames
     worms_results = connect_matchAphiaRecordsByNames(scinames)
-#    if len(worms_results) != len(wormsscinames): #DEBUG
-#        print('wormssciname')
-#        print(wormsscinames)
-#        print('result')
-#        print(worms_results)
-#        raise Exception
+
     # Keep only the match information specified in `wormscall`
 
     classification = []
@@ -751,21 +740,6 @@ def match50_WoRMSBySciname(wormsscinames, wormscall, species_only=True, retry_mo
     for idx,res in enumerate(worms_results):
 
         classification += parse_matchAphiaRecordsByNames(wormsscinames[idx], res, wormscall, species_only=species_only, retry_mode=retry_mode)
-#        classif, error = parse_matchAphiaRecordsByNames(wormsscinames[idx], res, wormscall, species_only=species_only)
-#        classification += classif
-#        if error: #DEBUG
-#            print('request')
-#            print(wormsscinames)
-#            print(f'len: {len(wormsscinames)}')
-#            print('result')
-            #print([val[wormscall.index('scientificname') + 1] for val in classif])
-#            for c in classif:
-#                print(c)
-#            print(f'len: {len(classif)}')
-            #print('result')
-            #print(worms_results)
-#            print()
-#            print()
 
     return classification
 
@@ -871,7 +845,6 @@ def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level
                 outputfile = left + f'{date.today().strftime("_%Y%m%d")}.' + right
                 printv(f'INFO | WoRMS match filter will be stored in {outputfile} (`overwrite`={overwrite})', verbose=verbose, indent=indent)
 
-
     # Preprocess scientific names for WoRMS queries
 
     printv(f'* Preprocess scientific names', verbose=verbose, indent=indent + '  ')
@@ -973,11 +946,7 @@ def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level
 
             ## WoRMS API call
 
-#            fullwormsmatch += match50_WoRMSBySciname(unique_wormsscinames[start:end], wormscall=wormscall, species_only=species_only, retry_mode=retry_mode)
-            blo = match50_WoRMSBySciname(unique_wormsscinames[start:end], wormscall=wormscall, species_only=species_only, retry_mode=retry_mode) #DEBUG
-            #bli = pd.DataFrame(blo, columns=['group']+wormscall) # DEBUG
-            #print(bli.loc[bli['group'].isin(['Eriospermum capense', 'Antherotoma naudinii', 'Buteogallus anthracinus gundlachii', 'Naasarius olomea', 'Radula kegelii','Protographium philolaus','Xystonella longicauda']),['group','scientificname','genus']])
-            fullwormsmatch += blo #DEBUG
+            fullwormsmatch += match50_WoRMSBySciname(unique_wormsscinames[start:end], wormscall=wormscall, species_only=species_only, retry_mode=retry_mode)
 
             ## Save progress
 
@@ -992,8 +961,6 @@ def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level
         # Match WoRMS
 
         printv(f'* Construct the WoRMS recognized match filter', verbose=verbose, indent=indent + '  ')
-
-#        column = ('kingdom' if ('kingdom' in wormscall) else 'rank')
 
         isduplicated = fullwormsmatch.duplicated(subset=['rawsciname'], keep=False)
 
@@ -1085,7 +1052,7 @@ def connect_getAphiaRecordsByIDs(aphiaID, max_attempt=10, pause_duration=5):
     while attempt < max_attempt:
         try:
             return cl.service.getAphiaRecordsByIDs(aphiaID)
-        except Exception as err: #(http.client.RemoteDisconnected, TimeoutError) as err:
+        except Exception as err:
             attempt += 1
             if attempt < max_attempt:
                 time.sleep(pause_duration)
@@ -1364,7 +1331,6 @@ def parallel_WoRMSmatch(wormsfunc, data, wormscall, cpu, max_attempt=3, verbose=
     params['resume_mode'] = resume_mode
     params['verbose'] = False
     params['parallel'] = True
-#    params['indent'] = indent
 
     if len(outputfile) == 0:
         outputfile = f'{wormsfunc}_results.txt'
@@ -1627,7 +1593,6 @@ def process_partialmatch(wormsfilter, wormsfuncname, parallel, wormscall=WORMSCA
     # or for 'rank' when 'kingdom' is not among the retrieved values,
     # attempt WoRMS matching again (WoRMS API bug)
 
-#    column = ('kingdom' if ('kingdom' in wormscall) else 'rank')
     doesmatch = (~pd.isnull(wormsfilter['status']))
     isquarantineddeleted = wormsfilter['status'].isin(['match_quarantine','match_deleted'])
     doeswormsmatchfailed = doesmatch & (~isquarantineddeleted) & pd.isnull(wormsfilter[CONTROL_COLUMN])
@@ -1840,7 +1805,7 @@ def create_WoRMSrecognizedfilter(unique_rawscinames, wormscall=WORMSCALL, identi
 
     worms_matchfilter = astype_Int64(worms_matchfilter, wormscall, isrecognizedmatch=True)
 
-    # Store WoRMS-accepted filter
+    # Store WoRMS-recognized filter
 
     if store:
         writedataframe.to_txt(worms_matchfilter, params_func['outputfile'], init=True, verbose=False, indent=indent)
@@ -2024,8 +1989,7 @@ def apply(filepath, colname, wormscall=WORMSCALL, identification_level='species'
 
     # Get unique species
 
-    unique_rawscinames = get_uniqueRawSciname(filepath, colname=colname, resume=resume, **params_store, verbose=verbose, indent=indent) #DEBUG
-#    unique_rawscinames = pd.read_csv('/data/smartbiodiv/eberhocoi/filters_20250323/unique_verbatimScientificName.txt',sep='\t')['raw_sciname'].tolist()
+    unique_rawscinames = get_uniqueRawSciname(filepath, colname=colname, resume=resume, **params_store, verbose=verbose, indent=indent)
 
     if len(unique_rawscinames) == 0: #tester avec gbifID !!
         raise Exception(f"`createwormsfilters.py` | no scientific name found, {filepath} may be empty or '{colname}' column may not contain scientific names")

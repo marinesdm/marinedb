@@ -293,9 +293,6 @@ def process_one_file(filepath, latkey, lonkey, idxkey, sep='\t', outputdir='./',
     if len(glob.glob(procfiles)) > 0:
         return '0\n'
 
-#    if cluster_mode:
-#        print(f'[{hostname}] {filepath}')
-
     printv('* Processing ' + filepath, verbose=verbose_func, indent=indent)
 
     data = pd.read_csv(filepath, sep=sep, engine='python')
@@ -641,7 +638,6 @@ def plot_time(df_time, show=True, store=True, outputfile='time.png', outputdir='
     plt.tight_layout(pad=4)
 
     sns.boxplot(y='time', data=df_time, notch=True, showcaps=False, medianprops={'color':'coral'}, whis=[1,99], showmeans=True, ax=axarr[0])
-    #sns.swarmplot(y='time', data=df_time, color='black', alpha=0.5, ax=axarr[0])
     axarr[0].set_ylabel('')
     axarr[0].set_xlabel('time per file (seconds)')
 

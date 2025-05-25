@@ -132,7 +132,6 @@ def apply(inputfile, latkey='', lonkey='', idxkey='', controlkey='', uncompresse
             outputfile = temp[0] + '_marine'
             if len(temp) == 2:
                 outputfile += f'.{temp[1]}'
-#            outputfile = os.path.join(outputdir, outputfile)
         if len(os.path.dirname(outputfile)) == 0:
             outputfile = os.path.join(outputdir, outputfile)
 

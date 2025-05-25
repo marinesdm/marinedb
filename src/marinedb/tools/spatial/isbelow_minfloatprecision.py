@@ -18,7 +18,6 @@ from marinedb.tools import getcolumnname
 
 __all__ = [] # populated using the @export decorator
 
-
 def get_floatprecision(series_flt):
 
     series_flt = series_flt.astype('string')

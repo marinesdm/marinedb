@@ -480,7 +480,7 @@ def match_AuthorshipByAuthors(refauthors, authors, difflib_cutoff=0.51, levensht
         return False, score
 
 
-def match_AuthorshipsByDatesAuthors(refauthorships, authorship, date_tolerance=2, difflib_cutoff=0.51, levenshtein_tolerance=0.7, author_tolerance=0.7): #author, date dataframe
+def match_AuthorshipsByDatesAuthors(refauthorships, authorship, date_tolerance=2, difflib_cutoff=0.51, levenshtein_tolerance=0.7, author_tolerance=0.7):
 
     authorship['date'] = authorship['date'].astype('Int64')
     refauthorships['date'] = refauthorships['date'].astype('Int64')
@@ -536,7 +536,7 @@ def match_TaxaByAuthorship(verbatim, candidates, verbatimauthorshiponly=False, d
     candidates[['sensu_conflict','match','datematch','authormatch']] = candidates[['sensu_conflict','match','datematch','authormatch']].astype('boolean')
     candidates['datematch_diff'] = candidates['datematch_diff'].astype('Int64')
     candidates['authormatch_ratio'] = candidates['authormatch_ratio'].astype('Float64')
-#    candidates['taxamatch'] = 'uncertain'
+
     ismore = False
 
     if pd.isnull(verbatim) or (len(verbatim) == 0):
@@ -681,11 +681,6 @@ def match_TaxaByAuthorship(verbatim, candidates, verbatimauthorshiponly=False, d
 
                     printv(f"WARNING | More than one 'sensu' in {candidates['authorship'].tolist()}. Exiting `match_TaxaByAuthorship`", verbose=verbose, indent=indent)
 
-#                    isnomatch = (~pd.isnull(candidates['match'])) & (~candidates['match'])
-#                    ismatch = (~pd.isnull(candidates['match'])) & (candidates['match'])
-#                    candidates.loc[isnomatch,'taxamatch'] = 'nomatch'
-#                    candidates.loc[ismatch,'taxamatch'] = 'match'
-
                     return candidates, ismore
 
             ## Split authorships into date, author, more
@@ -711,7 +706,7 @@ def match_TaxaByAuthorship(verbatim, candidates, verbatimauthorshiponly=False, d
             # `candidates_authorships`
 
             candidates_authorships['authorship1'] = candidates_sensusplit.str[0]
-            candidates_authorships['authorship2'] = candidates_sensusplit.str[1] #pd.NA if len<2
+            candidates_authorships['authorship2'] = candidates_sensusplit.str[1] # pd.NA if len < 2
             index = candidates_authorships.index.to_list()
 
             for i, authorship in enumerate(candidates_authorships[['authorship1','authorship2']].values):
@@ -818,11 +813,6 @@ def match_TaxaByAuthorship(verbatim, candidates, verbatimauthorshiponly=False, d
             candidates.loc[doescandidateequal,'authormatch'] = pdmin(candidates_authorships.loc[doescandidateequal,:],['authormatch1','authormatch2'], axis=1, skipna=True).astype('boolean')
             candidates.loc[doescandidateequal,'datematch_diff'] = candidates_authorships.loc[doescandidateequal,['datematch_diff1','datematch_diff2']].sum(axis=1, skipna=True, min_count=1).astype('Int64')
             candidates.loc[doescandidateequal,'authormatch_ratio'] = pdmean(candidates_authorships.loc[doescandidateequal,:],['authormatch_ratio1','authormatch_ratio2'], axis=1, skipna=True).astype('Float64')
-
-#            isnomatch = (~pd.isnull(candidates['match'])) & (~candidates['match'])
-#            ismatch = (~pd.isnull(candidates['match'])) & (candidates['match'])
-#            candidates.loc[isnomatch,'taxamatch'] = 'nomatch'
-#            candidates.loc[ismatch,'taxamatch'] = 'match'
 
     return candidates, ismore
 
@@ -1124,7 +1114,7 @@ def match_TaxaByFullClassification(data_classif, worms_classif, check_ambiguity=
 
         unique_wormsspecies = candidates[RANK_MAPPING_RENAMED['scientificname']].unique()
 
-        if (match['match'].sum() != 1) and (len(unique_wormsspecies) > 1): #DEBUG !=1
+        if (match['match'].sum() != 1) and (len(unique_wormsspecies) > 1):
 
             # More than one species name among WoRMS candidates
 
@@ -1171,7 +1161,7 @@ def match_TaxaByFullClassification(data_classif, worms_classif, check_ambiguity=
         # CASE N°1: Only one higher ranks match
 
 
-        if match['match'].sum()==1:
+        if match['match'].sum() == 1:
 
             doesmatch = 'match'
             match_idx = np.where(match['match'])[0][0]
@@ -1244,6 +1234,7 @@ def match_TaxaByFullClassification(data_classif, worms_classif, check_ambiguity=
                     else:
                         index += 1
 
+
             # STEP N°4: Is one of the candidates the best match for higher taxonomic ranks?
 
 
@@ -1308,7 +1299,7 @@ def match_TaxaByFullClassification(data_classif, worms_classif, check_ambiguity=
                     match_temp = match.loc[candidates.index,:].copy()
                     match_temp = match_temp[(match_temp['Nspeciesmatch'] == match_temp['Nspeciesmatch'].max())]
                     max_speciesratio = match_temp['speciesratio'].max() # no NaN
-                    match_temp = match_temp[(max_speciesratio - match_temp['speciesratio'])<1e-2]
+                    match_temp = match_temp[(max_speciesratio - match_temp['speciesratio']) < 1e-2]
                     candidates = candidates.loc[match_temp.index,:]
 
                     if check_ambiguity and (not isambiguity):
@@ -1328,6 +1319,7 @@ def match_TaxaByFullClassification(data_classif, worms_classif, check_ambiguity=
 
                 if check_ambiguity and isambiguity:
                     ambiguitymsg.append('SPECIESNAME')
+
 
             # STEP N°6: Do all candidates have the same classification and "accepted" status?
 
@@ -1609,7 +1601,6 @@ def apply_matchfilter(classification, matchfilter=None, check_ambiguity=True, fu
     coldiff = list(set(colnames) - set(RANK_MAPPING_RENAMED.values()))
     classification[coldiff] = pd.NA
 
-#    process = tqdm(range(nclassification), desc=indent + 'Progress')
     for idx in range(nclassification):
 
         spe = tuple([classification.loc[idx,RANK_MAPPING_RENAMED['scientificname']]])
@@ -1776,7 +1767,6 @@ def apply_acceptedfilter(classification, acceptedfilter=None, keep_fossil=False,
         # Remove above species taxa
 
         isabovespecies = (classification['match_type'] == 'match_abovespecies')
-#        print(classification.loc[isabovespecies,:]) #debug
         classification.loc[isabovespecies,'classif_matchtype_generatedby_isinworms'] += '_taxonNoSpecies'
         classification.loc[isabovespecies,'taxamatch_generatedby_isinworms'] = 'nomatch'
 
@@ -1955,19 +1945,12 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
     if len(missing_keys) != 0:
         raise Exception(f'`isinworms.py` | {missing_keys} WoRMS keys are missing in `WORMSCALL`')
 
-#    if (wormscall is not None) or (rank_mapping is not None):
-#        COLNAMES = list(set(list(set(WORMSCALL) - set(RANK_MAPPING.keys())) + list(RANK_MAPPING.values())))
-
     if worms_dtypes is not None:
         WORMS_DTYPES = worms_dtypes
 
     delkeys = list(set(WORMS_DTYPES.keys()) - set(WORMSCALL))
     for key in delkeys:
         del WORMS_DTYPES[key]
-
-#    missing_dtypes = set(WORMSCALL) - set(WORMS_DTYPES.keys())
-#    if len(missing_dtypes) != 0:
-#        printv(f'INFO | No dtype specified for: {list(missing_dtypes)}', verbose=verbose, indent=indent)
 
     ## Arguments
 
@@ -1982,12 +1965,6 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
 
     if (drop_conditions is not None) and (not isinstance(drop_conditions, dict)):
         raise TypeError(f'`isinworms.py` | `drop_conditions` must be a dictionary')
-
-#    if drop_nomatch and flag_nomatch:
-#        raise ValueError(f'`isinworms.py` | drop_nomatch={drop_nomatch} but flag_nomatch={flag_nomatch}')
-
-#    if drop_uncertain and flag_uncertain:
-#        raise ValueError(f'`isinworms.py` | drop_uncertain={drop_uncertain} but flag_uncertain={flag_uncertain}')
 
     params = {
               'matchfilter': matchfilter,
@@ -2023,13 +2000,6 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
                        'store_parallel': store_parallel,
                        'overwrite_parallel': overwrite_parallel_createwormsfilters
                       }
-
-#    rankkeys = list(RANK_MAPPING.keys())
-#    rankcolumns = list(itemgetter(*rankkeys)(RANK_MAPPING))
-#    print(rankkeys) #debug
-#    print(rankcolumns) #debug
-#    rankcolumns = list(RANK_MAPPING.values())
-#    wormscolumns = list(set(WORMSCALL) - set(RANK_MAPPING.keys()))
 
     rankcolumns_mapping = {}
     for key,rank in RANK_MAPPING.items():
@@ -2112,12 +2082,6 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
     else:
         classification = clean_taxonomy(taxonomy.replace('_MISSING_',pd.NA), **params, **params_store, **params_parallel)
 
-#        print('classification len:', len(classification)) #À SUPPRIMER APRES DEBUG (il peut y en avaoir moins dans classification car suppression des nomatch
-#        print('taxonomy len:', len(taxonomy))
-#        idx_test=classification.index[0]
-#        print('check:', taxonomy.loc[idx_test,:])
-#        print('check:', classification.loc[idx_test,:])
-
     # Convert WORMS-specific column dtypes
 
     for key, value in WORMS_DTYPES.items():
@@ -2146,7 +2110,6 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
     rankcolumns = list(rankcolumns_mapping.values())
     if not inplace:
         df[rankcolumns] = pd.NA
-#    df[rankcolumns] = df[rankcolumns].astype('string')
 
     ## Apply the standardized taxonomy
 
@@ -2174,7 +2137,6 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
         indexes = dfByClassification.get_group(group).index
         df.loc[indexes, target_columns] = classification.loc[idx, classification_columns].values
 
-#    df[wormscolumns] = df[wormscolumns].astype(WORMS_DTYPES_RENAMED)
     if check_ambiguity:
         df['issue_isinworms'] = df['issue_isinworms'].astype('string')
 
