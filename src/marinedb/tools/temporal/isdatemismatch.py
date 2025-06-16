@@ -368,7 +368,7 @@ def apply(df, datekey, yearkey, monthkey=None, daykey=None, stdnan=True, cvttype
     if stdnan:
         # prevent mismatches caused by unrecognized missing values
         printv('* Apply standardizenan', verbose=verbose, indent=indent)
-        df = standardizenan.apply(df, key=paramsV)
+        df = standardizenan.apply(df, key=paramsV, additional_policy='contains_letters_or_digits')
 
     if cvttype:
         # prevent mismatches caused by invalid year/month/day strings
