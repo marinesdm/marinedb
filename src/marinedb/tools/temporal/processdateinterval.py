@@ -112,10 +112,9 @@ def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_numb
         flag = False
         printv(f"INFO | As drop_interval='{drop_interval}', `flag` will be ignored", verbose=verbose, indent=indent)
 
-    df, datekey, outputkey = getcolumnname.apply(df, datekey, 'processdateinterval', inplace=inplace)
-
+    df, datekey, datekeyout = getcolumnname.apply(df, datekey, 'processdateinterval', inplace=inplace)
     if not inplace:
-        df[outputkey] = df[datekey].copy()
+        df[datekeyout] = df[datekey].copy()
 
     basedatekey = datekey.split('_processedby_')[0]
 
@@ -156,8 +155,8 @@ def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_numb
 
         # Delete date intervals
 
-        df.loc[df[flagname],outputkey] = pd.NA
-        df[outputkey] = df[outputkey].astype('string')
+        df.loc[df[flagname],datekeyout] = pd.NA
+        df[datekeyout] = df[datekeyout].astype('string')
 
         dropcolumns = []
 
@@ -202,7 +201,7 @@ def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_numb
             # Else, process date intervals
 
             ismissing = (pd.isnull(df['start']) & (~pd.isnull(df['end']))) | (pd.isnull(df['end']) & (~pd.isnull(df['start'])))
-            df.loc[ismissing,outputkey] = pd.NA
+            df.loc[ismissing,datekeyout] = pd.NA
             df.loc[ismissing,'issue_processdateinterval'] = f'{basedatekey.upper()}_INTERVAL_PROCESSING_FAILED'
 
             tempcol += ['upperbound','flag_isgreater']
@@ -212,16 +211,16 @@ def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_numb
             index_delete = df[(~ismissing) & df[flagname] & df['flag_isgreater']].index
             index2process = df[(~ismissing) & df[flagname] & (~df['flag_isgreater'])].index
 
-            df.loc[index_delete,outputkey] = pd.NA
+            df.loc[index_delete,datekeyout] = pd.NA
             df.loc[index_delete,'issue_processdateinterval'] = f'{basedatekey.upper()}_INTERVAL_EXCEEDS_LIMIT'
-            df = apply_strategy(df, outputkey, index2process, strategy)
+            df = apply_strategy(df, datekeyout, index2process, strategy)
 
         else:
 
             # Process all date intervals
 
             index2process = df[flagname].index
-            df = apply_strategy(df, outputkey, index2process, strategy)
+            df = apply_strategy(df, datekeyout, index2process, strategy)
 
         if drop_empty and pd.isnull(df['issue_processdateinterval']).all():
             tempcol += ['issue_processdateinterval']
