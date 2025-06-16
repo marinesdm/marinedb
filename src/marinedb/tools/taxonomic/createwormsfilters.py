@@ -14,7 +14,7 @@ import http
 import argparse
 import pandas as pd
 from tqdm import tqdm
-from datetime import date
+#from datetime import date
 from datetime import datetime
 from unidecode import unidecode
 from operator import itemgetter
@@ -101,7 +101,7 @@ def setup(wormscall=WORMSCALL):
 
 
 def update_set(myset,key):
-    if isnan(key, letters_only=True):
+    if isnan(key):
         return myset
     myset.add(key)
     return myset
@@ -112,9 +112,9 @@ def store_uniqueRawSciname(unique_rawsciname, outputfile, verbose=True, indent='
         f.writelines('\n'.join(['raw_sciname'] + list(unique_rawsciname)))
 
 @export
-def get_uniqueRawSciname(filepath, colname, resume=True, store=False, overwrite=False, outputdir='./', outputfile='', verbose=True, indent=''):
+def get_uniqueRawSciname(inputfile, colname, resume=True, store=False, overwrite=False, outputdir='./', outputfile='', verbose=True, indent=''):
 
-    printv(f'* Retrieve unique raw scientific names from {filepath}', verbose=verbose, indent=indent)
+    printv(f'* Retrieve unique raw scientific names from {inputfile}', verbose=verbose, indent=indent)
 
     unique_rawsciname = set()
 
@@ -136,15 +136,15 @@ def get_uniqueRawSciname(filepath, colname, resume=True, store=False, overwrite=
                 previous_outputfile = outputfile
                 left = outputfile.split('.')[0]
                 right = outputfile.split('.')[1]
-                outputfile = left + f'{date.today().strftime("_%Y%m%d")}.' + right
+                outputfile = left + f'{datetime.now().strftime("_%Y%m%d_%H%M%S")}.' + right
                 printv(f'INFO | Unique raw scinames will be stored in {outputfile} (`overwrite`={overwrite})', verbose=verbose, indent=indent)
 
     start = time.time()
 
-    open_file, decode_line = readfile.apply(filepath)
+    open_file, decode_line = readfile.apply(inputfile)
     error = 0
 
-    with open_file(filepath,'r') as data:
+    with open_file(inputfile,'r') as data:
 
         header = decode_line(data.readline()).strip('\n').split('\t')
         header_length = len(header)
@@ -334,7 +334,7 @@ def format_scinamesForWoRMS(raw_scinames, identification_level='species', min_le
         min_stringlength = min_words*min_length
 
 
-    if (pd.isnull(raw_scinames)) or (len(raw_scinames) == 0):
+    if isnan(raw_scinames, additional_policy='contains_letters'):
         return wormsscinames
 
     # Do not proceed with the code if hybrid name
@@ -502,7 +502,7 @@ def format_scinamesForWoRMS(raw_scinames, identification_level='species', min_le
 
                 if identification_level == 'best':
                     min_words = 2
-                    min_stringlength = min_words*min_length+1
+                    min_stringlength = min_words * min_length + 1
 
             if next:
 
@@ -842,7 +842,7 @@ def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level
             else:
                 left = outputfile.split('.')[0]
                 right = outputfile.split('.')[1]
-                outputfile = left + f'{date.today().strftime("_%Y%m%d")}.' + right
+                outputfile = left + f'{datetime.now().strftime("_%Y%m%d_%H%M%S")}.' + right
                 printv(f'INFO | WoRMS match filter will be stored in {outputfile} (`overwrite`={overwrite})', verbose=verbose, indent=indent)
 
     # Preprocess scientific names for WoRMS queries
@@ -1033,7 +1033,8 @@ def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level
 
     # Clean
 
-    os.remove(tempfile)
+    if tempfile in locals():
+        os.remove(tempfile)
 
     if return_filename:
         return outputfile, wormsmatch
@@ -1202,7 +1203,7 @@ def match_WoRMSByAcceptedSciname(valid_aphiaID, wormscall=WORMSCALL, species_onl
             else:
                 left = outputfile.split('.')[0]
                 right = outputfile.split('.')[1]
-                outputfile = left + f'{date.today().strftime("_%Y%m%d")}.' + right
+                outputfile = left + f'{datetime.now().strftime("_%Y%m%d_%H%M%S")}.' + right
                 printv(f'INFO | WoRMS match filter will be stored in {outputfile} (`overwrite`={overwrite})', verbose=verbose, indent=indent)
 
     wormsaccepted = []
@@ -1375,7 +1376,7 @@ def parallel_WoRMSmatch(wormsfunc, data, wormscall, cpu, max_attempt=3, verbose=
                     previous_filename = outputfile
                     left = outputfile.split('.')[0]
                     right = outputfile.split('.')[1]
-                    outputfile = left + f'{date.today().strftime("_%Y%m%d")}.' + right
+                    outputfile = left + f'{datetime.now().strftime("_%Y%m%d_%H%M%S")}.' + right
                     params['outputfile'] = outputfile.split('/')[-1]
 
 
@@ -1787,7 +1788,7 @@ def create_WoRMSrecognizedfilter(unique_rawscinames, wormscall=WORMSCALL, identi
         filename, worms_matchfilter = match_WoRMSBySciname(unique_rawscinames, **params_func)
 
     params_func['outputfile'] = filename
-    worms_matchfilter = standardizenan.apply(worms_matchfilter)
+    worms_matchfilter = standardizenan.apply(worms_matchfilter, additional_policy='contains_letters_or_digits')
 
     # Retrieve the classification for taxa that partially failed to match WoRMS backbone
 
@@ -1799,7 +1800,7 @@ def create_WoRMSrecognizedfilter(unique_rawscinames, wormscall=WORMSCALL, identi
 
     # Standardize missing values
 
-    worms_matchfilter = standardizenan.apply(worms_matchfilter)
+    worms_matchfilter = standardizenan.apply(worms_matchfilter, additional_policy='contains_letters_or_digits')
 
     # Convert ID fields to integer type
 
@@ -1909,7 +1910,7 @@ def create_WoRMSacceptedfilter(unaccepted_aphiaID, wormscall=WORMSCALL, species_
     printv('', verbose=verbose)
 
     worms_acceptedfilter = worms_acceptedfilter.drop(columns=['cyclic_status','cyclic_valid_AphiaID'])
-    worms_acceptedfilter = standardizenan.apply(worms_acceptedfilter)
+    worms_acceptedfilter = standardizenan.apply(worms_acceptedfilter, additional_policy='contains_letters_or_digits')
 
     # Retrieve the classification for taxa that partially failed to match WoRMS backbone
 
@@ -1917,7 +1918,7 @@ def create_WoRMSacceptedfilter(unaccepted_aphiaID, wormscall=WORMSCALL, species_
 
     # Standardize missing values
 
-    worms_acceptedfilter = standardizenan.apply(worms_acceptedfilter)
+    worms_acceptedfilter = standardizenan.apply(worms_acceptedfilter, additional_policy='contains_letters_or_digits')
 
     # Convert ID fields to integer type
 
@@ -1932,7 +1933,7 @@ def create_WoRMSacceptedfilter(unaccepted_aphiaID, wormscall=WORMSCALL, species_
     return worms_acceptedfilter
 
 @export
-def apply(filepath, colname, wormscall=WORMSCALL, identification_level='species', min_length=3, doublecheck=True, store=True, outputdir='./', overwrite=False, resume=True, resume_mode='soft', parallel=True, max_attempt=10, store_parallel=True, overwrite_parallel=False, resume_parallel=True, verbose=True, indent=''):
+def apply(inputfile, colname, wormscall=WORMSCALL, identification_level='species', min_length=3, doublecheck=True, store=True, outputdir='./', overwrite=False, resume=True, resume_mode='soft', parallel=True, max_attempt=10, store_parallel=True, overwrite_parallel=False, resume_parallel=True, verbose=True, indent=''):
 
     # Parameters
 
@@ -1989,10 +1990,10 @@ def apply(filepath, colname, wormscall=WORMSCALL, identification_level='species'
 
     # Get unique species
 
-    unique_rawscinames = get_uniqueRawSciname(filepath, colname=colname, resume=resume, **params_store, verbose=verbose, indent=indent)
+    unique_rawscinames = get_uniqueRawSciname(inputfile, colname=colname, resume=resume, **params_store, verbose=verbose, indent=indent)
 
     if len(unique_rawscinames) == 0: #tester avec gbifID !!
-        raise Exception(f"`createwormsfilters.py` | no scientific name found, {filepath} may be empty or '{colname}' column may not contain scientific names")
+        raise Exception(f"`createwormsfilters.py` | no scientific name found, {inputfile} may be empty or '{colname}' column may not contain scientific names")
 
     # Get WoRMS-recognized classifications
 
@@ -2047,7 +2048,7 @@ def apply(filepath, colname, wormscall=WORMSCALL, identification_level='species'
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Create WoRMS filters')
-    parser.add_argument('tabfilepath', type=str, help='path to the tab-separated file to be processed, either gzip-compressed or uncompressed')
+    parser.add_argument('tabinputfile', type=str, help='path to the tab-separated file to be processed, either gzip-compressed or uncompressed')
     parser.add_argument('colname', type=str, help='column containing raw scientific names')
     parser.add_argument('--wormscall', nargs='*', type=str, help='list containing the WoRMS variables to keep', default=WORMSCALL)
     parser.add_argument('--identification_level', type=str, help="should be 'best', 'species' or 'first'", default='species')
@@ -2086,7 +2087,7 @@ if __name__ == '__main__':
     print()
     print('Parameters')
     print('----------')
-    print(f'file: {args.tabfilepath}')
+    print(f'file: {args.tabinputfile}')
     print(f'colname: {args.colname}')
     for key, value in params.items():
         print(f'    {key}: {value}')
@@ -2097,7 +2098,7 @@ if __name__ == '__main__':
     start = time.time()
 
     params['indent'] = '  '
-    _ = apply(args.tabfilepath, args.colname, **params)
+    _ = apply(args.tabinputfile, args.colname, **params)
 
     end = time.time()
 
