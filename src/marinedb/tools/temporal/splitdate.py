@@ -34,7 +34,7 @@ def get_basekey(key, columns):
 
     return basekey
 
-def clean(df, yearkey, monthkey, daykey, issuekey, split, dropcolumns=None, drop_empty=True, verbose=True, indent=''):
+def clean(df, yearkey, monthkey, daykey, datekeyout, issuekey, split, dropcolumns=None, drop_empty=False, drop_mismatch=True, verbose=True, indent=''):
 
     # Drop columns
 
@@ -52,6 +52,8 @@ def clean(df, yearkey, monthkey, daykey, issuekey, split, dropcolumns=None, drop
             dropcolumns += [daykey]
         if pd.isnull(df[issuekey]).all():
             dropcolumns += [issuekey]
+        if drop_mismatch and pd.isnull(df[datekeyout]).all():
+            dropcolumns += [datekeyout]
 
     df.drop(columns=dropcolumns, inplace=True)
 
@@ -182,7 +184,7 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', dr
         if doeskeyexist:
             raise Exception(f'`splitdate.py` | {daykey} found in {",".join(keyin)} columns')
 
-    df, datekey, _ = getcolumnname.apply(df, datekey, '', inplace=True)
+    df, datekey, datekeyout = getcolumnname.apply(df, datekey, '', inplace=True)
     df, yearkey, yearkeyout = getcolumnname.apply(df, yearkey, yearmodulename, inplace=yearinplace)
     df, monthkey, monthkeyout = getcolumnname.apply(df, monthkey, monthmodulename, inplace=monthinplace)
     df, daykey, daykeyout = getcolumnname.apply(df, daykey, daymodulename, inplace=dayinplace)
@@ -199,6 +201,11 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', dr
                                   }
 
     df, datekey = call_processdateinterval(df, datekey, **processdateinterval_params, verbose=verbose, indent=indent)
+
+    if drop_mismatch:
+        df, datekey, datekeyout = getcolumnname.apply(df, datekey, 'splitdate', inplace=inplace)
+        if not inplace:
+            df[datekeyout] = df[datekey].copy()
 
     printv(f'* Split into year/month/day when known', verbose=verbose, indent=indent)
 
@@ -301,7 +308,7 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', dr
         else:
             dropcolumns = intervalcolumns
 
-        df = clean(df, yearkeyout, monthkeyout, daykeyout, issuekey, split, dropcolumns=dropcolumns, drop_empty=drop_empty, verbose=verbose, indent=indent)
+        df = clean(df, yearkeyout, monthkeyout, daykeyout, datekeyout, issuekey, split, dropcolumns=dropcolumns, drop_empty=drop_empty, drop_mismatch=drop_mismatch, verbose=verbose, indent=indent)
 
         return df
 
@@ -323,7 +330,7 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', dr
         else:
             dropcolumns = intervalcolumns
 
-        df = clean(df, yearkeyout, monthkeyout, daykeyout, issuekey, split, dropcolumns=dropcolumns, drop_empty=drop_empty, verbose=verbose, indent=indent)
+        df = clean(df, yearkeyout, monthkeyout, daykeyout, datekeyout, issuekey, split, dropcolumns=dropcolumns, drop_empty=drop_empty, drop_mismatch=drop_mismatch, verbose=verbose, indent=indent)
 
         return df
 
@@ -375,7 +382,7 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', dr
         df = modifyissuecolumn.apply(df, issuekey, f'{basedaykey}_MISMATCH', subset=isdaymismatch)
 
     if drop_mismatch:
-        df, datekey, datekeyout = getcolumnname.apply(df, datekey, 'splitdate', inplace=inplace)
+#        df, datekey, datekeyout = getcolumnname.apply(df, datekey, 'splitdate', inplace=inplace)
         if isyear:
             df.loc[isyearmismatch,[yearkeyout,monthkeyout,daykeyout]] = pd.NA
             df.loc[isyearmismatch,datekeyout] = pd.NA
@@ -400,7 +407,7 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', dr
     else:
         dropcolumns = intervalcolumns
 
-    df = clean(df, yearkeyout, monthkeyout, daykeyout, issuekey, split=split, dropcolumns=dropcolumns, drop_empty=drop_empty, verbose=verbose, indent=indent)
+    df = clean(df, yearkeyout, monthkeyout, daykeyout, datekeyout, issuekey, split=split, dropcolumns=dropcolumns, drop_empty=drop_empty, drop_mismatch=drop_mismatch, verbose=verbose, indent=indent)
 
     printv('', verbose=verbose)
 
