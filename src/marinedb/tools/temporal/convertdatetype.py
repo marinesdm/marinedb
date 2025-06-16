@@ -48,8 +48,13 @@ def astype_Int64(df, key, drop_empty=True, verbose=True, indent=''):
     # (excluding floating point)
 
     notonlynumbers = df[key].str.contains(r'[^.0-9]', regex=True)
-    df.loc[notonlynumbers, key] = pd.NA
-    df = modifyissuecolumn.apply(df, issuekey='issue_convertdatetype', issuemsg=f'{basekey}_INVALID', subset=notonlynumbers)
+    notfloatingpoint = (df[key].str.count(r'\.') > 1)
+    condition = (notonlynumbers | notfloatingpoint) #debug
+    if condition.any():
+        print(df.loc[condition, key]) #debug
+        print(df.loc[~condition,key])
+    df.loc[notonlynumbers | notfloatingpoint, key] = pd.NA
+    df = modifyissuecolumn.apply(df, issuekey='issue_convertdatetype', issuemsg=f'{basekey}_INVALID', subset=(notonlynumbers | notfloatingpoint))
 
     # Convert to integers
 
@@ -64,7 +69,7 @@ def astype_Int64(df, key, drop_empty=True, verbose=True, indent=''):
 
 @export
 def convert_year(df, yearkey, drop_ambiguous=False, drop_empty=True, verbose=True, indent=''):
-
+    print('yearkey:', yearkey) #debug
     baseyearkey = get_basekey(yearkey, list(df.columns))
 
     # Convert to integers
