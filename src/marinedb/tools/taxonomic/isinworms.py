@@ -673,7 +673,7 @@ def match_TaxaByAuthorship(verbatim, candidates, verbatimauthorshiponly=False, d
 
             if any(doescontainsensu_candidates):
 
-                exitcondition = (candidates_sensusplit.str.len()>2)
+                exitcondition = (candidates_sensusplit.str.len() > 2)
 
                 if any(exitcondition):
 
@@ -760,12 +760,12 @@ def match_TaxaByAuthorship(verbatim, candidates, verbatimauthorshiponly=False, d
                 index_singlematch = temp_match[temp_match==1].index.to_list()
                 if len(index_singlematch) != 0:
                     singlematch = idxmax(temp.loc[index_singlematch,:], ['match1','match2'], axis=1, skipna=True)
-                    idx1 = idx1 + singlematch[singlematch=='match1'].index.to_list()
-                    idx2 = idx2 + singlematch[singlematch=='match2'].index.to_list()
+                    idx1 = idx1 + singlematch[singlematch == 'match1'].index.to_list()
+                    idx2 = idx2 + singlematch[singlematch == 'match2'].index.to_list()
 
                 # More than one match
 
-                index_morematch = temp_match[temp_match>1].index.to_list()
+                index_morematch = temp_match[temp_match > 1].index.to_list()
                 if len(index_morematch) != 0:
 
                     #(~morematch_eqauthors) & (~morematch_eqdates) & (morematch_eqbest) : best author (equivalent to best date)
@@ -787,19 +787,25 @@ def match_TaxaByAuthorship(verbatim, candidates, verbatimauthorshiponly=False, d
                     morematch_bestauthor = idxmax(morematch, ['authormatch_ratio1','authormatch_ratio2'], axis=1, skipna=True).str[-1]
                     morematch_bestdate = idxmin(morematch, ['datematch_diff1','datematch_diff2'], axis=1, skipna=True).str[-1]
 
-                    conditions11 = (morematch_eqauthors) & (~morematch_eqdates) & (morematch_bestdate=='1')
-                    conditions12 = ((~morematch_eqauthors) | (morematch_eqdates)) & (morematch_bestauthor=='1')
+                    conditions11 = (morematch_eqauthors) & (~morematch_eqdates) & (morematch_bestdate == '1')
+                    conditions12 = ((~morematch_eqauthors) | (morematch_eqdates)) & (morematch_bestauthor == '1')
                     idx1 = idx1 + morematch[conditions11 | conditions12].index.to_list()
 
-                    conditions21 = (morematch_eqauthors) & (~morematch_eqdates) & (morematch_bestdate=='2')
-                    conditions22 = ((~morematch_eqauthors) | (morematch_eqdates)) & (morematch_bestauthor=='2')
+                    conditions21 = (morematch_eqauthors) & (~morematch_eqdates) & (morematch_bestdate == '2')
+                    conditions22 = ((~morematch_eqauthors) | (morematch_eqdates)) & (morematch_bestauthor == '2')
                     idx2 = idx2 + morematch[conditions21 | conditions22].index.to_list()
 
+                    if (len(idx1) == 0) and (len(idx2) == 0): #debug
+                        print('candidates sensu conflict:')
+                        print(temp)
+                        print(candidates[columns])
+                        print(verbatim)
+                        raise Exception
 
-                if len(idx1)!=0:
-                    candidates.loc[idx1, columns] = candidates_authorships.loc[idx1,list(itemgetter(*columns)(colmap1))].values
-                if len(idx2)!=0:
-                    candidates.loc[idx2, columns] = candidates_authorships.loc[idx2,list(itemgetter(*columns)(colmap2))].values
+                if len(idx1) != 0:
+                    candidates.loc[idx1, columns] = candidates_authorships.loc[idx1, list(itemgetter(*columns)(colmap1))].values
+                if len(idx2) != 0:
+                    candidates.loc[idx2, columns] = candidates_authorships.loc[idx2, list(itemgetter(*columns)(colmap2))].values
 
             # else:
             #   both authorships must match when known
@@ -813,7 +819,8 @@ def match_TaxaByAuthorship(verbatim, candidates, verbatimauthorshiponly=False, d
             candidates.loc[doescandidateequal,'authormatch'] = pdmin(candidates_authorships.loc[doescandidateequal,:],['authormatch1','authormatch2'], axis=1, skipna=True).astype('boolean')
             candidates.loc[doescandidateequal,'datematch_diff'] = candidates_authorships.loc[doescandidateequal,['datematch_diff1','datematch_diff2']].sum(axis=1, skipna=True, min_count=1).astype('Int64')
             candidates.loc[doescandidateequal,'authormatch_ratio'] = pdmean(candidates_authorships.loc[doescandidateequal,:],['authormatch_ratio1','authormatch_ratio2'], axis=1, skipna=True).astype('Float64')
-
+    #print('candidates after TaxaByAuthorship:')
+    #print(candidates[['match','datematch','authormatch','datematch_diff','authormatch_ratio','sensu_conflict']])
     return candidates, ismore
 
 
@@ -836,14 +843,15 @@ def match_TaxaByVerbatim(verbatim, candidates, wormscolumns, verbatimauthorshipo
         return {'candidates': candidates, 'processed': processed, 'match_idx': match_idx, 'classif': classif}
 
     # Match taxa by verbatim authorship
-
+    #print('verbatim:', verbatim) #debug
     candidates, ismore = match_TaxaByAuthorship(verbatim, candidates, **params)
 
     if pd.isnull(candidates['match']).all():
         return {'candidates': candidates, 'processed': processed, 'match_idx': match_idx, 'classif': classif}
 
     candidates = candidates[candidates['match']]
-
+    #print('candidates empty?:')
+    #print(candidates)
     if len(candidates) == 0:
 
         # No match
@@ -884,15 +892,16 @@ def match_TaxaByVerbatim(verbatim, candidates, wormscolumns, verbatimauthorshipo
 
         # More than one match
 
-        if not candidates['authormatch_ratio'].isna().all():
+        if (not candidates['authormatch_ratio'].isna().all()):
 
             # Keep the candidate that best matches the verbatim author names
 
             candidates = candidates[~pd.isnull(candidates['authormatch_ratio'])]
             max_authormatch_ratio = candidates['authormatch_ratio'].max()
             candidates = candidates[(max_authormatch_ratio - candidates['authormatch_ratio'])<=1e-2]
-
-            if len(candidates)==1:
+            #print('candidates empty?:') #debug
+            #print(candidates)
+            if len(candidates) == 1:
 
                 # Only one match
 
@@ -901,13 +910,15 @@ def match_TaxaByVerbatim(verbatim, candidates, wormscolumns, verbatimauthorshipo
                 classif = [doesmatch,'verbatim_bestAuthorMatch'] + candidates.loc[match_idx,wormscolumns].values.flatten().tolist()
                 processed = True
 
-        if (not processed) and (not all(candidates['datematch_diff'].isna())):
+        if (not processed) and (not candidates['datematch_diff'].isna().all()):
 
             # Keep the candidate that best matches:
             # - the verbatim author names, if any
             # - and the verbatim authorship date
 
             candidates = candidates[~pd.isnull(candidates['datematch_diff'])]
+            #print('candidates empty?:') #debug
+            #print(candidates)
             min_datematch_diff = candidates['datematch_diff'].min()
             candidates = candidates[candidates['datematch_diff']==min_datematch_diff]
 
@@ -920,7 +931,7 @@ def match_TaxaByVerbatim(verbatim, candidates, wormscolumns, verbatimauthorshipo
                 classif = [doesmatch,'verbatim_bestDateMatch'] + candidates.loc[match_idx,wormscolumns].values.flatten().tolist()
                 processed = True
 
-        if (not processed) and (not all(candidates['sensu_conflict'].isna())):
+        if (not processed) and (not candidates['sensu_conflict'].all()):
 
             # Keep the candidate that best matches:
             # - the verbatim author names, if any
@@ -932,7 +943,8 @@ def match_TaxaByVerbatim(verbatim, candidates, wormscolumns, verbatimauthorshipo
             #       the result should be `candidate1`
 
             candidates = candidates[~candidates['sensu_conflict']]
-
+            #print('candidates empty?:') #debug
+            #print(candidates)
             if len(candidates) == 1:
 
                 # Only one match
@@ -941,7 +953,9 @@ def match_TaxaByVerbatim(verbatim, candidates, wormscolumns, verbatimauthorshipo
                 match_idx = candidates.index[0]
                 classif = [doesmatch,'verbatim_noSensuConflict'] + candidates.loc[match_idx,wormscolumns].values.flatten().tolist()
                 processed = True
-
+    #print('candidates after TaxaByVerbatim')
+    #print(candidates[['match','datematch','authormatch','datematch_diff','authormatch_ratio','sensu_conflict','match']])
+    #print('processed:', processed)
     return {'candidates': candidates, 'processed': processed, 'match_idx': match_idx, 'classif': classif}
 
 
@@ -1032,7 +1046,7 @@ def match_TaxaByHigherRanks(ranks1, ranks2, fuzzy=True, fixed_allowedMismatch=Fa
     return match
 
 
-def match_TaxaByFullClassification(data_classif, worms_classif, check_ambiguity=True, verbatimcolumn=None, verbatimauthorshiponly=None, fuzzy=True, fixed_allowedMismatch=False, fixed_allowedMismatch_withNaN=1, fixed_allowedMismatch_withoutNaN=2, keep_fossil=False):
+def match_TaxaByFullClassification(data_classif, worms_classif, check_ambiguity=True, verbatimcolumn=None, verbatimauthorshiponly=None, fuzzy=True, fixed_allowedMismatch=False, fixed_allowedMismatch_withNaN=1, fixed_allowedMismatch_withoutNaN=2, keep_fossil=False, verbose=True, indent=''):
 
     higherranks = list(set(RANK_MAPPING_RENAMED.values()) - set([RANK_MAPPING_RENAMED['scientificname']]))
     wormscolumns = list(worms_classif.columns)
@@ -1054,7 +1068,7 @@ def match_TaxaByFullClassification(data_classif, worms_classif, check_ambiguity=
             print('            ERROR            ')
             print('-----------------------------')
             print(worms_classif)
-            raise NotImplementedError('`isinworms.py` | some candidates match while others do not, or none match but have different `match_type` values')
+            raise NotImplementedError('`isinworms.py` | Some candidates match while others do not, or none match but have different `match_type` values')
 
         else:
             doesmatch = 'nomatch'
@@ -1079,7 +1093,7 @@ def match_TaxaByFullClassification(data_classif, worms_classif, check_ambiguity=
         check_ambiguity = False
 
     else:
-
+        #print('*******************************') #debug
         # WoRMS match
 
         params = {
@@ -1093,6 +1107,7 @@ def match_TaxaByFullClassification(data_classif, worms_classif, check_ambiguity=
 
 
         # STEP N°1: Do the higher ranks match?
+
 
         match = match_TaxaByHigherRanks(worms_classif.loc[:,higherranks], data_classif.loc[:,higherranks], **params)
 
@@ -1201,15 +1216,17 @@ def match_TaxaByFullClassification(data_classif, worms_classif, check_ambiguity=
 
 
             if (not processed) and isverbatim and (not pd.isnull(candidates['authority']).any()):
-
                 index = 0
                 while (not processed) and (index != len(verbatimcolumn)):
-
+                    #print('STEP N°', index)
                     verbatim = data_classif.loc[0,verbatimcolumn[index]]
-
+                    #if len(candidates) == 0: #debug
+                        #print('here 6')
+                        #print(worms_classif)
+                        #print(data_classif)
                     if not pd.isnull(verbatim):
 
-                        results = match_TaxaByVerbatim(verbatim, candidates, wormscolumns, verbatimauthorshiponly=verbatimauthorshiponly[index])
+                        results = match_TaxaByVerbatim(verbatim, candidates, wormscolumns, verbatimauthorshiponly=verbatimauthorshiponly[index], verbose=verbose, indent=indent)
 
                         candidates = results['candidates']
                         match_idx = results['match_idx']
@@ -1354,7 +1371,9 @@ def match_TaxaByFullClassification(data_classif, worms_classif, check_ambiguity=
                 classif = pd.DataFrame([[doesmatch,'classification_undecided'] + [pd.NA]*len(wormscolumns)], columns=colnames)
                 processed = True
 
+
         # CASE N°3: no higher ranks match
+
 
         if match['match'].sum() == 0:
 
@@ -1393,7 +1412,7 @@ def match_TaxaByFullClassification(data_classif, worms_classif, check_ambiguity=
 
                         if not pd.isnull(verbatim):
 
-                            results = match_TaxaByVerbatim(verbatim, candidates, wormscolumns, verbatimauthorshiponly=verbatimauthorshiponly[index])
+                            results = match_TaxaByVerbatim(verbatim, candidates, wormscolumns, verbatimauthorshiponly=verbatimauthorshiponly[index], verbose=verbose, indent=indent)
 
                             candidates = results['candidates']
                             match_idx = results['match_idx']
@@ -1441,6 +1460,8 @@ def match_TaxaByFullClassification(data_classif, worms_classif, check_ambiguity=
 
     if add_ambiguitycol:
         classif['issue_isinworms'] = ('AMBIGUOUS_TAXAMATCH_' + '_'.join(ambiguitymsg) if isambiguity else pd.NA)
+    #print('*******************************') #debug
+    #print() #debug
 
     return classif
 
@@ -1565,7 +1586,7 @@ def apply_matchfilter(classification, matchfilter=None, check_ambiguity=True, fu
             params_dict['resume_mode'] = 'hard'
             params_store['overwrite'] = False
             params_store['overwrite_parallel'] = False
-
+            print(species2process) #debug
             addmatchfilter = call_create_WoRMSrecognizedfilter(species2process, parallel=parallel, verbose=verbose, indent=indent, **params_store, **params_dict)
             matchfilter = pd.concat([matchfilter,addmatchfilter.loc[:,matchfilter.columns]], axis=0)
 
@@ -1582,7 +1603,9 @@ def apply_matchfilter(classification, matchfilter=None, check_ambiguity=True, fu
               'fixed_allowedMismatch_withoutNaN': fixed_allowedMismatch_withoutNaN,
               'verbatimauthorshiponly': verbatimauthorshiponly,
               'verbatimcolumn': verbatimcolumn,
-              'keep_fossil': keep_fossil
+              'keep_fossil': keep_fossil,
+              'verbose': verbose,
+              'indent': indent
              }
 
     if verbatimcolumn is None:
@@ -1774,7 +1797,7 @@ def apply_acceptedfilter(classification, acceptedfilter=None, keep_fossil=False,
 
         if not keep_fossil:
 
-            classification['isExtinct'] = classification['isExtinct'].astype('Int64')
+            classification['isExtinct'] = classification['isExtinct'].astype('Float64').astype('Int64')
             isfossil = (classification['isExtinct'] == 1)
             classification.loc[isfossil,'classif_matchtype_generatedby_isinworms'] += '_fossil'
             classification.loc[isfossil,'taxamatch_generatedby_isinworms'] = 'nomatch'
@@ -2054,10 +2077,10 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
     # Convert all missing values in `columns` columns to pd.NA
 
     if stdnan:
-        df = standardizenan.apply(df, key=rankcolumns, letters_only=True)
+        df = standardizenan.apply(df, key=rankcolumns, additional_policy='contains_letters')
         if verbatimcolumn is not None:
             coldiff = list(set(verbatimcolumn) - set(rankcolumns))
-            df = standardizenan.apply(df, key=coldiff, letters_only=False)
+            df = standardizenan.apply(df, key=coldiff, additional_policy='contains_letters_or_digits')
 
     # Pre-process the raw scientific names
     # to avoid quotation mark problems with pandas
