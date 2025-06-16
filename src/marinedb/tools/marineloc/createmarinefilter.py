@@ -98,7 +98,7 @@ def extract_marine_indices(inputdir, controlkey=None, outputfile='marine_filter'
     init_array = True
     init_storage = True
     columns = ['index','mask','latitude','longitude']
-    if controlkey is not None:
+    if (controlkey is not None) and (len(controlkey) != 0):
         columns.append(controlkey)
 
     if verbose:

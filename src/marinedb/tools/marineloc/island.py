@@ -273,7 +273,7 @@ def island(lat, lon, verbose=True, indent=''):
     return df
 
 @export
-def process_one_file(filepath, latkey, lonkey, idxkey, sep='\t', outputdir='./', store_time=True, parallel=False, mask_filepath=None, verbose=True, indent='', controlkey=None, cluster_mode=False):
+def process_one_file(filepath, latkey, lonkey, idxkey, controlkey=None, sep='\t', outputdir='./', store_time=True, parallel=False, mask_filepath=None, verbose=True, indent='', cluster_mode=False):
 
     outputdir = os.path.expanduser(outputdir)
 
@@ -298,13 +298,13 @@ def process_one_file(filepath, latkey, lonkey, idxkey, sep='\t', outputdir='./',
     data = pd.read_csv(filepath, sep=sep, engine='python')
     data_processed = island(data[latkey], data[lonkey], verbose=verbose_func, indent=indent)
     data_processed['index'] = data[idxkey].values
-    if controlkey is not None:
+    if (controlkey is not None) and (len(controlkey) != 0):
         data_processed[controlkey] = data[controlkey]
 
     printv(f'>>> save to {res}', verbose=verbose_func, indent=indent)
 
     columns = ['index','latitude','longitude','mask','island']
-    if controlkey is not None:
+    if (controlkey is not None) and (len(controlkey) != 0):
         columns.append(controlkey)
     data_processed[columns].to_csv(res, index=False, sep=sep, encoding='utf-8')
 
