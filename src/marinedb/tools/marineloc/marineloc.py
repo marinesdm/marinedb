@@ -21,7 +21,7 @@ __all__ = ['apply']
 
 CHUNKSIZE = 100000
 
-def apply(inputfile, latkey='', lonkey='', idxkey='', controlkey='', uncompressed_chunks_dir='',  sep='\t', fileslist=None, kernel_type=None, kernel_size=None, maskfile=None, chunksize=CHUNKSIZE, split_type='', outputdir='', store_time=True, parallel=False, cpu=None, filterfile='marine_filter', outputfile='', verbose=True, indent=''):
+def apply(inputfile, latkey='', lonkey='', idxkey='', controlkey='', uncompressed_chunks_dir='',  sep='\t', fileslist=None, kernel_type=None, kernel_size=None, maskfile=None, chunksize=CHUNKSIZE, split_type='', keep_mask=False, outputdir='', store_time=True, parallel=False, cpu=None, filterfile='marine_filter', outputfile='', verbose=True, indent=''):
 
     sep = sep.encode('utf-8').decode('unicode_escape')
 
@@ -42,7 +42,7 @@ def apply(inputfile, latkey='', lonkey='', idxkey='', controlkey='', uncompresse
         issplit = issplitdir and isnotempty
         if not issplit:
             columns = [latkey, lonkey]
-            if controlkey is not None:
+            if len(controlkey) != 0:
                 columns.append(controlkey)
             uncompressed_chunks_dir = split_pandas_parquet.apply(inputfile, split_type=split_type, columns=columns, sep=sep, chunksize=chunksize, outputdir=uncompressed_chunks_dir, verbose=verbose, indent=indent)
             idxkey = 'index'
@@ -142,6 +142,7 @@ def apply(inputfile, latkey='', lonkey='', idxkey='', controlkey='', uncompresse
                          'controlkey': controlkey,
                          'inputfile_sep': sep,
                          'filter_sep': sep,
+                         'keep_mask': keep_mask,
                          'outputfile': outputfile,
                          'verbose': verbose,
                          'indent': indent  + '   '
