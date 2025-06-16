@@ -36,7 +36,11 @@ STR_NAN_VALUES = ['-1.#IND',
                   '',
                   'None']
 
-def isnan(value, nan_values=None, letters_only=False):
+def isnan(value, nan_values=None, additional_policy=''):
+
+    if len(additional_policy) != 0:
+        if additional_policy not in ['contains_letters', 'contains_digits', 'contains_letters_or_digits']:
+            raise ValueError(f"`standardizenan.py | `additional_policy` must be either 'contains_letters' or 'contains_letters_or_digits', but received '{additional_policy}'")
 
     try:
         if pd.isnull(float(value)): #NaN, nan, 'nan', 'NaN', None ...
@@ -56,23 +60,29 @@ def isnan(value, nan_values=None, letters_only=False):
     if str(value).lower() in nan_values:
         return True
 
-    if letters_only:
-        pattern=r'[a-zA-Z]'
-    else:
-        pattern=r'[a-zA-Z0-9]'
+    if len(additional_policy) != 0:
 
-    if not re.search(pattern,str(value)):
-        return True
+        if additional_policy == 'contains_letters':
+            pattern = r'[a-zA-Z]'
+        elif additional_policy == 'contains_digits':
+            pattern = r'[0-9]'
+        else:
+            pattern = r'[a-zA-Z0-9]'
+
+        if not re.search(pattern, str(value)):
+            return True
 
     return False
 
-def stdnan(value, nan_values=None, letters_only=False):
-    if isnan(value, nan_values=nan_values, letters_only=letters_only):
+def stdnan(value, nan_values=None, additional_policy=''):
+
+    if isnan(value, nan_values=nan_values, additional_policy=additional_policy):
         return pd.NA
+
     return value
 
 @export
-def apply(df, key=None, nan_values=None, letters_only=False):
+def apply(df, key=None, nan_values=None, additional_policy=''):
 
     visnan = np.vectorize(isnan)
 
@@ -81,9 +91,9 @@ def apply(df, key=None, nan_values=None, letters_only=False):
         # Convert all missing values to pd.NA
 
         if isinstance(df, pd.Series):
-            df = pd.Series(np.where(visnan(df, nan_values=nan_values, letters_only=letters_only), pd.NA, df))
+            df = pd.Series(np.where(visnan(df, nan_values=nan_values, additional_policy=additional_policy), pd.NA, df))
         elif isinstance(df, pd.DataFrame):
-            df = pd.DataFrame(np.where(visnan(df, nan_values=nan_values, letters_only=letters_only), pd.NA, df), columns=df.columns)
+            df = pd.DataFrame(np.where(visnan(df, nan_values=nan_values, additional_policy=additional_policy), pd.NA, df), columns=df.columns)
         else:
             raise TypeError(f"`standardizenan.py` | '{type(df).__name__}' type not supported")
 
@@ -91,6 +101,6 @@ def apply(df, key=None, nan_values=None, letters_only=False):
 
         # Convert all missing values in `key` columns to pd.NA
 
-        df[key] = np.where(visnan(df[key], nan_values=nan_values, letters_only=letters_only), pd.NA, df[key])
+        df[key] = np.where(visnan(df[key], nan_values=nan_values, additional_policy=additional_policy), pd.NA, df[key])
 
     return df
