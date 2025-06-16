@@ -19,17 +19,23 @@ from marinedb.utils.printverbose import printv
 
 # Global variable
 
-__all__ = ['contains', 'doesnotcontain','dropvalues','isboundedby','isin','isna','notisin','doeslateqlon','isbelow_minlatlonprecision','iszero','lettersonly','taxasubset','parsedate','processdateinterval','splitdate','temporal']
+__all__ = ['contains', 'doesnotcontain', 'dropvalues', 'isboundedby', 'isin', 'isna', 'notisin', 'doeslateqlon', 'isbelow_minlatlonprecision', 'iszero', 'lettersonly', 'taxasubset', 'mapbasisofrecord', 'parsedate', 'processdateinterval', 'splitdate', 'temporal']
 
 
-def apply(df, config_dict, verbose=True, indent='', store_stats=True, outputdir_marinedb='./', outputfile_marinedb='marinedb_stats.txt'):
+def apply(df, config_dict, verbose=True, indent='', store_stats=True, outputdir_marinedb='./', outputfile_marinedb='marinedb_stats.txt', partition=None):
 
     if len(os.path.dirname(outputfile_marinedb)) == 0:
         outputfile_marinedb = os.path.join(outputdir_marinedb, outputfile_marinedb)
 
     header = []
     stats = []
+    if partition is not None:
+        header += ['partition_number']
+        stats += [partition]
+    header += ['init']
+    stats += [len(df)]
 
+    count = 1
     for procstep in config_dict:
 
         colname = list(procstep.keys())[0]
@@ -48,7 +54,7 @@ def apply(df, config_dict, verbose=True, indent='', store_stats=True, outputdir_
             proc_params['verbose'] = verbose
             proc_params['indent'] = indent + '   '
 
-            length_before=len(df)
+            length_before = len(df)
 
             if colname == 'tool':
 
@@ -78,7 +84,7 @@ def apply(df, config_dict, verbose=True, indent='', store_stats=True, outputdir_
             printv(f'{proc_name} | before: {length_before}, after: {length_after}', verbose=verbose, indent=indent + '   ')
 
             if store_stats:
-                header += [f'{procstep_string}' + '_before', f'{procstep_string}' + '_after']
+                header += [f'STEP_{count:03}_{procstep_string}_before', f'STEP_{count:03}_{procstep_string}_after']
                 stats += [length_before, length_after]
 
             columns_after = set(df.columns)
@@ -86,6 +92,8 @@ def apply(df, config_dict, verbose=True, indent='', store_stats=True, outputdir_
             if len(new_columns) != 0:
                 printv(f'{proc_name} | new column(s): {list(new_columns)}', verbose=verbose, indent=indent + '   ')
             printv('', verbose=verbose, indent=indent)
+
+            count += 1
 
     if store_stats:
         stats = pd.DataFrame([stats], columns=header, dtype=int)
