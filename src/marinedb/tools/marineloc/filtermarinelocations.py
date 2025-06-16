@@ -69,11 +69,11 @@ def filter_parquet(inputfile, filterfile, controlkey=None, filter_sep='\t', outp
     printv('', verbose=verbose, indent=indent)
 
     filter_sep = filter_sep.encode('utf-8').decode('unicode_escape')
-    doublecheck = (controlkey is not None)
+    doublecheck = (controlkey is not None) and (len(controlkey) != 0)
     resume = False
 
     if os.path.isfile(outputfile):
-        if controlkey is not None:
+        if doublecheck:
             resume = True
             first_line, last_line = readfirstlast(outputfile)
             header_outputfile = first_line.strip('\n').split('\t')
@@ -161,13 +161,13 @@ def filter_parquet(inputfile, filterfile, controlkey=None, filter_sep='\t', outp
                 if doublecheck:
                     assert subset_index == sorted(subset_index)
                 batch_df = batch_df.set_index('index').loc[subset_index,:].reset_index()
-                batch_df = standardizenan.apply(batch_df)
+                batch_df = standardizenan.apply(batch_df, additional_policy='contains_letters_or_digits')
 
                 if doublecheck:
+
                     assert len(batch_df) == len(subset_index)
 
-                if doublecheck:
-                    subset_validation = standardizenan.apply(validation[:cutoff_index])
+                    subset_validation = standardizenan.apply(validation[:cutoff_index], additional_policy='contains_letters_or_digits')
                     ismissing = pd.isnull(batch_df[controlkey]) & pd.isnull(subset_validation)
                     ismismatch = (~ismissing) & (batch_df[controlkey] != subset_validation)
                     if any(ismismatch):
@@ -230,7 +230,7 @@ def filter_uncompressed_gzip(inputfile, filterfile, controlkey=None, inputfile_s
 
     inputfile_sep = inputfile_sep.encode('utf-8').decode('unicode_escape')
     filter_sep = filter_sep.encode('utf-8').decode('unicode_escape')
-    doublecheck = (controlkey is not None)
+    doublecheck = (controlkey is not None) and (len(controlkey) != 0)
 
     data = []
     count = 0
@@ -307,9 +307,9 @@ def filter_uncompressed_gzip(inputfile, filterfile, controlkey=None, inputfile_s
 
                         if doublecheck:
                             original_value = preprocessquotationmark.apply(obs[data_controlkey_idx])
-                            original_value = standardizenan.stdnan(original_value)
+                            original_value = standardizenan.stdnan(original_value, additional_policy='contains_letters_or_digits')
                             filter_value = preprocessquotationmark.apply(lines[filter_controlkey_idx])
-                            filter_value = standardizenan.stdnan(filter_value)
+                            filter_value = standardizenan.stdnan(filter_value, additional_policy='contains_letters_or_digits')
                             try:
                                 original_value = int(float(original_value))
                                 filter_value = int(float(filter_value))
@@ -350,7 +350,7 @@ def filter_uncompressed_gzip(inputfile, filterfile, controlkey=None, inputfile_s
     return error, count
 
 @export
-def apply(inputfile, filterfile, inputfile_format='uncompressed_gzip', controlkey=None, inputfile_sep='\t', filter_sep='\t', outputfile='', verbose=True, indent=''):
+def apply(inputfile, filterfile, inputfile_format='uncompressed_gzip', controlkey=None, keep_mask=False, inputfile_sep='\t', filter_sep='\t', outputfile='', verbose=True, indent=''):
 
     inputfile_sep = inputfile_sep.encode('utf-8').decode('unicode_escape')
     filter_sep = filter_sep.encode('utf-8').decode('unicode_escape')
@@ -367,7 +367,7 @@ def apply(inputfile, filterfile, inputfile_format='uncompressed_gzip', controlke
     if inputfile_format == 'parquet':
         count = filter_parquet(inputfile, filterfile, controlkey=controlkey, filter_sep=filter_sep, outputfile=outputfile, verbose=verbose, indent=indent)
     elif (inputfile_format == 'uncompressed_gzip') or (inputfile_format == 'pandas'):
-        error, count = filter_uncompressed_gzip(inputfile, filterfile, controlkey=controlkey, inputfile_sep=inputfile_sep, filter_sep=filter_sep, outputfile=outputfile, verbose=verbose, indent=indent)
+        error, count = filter_uncompressed_gzip(inputfile, filterfile, controlkey=controlkey, inputfile_sep=inputfile_sep, filter_sep=filter_sep, keep_mask=keep_mask, outputfile=outputfile, verbose=verbose, indent=indent)
         if error != 0:
             printv(f'ERROR:', verbose=verbose, indent=indent)
             printv(f'SplittingError: {error} observations produced a different number of fields upon splitting compared to the header, and were consequently ignored.', verbose=verbose, indent=indent)
