@@ -1,0 +1,126 @@
+{
+    "DATE_BEFORE_MIN": {
+        "id": 0,
+        "description": "`eventDate` should be later than the set minimum date (year 0)"
+    },
+    "DATE_IN_FUTURE": {
+        "id": 1,
+        "description": "`eventDate` should not be in the future"
+    },
+    "LON_OUT_OF_RANGE": {
+        "id": 2,
+        "description": "`decimalLongitude` should be within the range of -180 to 180"
+    },
+    "LAT_OUT_OF_RANGE": {
+        "id": 3,
+        "description": "`decimalLatitude` should be within the range of -90 to 90"
+    },
+    "NO_COORD": {
+        "id": 4,
+        "description": "`decimalLongitude` and `decimalLatitude` should be present"
+    },
+    "ZERO_COORD": {
+        "id": 5,
+        "description": "`decimalLatitude` and `decimalLongitude` should not be zero"
+    },
+    "DEPTH_OUT_OF_RANGE": {
+        "id": 6,
+        "description": "`minimumDepthInMeters` and `maximumDepthInMeters` should be within the range of -100000 and 11000"
+    },
+    "NO_DEPTH": {
+        "id": 7,
+        "description": "`minimumDepthInMeters` and `maximumDepthInMeters` should be present"
+    },
+    "MIN_DEPTH_EXCEEDS_MAX": {
+        "id": 8,
+        "description": "`minimumDepthInMeters` should not exceeds `maximumDepthInMeters`"
+    },
+    "DEPTH_EXCEEDS_BATH": {
+        "id": 9,
+        "description": "`minimumDepthInMeters` and `maximumDepthInMeters` should be less than or equal to the bathymetric depth"
+    },
+    "ON_LAND": {
+        "id": 10,
+        "description": "The occurrence is located on land, based on OpenStreetMap land polygons"
+    },
+    "NO_MATCH": {
+        "id": 11,
+        "description": "Taxon should unambiguously match with WoRMS"
+    },
+    "NOT_MARINE": {
+        "id": 12,
+        "description": "Taxon should not be exclusively freshwater or terrestrial according to WoRMS"
+    },
+    "NO_ACCEPTED_NAME": {
+        "id": 13,
+        "description": "An accepted name should exist in WoRMS"
+    },
+    "MARINE_UNSURE": {
+        "id": 14,
+        "description": "Taxon should not be exclusively freshwater or terrestrial according to WoRMS"
+    },
+    "SCIENTIFICNAMEID_EXTERNAL": {
+        "id": 15,
+        "description": ""
+    },
+    "WORMS_ANNOTATION_NO_BIOTA": {
+        "id": 16,
+        "description": "When OBIS receives a scientific name which cannot be matched with WoRMS automatically, it is sent to the WoRMS team. The WoRMS team will then annotate the name to indicate if and how the name can be fixed."
+    },
+    "WORMS_ANNOTATION_UNRESOLVABLE": {
+        "id": 17,
+        "description": "When OBIS receives a scientific name which cannot be matched with WoRMS automatically, it is sent to the WoRMS team. The WoRMS team will then annotate the name to indicate if and how the name can be fixed."
+    },
+    "WORMS_ANNOTATION_REJECT_HABITAT": {
+        "id": 18,
+        "description": "When OBIS receives a scientific name which cannot be matched with WoRMS automatically, it is sent to the WoRMS team. The WoRMS team will then annotate the name to indicate if and how the name can be fixed."
+    },
+    "WORMS_ANNOTATION_REJECT_GROUPING": {
+        "id": 19,
+        "description": "When OBIS receives a scientific name which cannot be matched with WoRMS automatically, it is sent to the WoRMS team. The WoRMS team will then annotate the name to indicate if and how the name can be fixed."
+    },
+    "WORMS_ANNOTATION_REJECT_AMBIGUOUS": {
+        "id": 20,
+        "description": "When OBIS receives a scientific name which cannot be matched with WoRMS automatically, it is sent to the WoRMS team. The WoRMS team will then annotate the name to indicate if and how the name can be fixed."
+    },
+    "WORMS_ANNOTATION_REJECT_FOSSIL": {
+        "id": 21,
+        "description": "When OBIS receives a scientific name which cannot be matched with WoRMS automatically, it is sent to the WoRMS team. The WoRMS team will then annotate the name to indicate if and how the name can be fixed."
+    },
+    "WORMS_ANNOTATION_RESOLVABLE": {
+        "id": 22,
+        "description": "When OBIS receives a scientific name which cannot be matched with WoRMS automatically, it is sent to the WoRMS team. The WoRMS team will then annotate the name to indicate if and how the name can be fixed."
+    },
+    "WORMS_ANNOTATION_RESOLVABLE_TYPO": {
+        "id": 23,
+        "description": "When OBIS receives a scientific name which cannot be matched with WoRMS automatically, it is sent to the WoRMS team. The WoRMS team will then annotate the name to indicate if and how the name can be fixed."
+    },
+    "WORMS_ANNOTATION_RESOLVABLE_AUTHORITY": {
+        "id": 24,
+        "description": "When OBIS receives a scientific name which cannot be matched with WoRMS automatically, it is sent to the WoRMS team. The WoRMS team will then annotate the name to indicate if and how the name can be fixed."
+    },
+    "WORMS_ANNOTATION_RESOLVABLE_UNPUBLISHED": {
+        "id": 25,
+        "description": "When OBIS receives a scientific name which cannot be matched with WoRMS automatically, it is sent to the WoRMS team. The WoRMS team will then annotate the name to indicate if and how the name can be fixed."
+    },
+    "WORMS_ANNOTATION_RESOLVABLE_HUMAN": {
+        "id": 26,
+        "description": "When OBIS receives a scientific name which cannot be matched with WoRMS automatically, it is sent to the WoRMS team. The WoRMS team will then annotate the name to indicate if and how the name can be fixed."
+    },
+    "WORMS_ANNOTATION_RESOLVABLE_LOSS": {
+        "id": 27,
+        "description": "When OBIS receives a scientific name which cannot be matched with WoRMS automatically, it is sent to the WoRMS team. The WoRMS team will then annotate the name to indicate if and how the name can be fixed."
+    },
+    "WORMS_ANNOTATION_AWAIT_EDITOR": {
+        "id": 28,
+        "description": "When OBIS receives a scientific name which cannot be matched with WoRMS automatically, it is sent to the WoRMS team. The WoRMS team will then annotate the name to indicate if and how the name can be fixed."
+    },
+    "WORMS_ANNOTATION_AWAIT_PROVIDER": {
+        "id": 29,
+        "description": "When OBIS receives a scientific name which cannot be matched with WoRMS automatically, it is sent to the WoRMS team. The WoRMS team will then annotate the name to indicate if and how the name can be fixed."
+    },
+    "WORMS_ANNOTATION_TODO": {
+        "id": 30,
+        "description": "When OBIS receives a scientific name which cannot be matched with WoRMS automatically, it is sent to the WoRMS team. The WoRMS team will then annotate the name to indicate if and how the name can be fixed."
+    }
+}
