@@ -21,11 +21,16 @@ def apply(df, key, flag=False, dropna=False, verbose=True, indent=''):
 
     df[key] = df[key].astype('string')
 
-    pattern=r'[^a-zA-Z\s]'
+    pattern=r'[^a-zA-Z\s\-]'
     islettersonly = (~df[key].str.contains(pattern, na=False))
     islettersonly = islettersonly.astype('boolean')
     ismissing = pd.isnull(df[key])
     islettersonly[ismissing] = pd.NA
+
+    if not islettersonly.all(): #debug
+        print('islettersonly')
+        print('key:', key)
+        print(df.loc[(~ismissing) & (~islettersonly), key]) #debug
 
     if flag:
         # Flag rows where the `key` column contains only letters
