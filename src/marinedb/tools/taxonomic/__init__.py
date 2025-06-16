@@ -3,4 +3,4 @@
 
 from . import *
 
-__all__ = ['createwormsfilters', 'isinworms', 'lettersonly', 'taxasubset']
+__all__ = ['createwormsfilters', 'isinworms', 'lettersonly', 'taxasubset', 'mapbasisofrecord']
