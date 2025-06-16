@@ -14,6 +14,7 @@ import pyarrow.parquet as pq
 # Internal import
 
 from marinedb.utils import readfile
+from marinedb.utils import cleardirectory
 from marinedb.utils.printverbose import printv
 from marinedb.utils import preprocessquotationmark
 
@@ -208,6 +209,13 @@ def apply(inputfile, split_type='', columns=None, sep='\t', chunksize=CHUNKSIZE,
 
     sep = sep.encode('utf-8').decode('unicode_escape')
 
+    if 'split' not in outputdir.split('/')[-2:]:
+        outputdir = os.path.join(outputdir, 'split')
+    try:
+        os.mkdir(outputdir)
+    except FileExistsError:
+        pass
+
     params = {
               'columns': columns,
               'chunksize': chunksize,
@@ -227,13 +235,17 @@ def apply(inputfile, split_type='', columns=None, sep='\t', chunksize=CHUNKSIZE,
         try:
             outputdir = split_pandas(inputfile, sep=sep, **params)
         except Exception as err1:
+            printv('', verbose=verbose, indent=indent)
             printv('INFO | `split_pandas` failed, attempting `split_parquet` as fallback', verbose=verbose, indent=indent)
             printv('', verbose=verbose, indent=indent)
+            cleardirectory.apply(outputdir)
             try:
                 outputdir = split_parquet(inputfile, **params)
+            except Exception as err2:
+                printv('', verbose=verbose, indent=indent)
                 printv('INFO | `split_parquet` failed, attempting `split_uncompressed_gzip` as fallback', verbose=verbose, indent=indent)
                 printv('', verbose=verbose, indent=indent)
-            except Exception as err2:
+                cleardirectory.apply(outputdir)
                 try:
                     outputdir = split_uncompressed_gzip(inputfile, sep=sep, **params)
                 except Exception as err3:
