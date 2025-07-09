@@ -9,6 +9,7 @@ import pandas as pd
 # Internal import
 
 from marinedb.utils.printverbose import printv
+from marinedb.utils import getdefaultoutputfile
 
 from marinedb.tools.marineloc import createmask
 from marinedb.tools.marineloc import createmarinefilter
@@ -127,11 +128,8 @@ def apply(inputfile, latkey='', lonkey='', idxkey='', controlkey='', uncompresse
             except FileExistsError:
                 pass
 
-        if len(outputfile) == 0:
-            temp = os.path.basename(inputfile).split('.')
-            outputfile = temp[0] + '_marine'
-            if len(temp) == 2:
-                outputfile += f'.{temp[1]}'
+        if (outputfile is None) or (len(outputfile) == 0):
+            outputfile = getdefaultoutputfile.apply(inputfile, 'marine', outputdir=outputdir, add_processedby=False)
         if len(os.path.dirname(outputfile)) == 0:
             outputfile = os.path.join(outputdir, outputfile)
 
