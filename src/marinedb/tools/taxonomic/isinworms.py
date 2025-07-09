@@ -246,7 +246,7 @@ def clean_split_strings(strings, authorship=False):
     return strings
 
 
-def elementwise_LevensteinRatio(strings, refstrings, difflib_cutoff=0.51): #!one-way, not commutative
+def elementwise_LevenshteinRatio(strings, refstrings, difflib_cutoff=0.51): #!one-way, not commutative
 
     if pd.isnull(refstrings) or (len(refstrings) == 0) or pd.isnull(strings) or (len(strings) == 0):
         return pd.NA, pd.NA
@@ -983,6 +983,8 @@ def fuzzymatch_HigherRanks(ranks1, ranks2, levenshtein_tolerance=0.7):
 
             elif (not pd.isnull(r1)) and (not pd.isnull(r2)):
 
+                r1 = r1.lower()
+                r2 = r2.lower()
                 r1 = re.sub('incertae sedis','',r1).strip()
                 r2 = re.sub('incertae sedis','',r2).strip()
 
@@ -1142,7 +1144,7 @@ def match_TaxaByFullClassification(data_classif, worms_classif, check_ambiguity=
             indexBywormsspecies = candidates[[RANK_MAPPING_RENAMED['scientificname']]].groupby([RANK_MAPPING_RENAMED['scientificname']]).indices
             dataspecies = data_classif.loc[0,RANK_MAPPING_RENAMED['scientificname']]
             for wormsspecies in unique_wormsspecies:
-                match.loc[indexBywormsspecies[wormsspecies],['speciesratio','Nspeciesmatch']] = elementwise_LevensteinRatio(wormsspecies, dataspecies)
+                match.loc[indexBywormsspecies[wormsspecies],['speciesratio','Nspeciesmatch']] = elementwise_LevenshteinRatio(wormsspecies.lower(), dataspecies.lower())
 
             ## Best species name
             # i.e  species name with the highest number of components and the best Levenstein ratio
@@ -1391,7 +1393,7 @@ def match_TaxaByFullClassification(data_classif, worms_classif, check_ambiguity=
 
                 candidates_withranks = candidates[~noranks]
                 if fuzzy:
-                    isequalkingdom = [(Levenshtein.ratio(kingdom, datakingdom) >= 0.7) for _,kingdom in enumerate(candidates_withranks[RANK_MAPPING_RENAMED['kingdom']])]
+                    isequalkingdom = [(Levenshtein.ratio(kingdom.lower(), datakingdom.lower()) >= 0.7) for _,kingdom in enumerate(candidates_withranks[RANK_MAPPING_RENAMED['kingdom']])]
                 else:
                     isequalkingdom = (candidates_withranks[RANK_MAPPING_RENAMED['kingdom']] == datakingdom)
                 candidates_withranks = candidates_withranks[isequalkingdom]
@@ -1518,7 +1520,9 @@ def call_create_WoRMSrecognizedfilter(species, min_length=3, doublecheck=True, r
         if ('isinworms' not in outputfile_suffix):
             outputfile_suffix = outputfile_suffix + '_generatedby_isinworms'
 
-        params_store['outputfile'] = outputfile_split[0] + '_' + outputfile_suffix + '.' + outputfile_split[1]
+        params_store['outputfile'] = outputfile_split[0] + '_' + outputfile_suffix
+        if len(outputfile_split) == 2:
+            params_store['outputfile'] = params_store['outputfile'] + '.' + outputfile_split[1]
 
     matchfilter = cwf.create_WoRMSrecognizedfilter(species, **params_func, **params_store, **params_parallel)
 
@@ -1695,7 +1699,9 @@ def call_create_WoRMSacceptedfilter(valid_aphiaID, store=True, outputdir='./', o
         if ('isinworms' not in outputfile_suffix):
             outputfile_suffix = outputfile_suffix + '_generatedby_isinworms'
 
-        params_store['outputfile'] = outputfile_split[0] + '_' + outputfile_suffix + '.' + outputfile_split[1]
+        params_store['outputfile'] = outputfile_split[0] + '_' + outputfile_suffix
+        if len(outputfile_split) == 2:
+            params_store['outputfile'] = params_store['outputfile'] + '.' + outputfile_split[1]
 
     matchfilter = cwf.create_WoRMSacceptedfilter(valid_aphiaID, **params_func, **params_store, **params_parallel)
 
