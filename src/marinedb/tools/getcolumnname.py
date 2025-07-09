@@ -54,9 +54,8 @@ def apply(df, key, modulename, inplace, minimize_columns=True):
         isgenerated = False
 
         if minimize_columns:
-            # To prevent the proliferation of columns resulting from
-            # inplace=False settings in various processing steps, stop
-            # generating new columns after the first derived column is created
+            # To prevent the proliferation of columns resulting from inplace=False during various processing steps,
+            # stop generating new columns after the first derived column is created
             inplace = True
 
     else:

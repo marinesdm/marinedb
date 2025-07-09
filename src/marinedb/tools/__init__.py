@@ -19,7 +19,23 @@ from marinedb.utils.printverbose import printv
 
 # Global variable
 
-__all__ = ['contains', 'doesnotcontain', 'dropvalues', 'isboundedby', 'isin', 'isna', 'notisin', 'doeslateqlon', 'isbelow_minlatlonprecision', 'iszero', 'lettersonly', 'taxasubset', 'mapbasisofrecord', 'parsedate', 'processdateinterval', 'splitdate', 'temporal']
+__all__ = ['contains',
+           'doesnotcontain',
+           'dropvalues',
+           'isboundedby',
+           'isin',
+           'isna',
+           'notisin',
+           'doeslateqlon',
+           'isbelow_minlatlonprecision',
+           'iszero',
+           'lettersonly',
+           'taxasubset',
+           'mapbasisofrecord',
+           'parsedate',
+           'processdateinterval',
+           'splitdate',
+           'temporal']
 
 
 def apply(df, config_dict, verbose=True, indent='', store_stats=True, outputdir_marinedb='./', outputfile_marinedb='marinedb_stats.txt', partition=None):
