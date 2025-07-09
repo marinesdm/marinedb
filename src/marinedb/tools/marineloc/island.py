@@ -26,6 +26,7 @@ from mpl_toolkits.basemap import Basemap
 
 # Internal import
 
+from marinedb.utils import resolvepath
 from marinedb.utils.allexport import export
 from marinedb.utils.printverbose import printv
 
@@ -275,7 +276,7 @@ def island(lat, lon, verbose=True, indent=''):
 @export
 def process_one_file(filepath, latkey, lonkey, idxkey, controlkey=None, sep='\t', outputdir='./', store_time=True, parallel=False, mask_filepath=None, verbose=True, indent='', cluster_mode=False):
 
-    outputdir = os.path.expanduser(outputdir)
+    outputdir = resolvepath(outputdir)
 
     verbose_func = (not parallel)
 
@@ -334,7 +335,7 @@ def apply(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=N
 
     sep = sep.encode('utf-8').decode('unicode_escape')
 
-    inputdir = os.path.expanduser(inputdir)
+    inputdir = resolvepath(inputdir)
     if not os.path.isdir(inputdir):
         raise FileNotFoundError(f'`island.py` | Directory specified for `inputdir` not found: {inputdir}')
 
@@ -343,7 +344,7 @@ def apply(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=N
     if fileslist is not None:
         if not isinstance(fileslist, str):
             raise TypeError(f'`island.py` | `fileslist` must be a string path')
-        fileslist = os.path.expanduser(fileslist)
+        fileslist = resolvepath(fileslist)
         if not os.path.exists(fileslist):
             raise FileNotFoundError(f'`island.py` | File specified for `fileslist` not found: {fileslist}')
 
@@ -352,7 +353,7 @@ def apply(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=N
     if maskfile is not None:
         if not isinstance(maskfile, str):
             raise TypeError(f'`island.py` | `maskfile` must be a string path')
-        maskfile = os.path.expanduser(maskfile)
+        maskfile = resolvepath(maskfile)
         if not os.path.exists(maskfile):
             raise FileNotFoundError(f'`island.py` | File specified for `maskfile` not found: {maskfile}')
 
@@ -367,7 +368,7 @@ def apply(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=N
     if len(outputdir) == 0:
         outputdir = inputdir
     else:
-        outputdir = os.path.expanduser(outputdir)
+        outputdir = resolvepath(outputdir)
     if 'processed' not in outputdir.split('/'):
         outputdir = join(outputdir,'processed')
     try:
@@ -854,20 +855,20 @@ def plot_island(df, latkey='latitude', lonkey='longitude', background=False, sho
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Identify marine coordinates', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('inputdir_path', type=str, help='directory path containing files to be processed')
-    parser.add_argument('--fileslist_path', type=str, help='path to the file that lists the files to be processed', default=None)
-    parser.add_argument('--latitude_column', type=str, help='latitude column name', required=True)
-    parser.add_argument('--longitude_column', type=str, help='longitude column name', required=True)
-    parser.add_argument('--index_column', type=str, help='index column name', required=True)
-    parser.add_argument('--control_column', type=str, help='control column name', default=None)
+    parser.add_argument('inputdir-path', type=str, help='directory path containing files to be processed')
+    parser.add_argument('--fileslist-path', type=str, help='path to the file that lists the files to be processed', default=None)
+    parser.add_argument('--latitude-column', type=str, help='latitude column name', required=True)
+    parser.add_argument('--longitude-column', type=str, help='longitude column name', required=True)
+    parser.add_argument('--index-column', type=str, help='index column name', required=True)
+    parser.add_argument('--control-column', type=str, help='control column name', default=None)
     parser.add_argument('--delimiter', type=str, help='delimiter used in the input files', default='\t')
     # Warning: delimiter must be enclosed in quotation marks
-    parser.add_argument('--maskfile_path', type=str, help='path to the .npz file containing the land/sea/coast mask', default=None)
-    parser.add_argument('--outputdir_path', type=str, help='path to the directory where the output files will be stored', default='./')
+    parser.add_argument('--maskfile-path', type=str, help='path to the .npz file containing the land/sea/coast mask', default=None)
+    parser.add_argument('--outputdir-path', type=str, help='path to the directory where the output files will be stored', default='./')
     parser.add_argument('--parallel', action=argparse.BooleanOptionalAction, help='whether to parallelize on multiple CPUs', default=False)
     parser.add_argument('--cpu', type=int, help='number of CPUs to be used', default=None)
-    parser.add_argument('--store_time', action=argparse.BooleanOptionalAction, help='whether to store the processing times', default=True)
-    parser.add_argument('--cluster_mode', action=argparse.BooleanOptionalAction, help='whether the script is parallelized across multiple machines', default=False)
+    parser.add_argument('--store-time', action=argparse.BooleanOptionalAction, help='whether to store the processing times', default=True)
+    parser.add_argument('--cluster-mode', action=argparse.BooleanOptionalAction, help='whether the script is parallelized across multiple machines', default=False)
     args = parser.parse_args()
 
     inputdir = args.inputdir_path
