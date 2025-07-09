@@ -1033,7 +1033,7 @@ def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level
 
     # Clean
 
-    if tempfile in locals():
+    if 'tempfile' in locals():
         os.remove(tempfile)
 
     if return_filename:
