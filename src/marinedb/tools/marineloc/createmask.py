@@ -66,8 +66,8 @@ def apply(kernel_type='square', kernel_size=51, outputdir='./', verbose=True, in
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Generate a mask differentiating land, sea, and coast', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--kernel_type', type=str, help='kernel type (square or ellipse)', default='square')
-    parser.add_argument('--kernel_size', type=int, help='kernel size', default=51)
+    parser.add_argument('--kernel-type', type=str, help='kernel type (square or ellipse)', default='square')
+    parser.add_argument('--kernel-size', type=int, help='kernel size', default=51)
     parser.add_argument('--outputdir', type=str, help='path to the directory where the output .npz file will be stored', default='./')
     args = parser.parse_args()
 

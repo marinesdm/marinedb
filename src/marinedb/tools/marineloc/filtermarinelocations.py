@@ -384,13 +384,13 @@ def apply(inputfile, filterfile, inputfile_format='uncompressed_gzip', controlke
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Retrieve data from a file based on a filter file containing the indices of the data to be extracted', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('inputfile_path', type=str, help='path to the file to be processed (default delimiter: tab)')
-    parser.add_argument('filterfile_path', type=str, help="path to the filter file, which must contain a sorted 'index' column (default delimiter: tab)")
-    parser.add_argument('--inputfile_format', type=str, help="file format, either 'pandas' for formats supported by pandas.read_csv, 'parquet' for Parquet files, or 'uncompressed_gzip' for plain text or gzip-compressed files", default='uncompressed_gzip')
-    parser.add_argument('--inputfile_delimiter', type=str, help='input file delimiter', default='\t')
-    parser.add_argument('--filter_delimiter', type=str, help='filter file delimiter', default='\t')
-    parser.add_argument('--control_column', type=str, help='control column name', default=None)
-    parser.add_argument('--outputfile_path', type=str, help='output file path', default='')
+    parser.add_argument('inputfile-path', type=str, help='path to the file to be processed (default delimiter: tab)')
+    parser.add_argument('filterfile-path', type=str, help="path to the filter file, which must contain a sorted 'index' column (default delimiter: tab)")
+    parser.add_argument('--inputfile-format', type=str, help="file format, either 'pandas' for formats supported by pandas.read_csv, 'parquet' for Parquet files, or 'uncompressed_gzip' for plain text or gzip-compressed files", default='uncompressed_gzip')
+    parser.add_argument('--inputfile-delimiter', type=str, help='input file delimiter', default='\t')
+    parser.add_argument('--filter-delimiter', type=str, help='filter file delimiter', default='\t')
+    parser.add_argument('--control-column', type=str, help='control column name', default=None)
+    parser.add_argument('--outputfile-path', type=str, help='output file path', default='')
     args = parser.parse_args()
 
     inputfile = args.inputfile_path
