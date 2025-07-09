@@ -35,7 +35,11 @@ BASISOFRECORD = BasisOfRecordMapping(BASISOFRECORD)
 @export
 def apply(df, key, additional_values=None, inplace=False, verbose=True, indent=''):
 
-    df, keyin, keyout = getcolumnname.apply(df, key, 'map_basisofrecord', inplace=inplace)
+    df, keyin, keyout = getcolumnname.apply(df, key, 'mapbasisofrecord', inplace=inplace)
+    if ('basis' not in keyout.lower()) or ('record' not in keyout.lower()):
+        _, _, keyout = getcolumnname.apply(df, 'basisOfRecord', 'mapbasisofrecord', inplace=False)
+        if inplace:
+            printv(f"WARNING | inplace={inplace}, but a new column called '{keyout}' will be added (key={key})")
 
     if additional_values is not None:
 
@@ -47,7 +51,7 @@ def apply(df, key, additional_values=None, inplace=False, verbose=True, indent='
             values_diff = option_values - global_values
             if len(values_diff) != 0:
                 global_values = list(global_values)
-                raise ValueError(f"`map_basisOfRecord.py` | The mapped values must be {', '.join([f'{val}' for val in global_values[:-1]])} or {global_values[-1]}, not {','.join([f'{val}' for val in values_diff])}")
+                raise ValueError(f"`mapbasisOfRecord.py` | The mapped values must be {', '.join([f'{val}' for val in global_values[:-1]])} or {global_values[-1]}, not {','.join([f'{val}' for val in values_diff])}")
 
             global_keys = set(BASISOFRECORD.keys())
             option_keys = set(additional_values.keys())
@@ -58,10 +62,10 @@ def apply(df, key, additional_values=None, inplace=False, verbose=True, indent='
             BASISOFRECORD.update(additional_values)
 
         else:
-            raise TypeError(f'`map_basisOfRecord.py` | `additional_values` must be a dictionary, got {type(additional_values).__name__} instead')
+            raise TypeError(f'`mapbasisOfRecord.py` | `additional_values` must be a dictionary, got {type(additional_values).__name__} instead')
 
     df[keyout] = df[keyin].str.upper()
     df[keyout] = df[keyout].map(BASISOFRECORD)
     df[keyout] = df[keyout].astype('string')
-
+    print(df[keyout]) #debug
     return df
