@@ -34,6 +34,7 @@ STR_NAN_VALUES = ['-1.#IND',
                   'nan',
                   '-nan',
                   '',
+                  'nd',
                   'None']
 
 def isnan(value, nan_values=None, additional_policy=''):
