@@ -4,6 +4,7 @@
 # External import
 
 import pandas as pd
+from unidecode import unidecode
 
 # Internal import
 
@@ -21,11 +22,22 @@ def apply(df, key, flag=False, dropna=False, verbose=True, indent=''):
 
     df[key] = df[key].astype('string')
 
+    # Flag or exclude rank names containing non-letter characters
+    # e.g., GWE2-31-10, UBA1177, and JACPGU01 classes (typically DNA-derived observations)
+    # Note: some edge cases may be incorrectly flagged or excluded,
+    # e.g., "Hexabothrium (incertae sedis)" (aphiaID=719046)
+    # e.g., "[non-Uristidae]" (aphiaID=875566) genera
+
     pattern=r'[^a-zA-Z\s\-]'
-    islettersonly = (~df[key].str.contains(pattern, na=False))
-    islettersonly = islettersonly.astype('boolean')
+    tempkey = 'TEMPORARYLETTERSONLY_{key}'
+    df[tempkey] = df[key].values
     ismissing = pd.isnull(df[key])
+    df.loc[~ismissing, tempkey] = df.loc[~ismissing, tempkey].apply(unidecode) # e.g., "Terpsinoë" and "Naïs" genera
+    islettersonly = (~df[tempkey].str.contains(pattern, na=False))
+    islettersonly = islettersonly.astype('boolean')
     islettersonly[ismissing] = pd.NA
+
+    df.drop(columns=[tempkey], inplace=True)
 
     if not islettersonly.all(): #debug
         print('islettersonly')
