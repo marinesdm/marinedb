@@ -69,7 +69,7 @@ def astype_Int64(df, key, drop_empty=True, verbose=True, indent=''):
 
 @export
 def convert_year(df, yearkey, drop_ambiguous=False, drop_empty=True, verbose=True, indent=''):
-    print('yearkey:', yearkey) #debug
+
     baseyearkey = get_basekey(yearkey, list(df.columns))
 
     # Convert to integers
