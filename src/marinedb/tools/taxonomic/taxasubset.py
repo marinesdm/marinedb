@@ -14,8 +14,10 @@ from importlib.resources import files
 
 # Internal import
 
+from marinedb.utils import convertbytes
 from marinedb.utils.allexport import export
 from marinedb.utils.printverbose import printv
+from marinedb.utils import getdefaultoutputfile
 
 from marinedb.tools import getcolumnname
 
@@ -143,23 +145,13 @@ def populate_method(flag):
     else:
         return populate_inplace
 
-def convert_bytes(num):
-    """
-    Convert bytes to bytes, KB, MB, GB or TP
-    source: https://stackoverflow.com/questions/2104080/how-do-i-check-file-size-in-python
-    """
-    for x in ['bytes', 'KB', 'MB', 'GB', 'TB']:
-        if num < 1024.0:
-            return "%3.1f %s" % (num, x)
-        num /= 1024.0
-
 @export
-def lowerbound_subset_distributed(inputfile, sep='\t', speciesidkey=None, specieskey=None, genuskey=None, familykey=None, orderkey=None, classkey=None, phylumkey=None, kingdomkey=None, limit=50, flag=False, dropna=False, verbose=True, indent='', outputdir='./', outputfile=''):
+def lowerbound_subset_distributed(inputfile, sep='\t', speciesidkey=None, specieskey=None, genuskey=None, familykey=None, orderkey=None, classkey=None, phylumkey=None, kingdomkey=None, limit=50, flag=False, dropna=False, verbose=True, indent='', outputdir='./', outputfile=None):
 
     _, _, available_disk_space = shutil.disk_usage(outputdir)
     inputfile_size = os.stat(inputfile).st_size
     if inputfile_size >= available_disk_space:
-        raise Exception(f'`taxasubset.py` | The available disk space at {outputdir} (i.e. {convert_bytes(available_disk_space)}) should be at least equal to the size of {inputfile} (i.e {convert_bytes(inputfile_size)})')
+        raise Exception(f'`taxasubset.py` | The available disk space at {outputdir} (i.e. {convertbytes.apply(available_disk_space)}) should be at least equal to the size of {inputfile} (i.e {convertbytes.apply(inputfile_size)})')
 
     ispartialclassification = (specieskey is None) or (genuskey is None) or (familykey is None) or (orderkey is None) or (classkey is None) or (phylumkey is None) or (kingdomkey is None)
     isspeciesidkey = (speciesidkey is not None)
@@ -293,17 +285,8 @@ def lowerbound_subset_distributed(inputfile, sep='\t', speciesidkey=None, specie
         store_lines(lines, tempfile, verbose=verbose, indent=indent)
         printv(f'Processing | {idx + 1} lines done', verbose=verbose, indent=indent)
 
-    if len(outputfile) == 0:
-        inputfile_split = inputfile.split('.')
-        start = inputfile.split('.')[0]
-        if len(inputfile_split) > 1:
-            end = '.' + inputfile.split('.')[1]
-        else:
-            end = ''
-        outputfile = start + '_processedby_taxasubset' + end
-
-    if len(os.path.dirname(outputfile)) == 0:
-        outputfile = os.path.join(outputdir, outputfile)
+    if (outputfile is None) or (len(outputfile) == 0):
+        outputfile = getdefaultoutputfile.apply(inputfile, 'taxasubset', outputdir=outputdir)
 
     printv(f'* Renaming {tempfile} to {outputfile}', verbose=verbose, indent=indent)
     os.rename(tempfile, outputfile)
@@ -315,11 +298,14 @@ def upperbound_subset(df, limit=-1, flag=False): #TODO
     return None
 
 @export
-def apply(inputfile, sep='\t', lowerbound=-1, upperbound=-1, flag=False, dropna=False, seed=None, force_distributed=False, speciesidkey=None, specieskey=None, genuskey=None, familykey=None, orderkey=None, classkey=None, phylumkey=None, kingdomkey=None, store=True, outputdir='./', outputfile='', verbose=True, indent=''):
+def apply(inputfile, sep='\t', lowerbound=-1, upperbound=-1, flag=False, dropna=False, seed=None, force_distributed=False, speciesidkey=None, specieskey=None, genuskey=None, familykey=None, orderkey=None, classkey=None, phylumkey=None, kingdomkey=None, store=True, outputdir='./', outputfile=None, verbose=True, indent=''):
 
     if (upperbound == -1) and (lowerbound == -1):
         # Do not filter taxa based on their number of occurrences in the dataset
         return None
+
+    if (outputfile is None) or (len(outputfile) == 0):
+        outputfile = getdefaultoutputfile.apply(inputfile, 'taxasubset', outputdir=outputdir)
 
     if lowerbound > 0:
 
@@ -343,18 +329,6 @@ def apply(inputfile, sep='\t', lowerbound=-1, upperbound=-1, flag=False, dropna=
                   'outputdir': outputdir,
                   'outputfile': outputfile,
                  }
-
-        if len(params['outputfile']) == 0:
-            inputfile_split = inputfile.split('.')
-            start = inputfile.split('.')[0]
-            if len(inputfile_split) > 1:
-                end = '.' + inputfile.split('.')[1]
-            else:
-                end = ''
-            if 'processedby' in start:
-                params['outputfile'] = start + '_taxasubset' + end
-            else:
-                params['outputfile'] = start + '_processedby_taxasubset' + end
 
         available_memory = psutil.virtual_memory().available
         file_size = os.path.getsize(inputfile)
