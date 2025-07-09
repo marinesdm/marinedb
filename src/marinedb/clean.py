@@ -15,13 +15,13 @@ import inspect
 import argparse
 import pandas as pd
 from itertools import groupby
-from os.path import expanduser
 from operator import itemgetter
 from joblib import Parallel, delayed
 
 # Internal import
 
 import marinedb.tools as tools
+from marinedb.tools import format
 from marinedb.tools import getcolumnname
 from marinedb.tools import convertdatetype
 from marinedb.tools.marineloc import marineloc
@@ -30,6 +30,7 @@ from marinedb.tools.taxonomic import createwormsfilters as cwf
 
 from marinedb.utils import readfile
 from marinedb.utils import tqdmjoblib
+from marinedb.utils import resolvepath
 from marinedb.utils import writedataframe
 from marinedb.utils import standardizenan
 from marinedb.utils import getdefaultargs
@@ -47,8 +48,10 @@ TYPE = {
        }
 
 SUPPORTED_PROCFUNCTIONS = ['marineloc',
+                           'format',
                            'createwormsfilters',
                            'isinworms',
+                           'mapbasisofrecord',
                            'contains',
                            'doesnotcontain',
                            'dropvalues',
@@ -88,7 +91,7 @@ def get_key(onekeydict):
 def get_keys(list_onekeydict):
     return [get_key(onekeydict) for onekeydict in list_onekeydict]
 
-def get_dtypes(config):
+def get_dtypes(config, key_type):
 
     config_variables = config['variables']
     dtypes_mapping = {}
@@ -103,7 +106,10 @@ def get_dtypes(config):
                 if (coltype in TYPE.keys()):
                     coltype = TYPE[coltype]
 #                    print(colname_old, coltype) #debug
-                dtypes_mapping[colname_old] = coltype
+                if key_type == 'old':
+                    dtypes_mapping[colname_old] = coltype
+                else:
+                    dtypes_mapping[colname_new] = coltype
 
     return dtypes_mapping
 
@@ -129,6 +135,8 @@ def get_column_mapping(config):
 def get_procfunc(config, key):
 
     config_proc = config[key]
+    if (config_proc is None) or (len(config_proc) == 0):
+        return []
 
     procfuncs = set()
     for i, procstep in enumerate(config[key]):
@@ -424,7 +432,7 @@ def curate_data(df, config, config_updated, init=False, verbose=True, indent='',
 
     if isvariable:
 
-        dtypes_mapping = get_dtypes(config)
+        dtypes_mapping = get_dtypes(config, key_type='old')
 
         for key,value in dtypes_mapping.items():
             try:
@@ -558,38 +566,16 @@ def minmax_consecutive(numbers):
 def resume_parallel_processing(outputdir):
 
     fileslist = glob.glob(os.path.join(outputdir, '*'))
-#    fileslist = sorted(glob.glob(os.path.join(outputdir, '*')))
-#    basepath = fileslist[0].split('_temp')[0]
-#    extension = fileslist[0].split('_temp')[1].split('.')
-#    if len(extension) > 1:
-#        extension = f'.{extension[1]}'
-#    else:
-#        extension = ''
-
     filesnumber = pd.Series(fileslist).str.findall(r'(?<=_temp)[0-9]+')
-#    print('filesnumber:', filesnumber)
     if any(filesnumber.str.len() > 1):
         bad_filenames = pd.Series(fileslist)[filesnumber.str.len() > 1].tolist()
         raise Exception(f"`clean.py` | Unsupported file names: {','.join(bad_filenames)}. The file name must contain exactly one number.")
     filesnumber = sorted(filesnumber.str[0].tolist())
-#    nonconsecutive_files = minmax_consecutive(filesnumber)
-#    nonconsecutive_files = [basepath + f'_temp{number}' + extension for number in nonconsecutive_files]
-#    print('nonconsecutive_files:',nonconsecutive_files)
 
-#    nonconsecutive_indices = [read_firstlastindex(f) for f in nonconsecutive_files]
-#    print('nonconsecutive_indices', nonconsecutive_indices)
-#    nonconsecutive_indices = sorted(nonconsecutive_indices, key=lambda x: x[0]) #normalement inutile mais bug
-#    print('nonconsecutive_indices', nonconsecutive_indices)
-#    nonconsecutive_indices = [index[0] if (i % 2 == 0) else index[1] for i,index in enumerate(nonconsecutive_indices)]
-#    print('nonconsecutive_indices', nonconsecutive_indices)
-#    index_pairs = list(zip(nonconsecutive_indices[1::2], nonconsecutive_indices[2::2]))
-#    print('index_pairs:',index_pairs)
     firstlast_pairs = [read_firstlastindex(f) for f in fileslist]
     firstlast_pairs = sorted(firstlast_pairs, key=lambda x: x[0])
-#    print('firstlast_pairs:',firstlast_pairs)
     Npairs = len(firstlast_pairs)
     nonconsecutive_indices = [(firstlast_pairs[i][1], firstlast_pairs[i+1][0]) for i in range(Npairs - 1) if (firstlast_pairs[i][1] != (firstlast_pairs[i+1][0] - 1))]
-#    print('nonconsecutive_indices', nonconsecutive_indices)
 
     find_missing_indices = []
     if firstlast_pairs[0][0] != 0:
@@ -598,21 +584,10 @@ def resume_parallel_processing(outputdir):
         find_missing_indices += [' or '.join(f'((x > {i}) and (x < {j}))' for i,j in nonconsecutive_indices)]
     find_missing_indices += [f'(x > {firstlast_pairs[-1][1]})']
     find_missing_indices = ' or '.join(find_missing_indices)
-##    if int(filesnumber[0]) != 0:
-#    if nonconsecutive_indices[0] != 0:
-#        find_missing_indices += [f'(x < {nonconsecutive_indices[0]})']
-#    if len(index_pairs) != 0:
-#        find_missing_indices += [' or '.join(f'((x > {i}) and (x < {j}))' for i,j in index_pairs)]
-#    find_missing_indices += [f'(x > {nonconsecutive_indices[-1]})']
-##        print('find_missing_indices:', find_missing_indices)
-#    find_missing_indices = ' or '.join(find_missing_indices)
-    print('find_missing_indices:', find_missing_indices)
     find_missing_indices = eval('lambda x: ' + find_missing_indices)
 
-#    last_index = nonconsecutive_indices[-1]
     last_index = firstlast_pairs[-1][1]
     last_file = int(filesnumber[-1])
-#    print(f'last_index: {last_index}, last_file: {last_file}')
     with open(fileslist[0],'r') as f:
         columns = f.readline().strip('\n').split('\t')
 
@@ -638,6 +613,10 @@ if __name__ == '__main__':
 
     config = yaml.safe_load(open(args.config_file,'r'))
 
+    #############################################
+    ############### Configuration ###############
+    #############################################
+
     if ('data' not in config.keys()):
         raise KeyError("`clean.py` | The configuration file must include a 'data' section")
 
@@ -645,19 +624,19 @@ if __name__ == '__main__':
 
     if ('inputfile_path' not in config.keys()):
         raise KeyError("`clean.py` | The configuration file must include a 'inputfile_path' section")
-    config['inputfile_path'] = expanduser(config['inputfile_path'])
+    config['inputfile_path'] = resolvepath(config['inputfile_path'])
     if (not os.path.isfile(config['inputfile_path'])):
         raise FileNotFoundError(f"`clean.py` | No such file: '{config['inputfile_path']}'")
 
     if ('inputdir_path' not in config.keys()):
         raise KeyError("`clean.py` | The configuration file must include a 'inputdir_path' section")
-    config['inputdir_path'] = expanduser(config['inputdir_path'])
+    config['inputdir_path'] = resolvepath(config['inputdir_path'])
     if (not os.path.isdir(config['inputdir_path'])):
         raise FileNotFoundError(f"`clean.py` | No such directory: '{config['inputdir_path']}'")
 
     if ('outputdir_path' not in config.keys()):
         raise KeyError("`clean.py` | The configuration file must include a 'outputdir_path' section")
-    config['outputdir_path'] = expanduser(config['outputdir_path'])
+    config['outputdir_path'] = resolvepath(config['outputdir_path'])
     if (not os.path.isdir(config['outputdir_path'])):
         try:
             os.mkdir(config['outputdir_path'])
@@ -679,13 +658,17 @@ if __name__ == '__main__':
         raise KeyError("`clean.py` | The configuration file must include a 'processing' section")
 
     outputdir = config['outputdir_path']
-    outputfile = expanduser(config['outputfile_path'])
+    outputfile = resolvepath(config['outputfile_path'])
 
     isvariable = ('variables' in config.keys())
     if not isvariable:
         print('INFO | `variables` section not found: column filtering, type casting, and renaming will be skipped')
 
-    # Verify that only supported functions are specified in the configuration files
+    # Verify that only supported functions are specified in the configuration file
+
+    if config['processing'] is None:
+        # No processing step
+        config['processing'] = []
 
     procfuncs = get_procfunc(config, 'processing')
     unsupported_funcs = set(procfuncs) - set(SUPPORTED_PROCFUNCTIONS)
@@ -697,21 +680,6 @@ if __name__ == '__main__':
             marineloc_funcs = [f'`{func}`' for func in marineloc_funcs]
             error += f" Use `marineloc` in place of {','.join(marineloc_funcs)}."
         raise ValueError(error)
-
-    print()
-    print(f"----- Start cleaning: {config['inputfile_path']} -----")
-    print()
-
-    start_cleaning = time.time()
-
-#    # Set `stdnan` to False since all missing values in the database
-#    # will be standardized before any processing steps are applied
-#
-#    config = re.sub(r"'stdnan': .*?(?=,|})", r"'stdnan': False", str(config))
-#
-#    # Set `drop_empty` to False to ensure that each batch has the same number of columns after processing
-#
-#    config = re.sub(r"'drop_empty': .*?(?=,|})", r"'drop_empty': False", config)
 
     # Parse 'True' and 'False' strings as Boolean True and False values
 
@@ -729,6 +697,52 @@ if __name__ == '__main__':
     config = overwrite_outputdir_stdnan_dropempty(config, config['inputdir_path'], config['outputdir_path'])
 
     ispreprocessing = False
+
+    print()
+    print(f"----- Start cleaning: {config['inputfile_path']} -----")
+    print()
+
+    start_cleaning = time.time()
+
+    ##############################################
+    ############### Pre-Processing ###############
+    ##############################################
+
+    # If specified, apply the `format` function
+
+    format_function = [(idx, filter) for idx,filter in enumerate(config['processing']) if 'format' in str(filter)]
+
+    if len(format_function) > 1:
+        raise Exception(f"`clean.py` | `format` should be specified only once in the `config` file")
+
+    if len(format_function) == 1:
+        format_idx = format_function[0][0]
+        format_params = format_function[0][1]['tool'][0]['format']
+        format_params['inputfile'] = config['inputfile_path']
+        if 'outputfile' not in format_params.keys():
+            temp = os.path.basename(format_params['inputfile']).split('.')[0]
+            format_params['outputfile'] = temp + '_processedby_format.txt'
+            format_params['outputfile'] = os.path.join(outputdir, format_params['outputfile'])
+
+        if not ispreprocessing:
+            print('Preprocessing')
+            print('--------------')
+            print()
+            ispreprocessing = True
+            start = time.time()
+
+        print('* dataframe')
+        print('** format')
+        print()
+
+        config['inputfile_path'] = format.apply(**format_params)
+
+        print()
+
+        del config['processing'][format_idx]
+
+        print(f'TIME: {round(time.time() - start,0)}s')
+        print()
 
     # If specified, apply the `marineloc` filter
 
@@ -767,15 +781,15 @@ if __name__ == '__main__':
         print(f'TIME: {round(time.time() - start,0)}s')
         print()
 
-
     # If `createwormsfilters` or `isinworms` is specified,
     # generate the necessary filters using `createwormsfilters`
 
     ## Verify if `createwormsfilters` is specified
     createwormsfilters_filter = [(idx, filter) for idx,filter in enumerate(config['processing']) if "'createwormsfilters'" in str(filter)]
     createwormsfilters_column = get_keys([filter[1] for filter in createwormsfilters_filter])
+
     if len(createwormsfilters_filter) > 1:
-        raise Exception(f"`clean.py` | `createwormsfilters.py` must be applied to a single column. Select either {','.join(createwormsfilters_column[:-1])} or {isinworms_column[-1]}")
+        raise Exception(f"`clean.py` | `createwormsfilters.py` must be applied to a single column. Select either {','.join(createwormsfilters_column[:-1])} or {createwormsfilters_column[-1]}")
 
     ## Verify if `isinworms` is specified
     isinworms_filter = [(idx, filter) for idx,filter in enumerate(config['processing']) if "'isinworms'" in str(filter)]
@@ -790,7 +804,7 @@ if __name__ == '__main__':
     if is_createwormsfilters and not is_isinworms:
         raise Exception(f'`clean.py` | `isinworms` must be specified when using `createwormsfilter`')
 
-    if is_createwormsfilters or is_isinworms:
+    if is_isinworms:
 
         # Set up the required components to apply the `isinworms` filter
 
@@ -863,6 +877,16 @@ if __name__ == '__main__':
 
             createwormsfilters_params = isinworms_createwormsfilters_params
 
+        if 'rank_mapping' not in isinworms_args:
+            isinworms_rank_mapping = getdefaultargs.apply(eval(f'tools.isinworms.apply'))['rank_mapping']
+        else:
+            isinworms_rank_mapping = isinworms_params['rank_mapping']
+        if isinworms_rank_mapping['scientificname'] != isinworms_column:
+#             print(f"WARNING | `isinworms`: rank_mapping['scientificname'] ({isinworms_rank_mapping['scientificname']}) does not match the column name ('{isinworms_column}')")
+#             print(f"INFO | rank_mapping['scientificname'] set to {isinworms_column}")
+#             config['processing'][isinworms_column_idx][isinworms_column][isinworms_idx]['isinworms']['rank_mapping']['scientificname'] = isinworms_column
+            raise ValueError(f"`clean.py` | The value associated with the 'scientificname' key in the 'rank_mapping' argument of the `isinworms` function (i.e., '{isinworms_rank_mapping['scientificname']}') must match the name of the column the filter is applied to (i.e., '{isinworms_column}')")
+
         createwormsfilters_params['inputfile'] = config['inputfile_path']
         createwormsfilters_params['indent'] = '   '
         createwormsfilters_params['store'] = True
@@ -878,7 +902,6 @@ if __name__ == '__main__':
         print()
 
         start = time.time()
-
         worms_matchfilter, worms_acceptedfilter = cwf.apply(**createwormsfilters_params)
 
         ## Add the filters to `config`
@@ -894,266 +917,277 @@ if __name__ == '__main__':
         print(f'TIME: {round(time.time() - start,0)}s')
         print()
 
+    ##########################################
+    ############### Processing ###############
+    ##########################################
+
     # Read the gzip or uncompressed data file
 
     print('Processing')
     print('----------')
     print()
 
-    parallel = args.parallel
-    if not parallel:
-        cpu_max = 1
-    else:
-        cpu_max = args.cpu_max
+    if (len(config['processing']) != 0):
 
-    parallel, cpu_main = set_cpu(config, parallel, cpu_main=None, cpu_max=cpu_max)
-    if ('variables' in config.keys()):
-        config['variables'].append('index_marinedb')
+        parallel = args.parallel
+        if not parallel:
+            cpu_max = 1
+        else:
+            cpu_max = args.cpu_max
 
-    if parallel:
-        outputdir = os.path.join(outputdir,'marinedb_parallel')
-        try:
-            os.mkdir(outputdir)
-        except FileExistsError:
-            pass
-    else:
-        outputdir = ''
+        parallel, cpu_main = set_cpu(config, parallel, cpu_main=None, cpu_max=cpu_max)
+        if ('variables' in config.keys()):
+            config['variables'].append('index_marinedb')
 
-    nbatch = 0
-    resume = False
-    columns = None
-    init_storage = True
-    start = time.time()
-
-    ## Resume processing
-
-    if parallel:
-#    outputfile_directory = os.path.dirname(outputfile)
-        if len(os.listdir(outputdir)) != 0:
-            print(f'* Restart processing from {outputdir}')
-            resume = True
-            indices2process, lastindex, nbatch, columns = resume_parallel_processing(outputdir)
-    else:
-        if os.path.isfile(outputfile):
-            print(f'* Restart processing from {outputfile}')
-            resume = True
-            init_storage = False
-            indices2process, lastindex, columns = resume_noparallel_processing(outputfile)
-
-    open_file, decode_line = readfile.apply(config['inputfile_path'])
-    skip = resume
-    dtypes_mapping = get_dtypes(config)
-    dtypes_mapping['index_marinedb'] = 'Int64'
-
-    with open_file(config['inputfile_path'],'r') as data:
-
-        header = decode_line(data.readline()).strip('\n').split('\t')
-        header_length = len(header)
-
-        batch = 0
-        error = []
-        data2clean = []
-        init_process = True
-        config_updated = None
-
-        for idx, line in enumerate(data):
-
-            if skip:
-                if idx == lastindex:
-                    skip = False
-                if (not indices2process(idx)):
-                    continue
-
-            # Add observations
-
-            obs = decode_line(line).strip('\n').split('\t')
-            obs = [preprocessquotationmark.apply(value) for value in obs]
-
-            if len(obs) == header_length:
-                obs.insert(0, idx)
-                data2clean.append(obs)
-                batch += 1
-            else:
-                error.append(idx+2)
-                print(f'SplittingError: splitting line n°{idx+2} yields a different number of fields ({len(obs)}) than the header ({header_length}).')
-                print(f'line n°{idx+2} is skipped : {line}')
-                print()
-
-            if init_process and (batch == BATCH_SIZE):
-
-                print(f'--- Processing | {batch} lines ---')
-                print()
-                print(f'INFO | Processing the initial batch separately to configure the environment')
-                print()
-
-                try:
-                    print('SUCCESS loading with dtypes !') #debug
-                    df2clean = pd.DataFrame(data2clean, columns = ['index_marinedb'] + header, dtype=dtypes_mapping)
-                except:
-                    df2clean = pd.DataFrame(data2clean, columns = ['index_marinedb'] + header)
-
-                # Process data
-
-                if parallel:
-                    cpu_idx = ((nbatch + 1) if resume else nbatch)
-                else:
-                    cpu_idx = None
-
-                config_updated, columns = process_one_dataframe(df2clean, config, config_updated, outputfile, outputdir=outputdir, columns=columns, cpu_idx=cpu_idx, verbose=True, init_process=init_process, init_storage=init_storage)
-
-                init_process = False
-                init_storage = False
-                data2clean.clear()
-                del df2clean
-                batch = 0
-                nbatch += 1
-
-            if (not init_process) and (batch == cpu_main*BATCH_SIZE):
-
-                print(f'--- Processing | {batch} lines on {cpu_main} CPUs ---')
-                print()
-
-                try:
-                    print('SUCCESS loading with dtypes !') #debug
-                    df2clean = pd.DataFrame(data2clean, columns = ['index_marinedb'] + header, dtype=dtypes_mapping)
-                except:
-                    df2clean = pd.DataFrame(data2clean, columns = ['index_marinedb'] + header)
-                data2clean.clear()
-
-                index_start = list(range(batch))[::BATCH_SIZE]
-                index_end = list(range(BATCH_SIZE,batch))[::BATCH_SIZE] + [batch]
-                index_slices = list(zip(index_start,index_end))
-                assert len(index_slices) == cpu_main #debug
-
-                if cpu_main != 1:
-
-                    process = Parallel(n_jobs=cpu_main, backend='multiprocessing')
-                    chunks = [df2clean.iloc[i:j,:].copy(deep=True) for i,j in index_slices]
-                    del df2clean
-#                    verbose_debug = [False]*cpu_main #debug
-#                    verbose_debug[-1] = True #debug
-                    params = {
-                              'config': config,
-                              'config_updated': config_updated,
-                              'outputfile': outputfile,
-                              'outputdir': outputdir,
-                              'columns': columns,
-                              'verbose': False,
-                              'init_process': False,
-                              'init_storage': True
-                             }
-
-                    _ = process(delayed(process_one_dataframe)(chunk, cpu_idx=(i+nbatch), **params) for i,chunk in enumerate(chunks)) #debug verbose
-                    del chunks
-
-                else:
-                    _ = process_one_dataframe(df2clean, config, config_updated, outputfile, outputdir=outputdir, columns=columns, cpu_idx=None, verbose=True, init_process=False, init_storage=init_storage)
-                    del df2clean
-
-                batch = 0
-                nbatch += cpu_main
-
-    if batch != 0:
-
-        cpu_main = math.ceil(batch/BATCH_SIZE)
-        _, cpu_main = set_cpu(config, parallel, cpu_main=cpu_main, cpu_max=cpu_max)
-
-        try:
-            print('SUCCESS loading with dtypes !') #debug
-            df2clean = pd.DataFrame(data2clean, columns = ['index_marinedb'] + header, dtype=dtypes_mapping)
-        except:
-            df2clean = pd.DataFrame(data2clean, columns = ['index_marinedb'] + header)
-
-        index_start = list(range(batch))[::BATCH_SIZE]
-        index_end = list(range(BATCH_SIZE,batch))[::BATCH_SIZE] + [batch]
-        index_slices = list(zip(index_start,index_end))
-        assert len(index_slices) == cpu_main
-        print('nbatch',nbatch) #debug
         if parallel:
-            cpu_idx = ((nbatch + 1) if (init_process and resume) else nbatch)
+            outputdir = os.path.join(outputdir,'marinedb_parallel')
+            try:
+                os.mkdir(outputdir)
+            except FileExistsError:
+                pass
         else:
-            cpu_idx = None
-        print('cpu_idx:', cpu_idx)
-        # Process data
+            outputdir = ''
 
-        print(f'--- Processing | {batch} lines on {cpu_main} CPUs ---')
-        print()
+        nbatch = 0
+        resume = False
+        columns = None
+        init_storage = True
+        start = time.time()
 
-        if cpu_main != 1:
+        ## Resume processing
 
-            process = Parallel(n_jobs=cpu_main, backend='multiprocessing')
-            chunks = [df2clean.iloc[i:j,:].copy(deep=True) for i,j in index_slices]
-            del df2clean
-
-            params = {
-                      'config': config,
-                      'config_updated': config_updated,
-                      'outputfile': outputfile,
-                      'outputdir': outputdir,
-                      'columns': columns,
-                      'verbose': False,
-                      'init_process': False,
-                      'init_storage': True
-                     }
-
-            _ = process(delayed(process_one_dataframe)(chunk, cpu_idx=(i+nbatch), **params) for i,chunk in enumerate(chunks))
-            del chunks
-
+        if parallel:
+            if len(os.listdir(outputdir)) != 0:
+                print(f'* Restart processing from {outputdir}')
+                resume = True
+                indices2process, lastindex, nbatch, columns = resume_parallel_processing(outputdir)
         else:
-            _ = process_one_dataframe(df2clean, config, config_updated, outputfile, outputdir=outputdir, columns=columns, cpu_idx=cpu_idx, verbose=True, init_process=init_process, init_storage=init_storage)
-            del df2clean
+            if os.path.isfile(outputfile):
+                print(f'* Restart processing from {outputfile}')
+                resume = True
+                init_storage = False
+                indices2process, lastindex, columns = resume_noparallel_processing(outputfile)
 
-    print(f'TIME: {round(time.time() - start,0)}s')
-    print()
+        open_file, decode_line = readfile.apply(config['inputfile_path'])
+        skip = resume
+        dtypes_mapping = get_dtypes(config, key_type='old')
+        dtypes_mapping['index_marinedb'] = 'Int64'
 
-    if parallel:
+        with open_file(config['inputfile_path'],'r') as data:
 
-#        print('Finalization')
-#        print('------------')
-#        print()
-        print(f'* Consolidate temporary files')
-        print(f'  Storing in {outputfile}')
+            header = decode_line(data.readline()).strip('\n').split('\t')
+            header_length = len(header)
 
-        # Concatenate
+            batch = 0
+            error = []
+            data2clean = []
+            init_process = True
+            config_updated = None
 
-        files = sorted(glob.glob(os.path.join(outputdir, '*')))
-        firstlast_pairs = [read_firstlastindex(f) for f in files]
-        files_order = sorted(range(len(files)), key=lambda x: firstlast_pairs[x][0])
-#        print('files:', files)
-#        print('files_order:', files_order)
+            for idx, line in enumerate(data):
 
-        if os.path.isfile(outputfile):
-            print(f'INFO | {outputfile} already exists and will be modified')
-            init = False
-            with open(outputfile,'r') as f:
-                header = f.readline().strip('\n').split('\t')
-        else:
-            init = True
+                if skip:
+                    if idx == lastindex:
+                        skip = False
+                    if (not indices2process(idx)):
+                        continue
 
-        with open(outputfile, 'a+') as output:
-            for i in files_order:
-                file = files[i]
-                print(f'  >>> {file}')
-                with open(file, 'r') as input:
-                    lines = input.readlines()
-                    if init:
-                        header = lines[0].strip('\n').split('\t')
-                        init = False
+                # Add observations
+
+                obs = decode_line(line).strip('\n').split('\t')
+                obs = [preprocessquotationmark.apply(value) for value in obs]
+
+                if len(obs) == header_length:
+                    obs.insert(0, idx)
+                    data2clean.append(obs)
+                    batch += 1
+                else:
+                    error.append(idx+2)
+                    print(f'SplittingError: splitting line n°{idx+2} yields a different number of fields ({len(obs)}) than the header ({header_length}).')
+                    print(f'line n°{idx+2} is skipped : {line}')
+                    print()
+
+                if init_process and (batch == BATCH_SIZE):
+
+                    print(f'--- Processing | {batch} lines ---')
+                    print()
+                    print(f'INFO | Processing the initial batch separately to configure the environment')
+                    print()
+
+                    try:
+                        df2clean = pd.DataFrame(data2clean, columns = ['index_marinedb'] + header, dtype=dtypes_mapping)
+                    except:
+                        df2clean = pd.DataFrame(data2clean, columns = ['index_marinedb'] + header)
+
+                    # Process data
+
+                    if parallel:
+                        cpu_idx = ((nbatch + 1) if resume else nbatch)
                     else:
-                        header_file = lines[0].strip('\n').split('\t')
-                        diff = list(set(header).symmetric_difference(header_file))
-                        if len(diff) != 0:
-                            raise Exception(f'`clean.py` | Header mismatch detected either between temporary files or between a temporary file and the existing output file: {diff}')
+                        cpu_idx = None
 
-                        lines = lines[1:]
+                    config_updated, columns = process_one_dataframe(df2clean, config, config_updated, outputfile, outputdir=outputdir, columns=columns, cpu_idx=cpu_idx, verbose=True, init_process=init_process, init_storage=init_storage)
 
-                        if header_file != header:
-                            sort_header_file = [header.index(col) for col in header_file]
-                            lines = [line.split('\t') for line in lines]
-                            lines = ['\t'.join([v for _,v in sorted(zip(sort_header_file, line), key=lambda pair: pair[0])]) for line in lines]
+                    init_process = False
+                    init_storage = False
+                    data2clean.clear()
+                    del df2clean
+                    batch = 0
+                    nbatch += 1
 
-                    output.writelines(lines)
+                if (not init_process) and (batch == cpu_main*BATCH_SIZE):
+
+                    print(f'--- Processing | {batch} lines on {cpu_main} CPUs ---')
+                    print()
+
+                    try:
+                        df2clean = pd.DataFrame(data2clean, columns = ['index_marinedb'] + header, dtype=dtypes_mapping)
+                    except:
+                        df2clean = pd.DataFrame(data2clean, columns = ['index_marinedb'] + header)
+                    data2clean.clear()
+
+                    index_start = list(range(batch))[::BATCH_SIZE]
+                    index_end = list(range(BATCH_SIZE,batch))[::BATCH_SIZE] + [batch]
+                    index_slices = list(zip(index_start,index_end))
+
+                    if cpu_main != 1:
+
+                        process = Parallel(n_jobs=cpu_main, backend='multiprocessing')
+                        chunks = [df2clean.iloc[i:j,:].copy(deep=True) for i,j in index_slices]
+                        del df2clean
+    #                    verbose_debug = [False]*cpu_main #debug
+    #                    verbose_debug[-1] = True #debug
+                        params = {
+                                  'config': config,
+                                  'config_updated': config_updated,
+                                  'outputfile': outputfile,
+                                  'outputdir': outputdir,
+                                  'columns': columns,
+                                  'verbose': False,
+                                  'init_process': False,
+                                  'init_storage': True
+                                 }
+
+                        _ = process(delayed(process_one_dataframe)(chunk, cpu_idx=(i+nbatch), **params) for i,chunk in enumerate(chunks)) #debug verbose
+                        del chunks
+
+                    else:
+                        _ = process_one_dataframe(df2clean, config, config_updated, outputfile, outputdir=outputdir, columns=columns, cpu_idx=None, verbose=True, init_process=False, init_storage=init_storage)
+                        del df2clean
+
+                    batch = 0
+                    nbatch += cpu_main
+
+        if batch != 0:
+
+            cpu_main = math.ceil(batch/BATCH_SIZE)
+            _, cpu_main = set_cpu(config, parallel, cpu_main=cpu_main, cpu_max=cpu_max)
+
+            try:
+                df2clean = pd.DataFrame(data2clean, columns = ['index_marinedb'] + header, dtype=dtypes_mapping)
+            except:
+                df2clean = pd.DataFrame(data2clean, columns = ['index_marinedb'] + header)
+
+            index_start = list(range(batch))[::BATCH_SIZE]
+            index_end = list(range(BATCH_SIZE,batch))[::BATCH_SIZE] + [batch]
+            index_slices = list(zip(index_start,index_end))
+            assert len(index_slices) == cpu_main
+
+            if parallel:
+                cpu_idx = ((nbatch + 1) if (init_process and resume) else nbatch)
+            else:
+                cpu_idx = None
+
+            # Process data
+
+            print(f'--- Processing | {batch} lines on {cpu_main} CPUs ---')
+            print()
+
+            if cpu_main != 1:
+
+                process = Parallel(n_jobs=cpu_main, backend='multiprocessing')
+                chunks = [df2clean.iloc[i:j,:].copy(deep=True) for i,j in index_slices]
+                del df2clean
+
+                params = {
+                          'config': config,
+                          'config_updated': config_updated,
+                          'outputfile': outputfile,
+                          'outputdir': outputdir,
+                          'columns': columns,
+                          'verbose': False,
+                          'init_process': False,
+                          'init_storage': True
+                         }
+
+                _ = process(delayed(process_one_dataframe)(chunk, cpu_idx=(i+nbatch), **params) for i,chunk in enumerate(chunks))
+                del chunks
+
+            else:
+                _ = process_one_dataframe(df2clean, config, config_updated, outputfile, outputdir=outputdir, columns=columns, cpu_idx=cpu_idx, verbose=True, init_process=init_process, init_storage=init_storage)
+                del df2clean
+
+        print(f'TIME: {round(time.time() - start,0)}s')
+        print()
+        if len(error) != 0:
+            print(indent + f'ERROR:')
+            print(indent + f'SplittingError: {len(error)} observations produced a different number of fields upon splitting compared to the header, and were consequently ignored.')
+            print(f'Refer to lines: {error}')
+            print()
+
+
+        if parallel:
+
+            print(f'* Consolidate temporary files')
+            print(f'  Storing in {outputfile}')
+
+            # Concatenate
+
+            files = sorted(glob.glob(os.path.join(outputdir, '*')))
+            firstlast_pairs = [read_firstlastindex(f) for f in files]
+            files_order = sorted(range(len(files)), key=lambda x: firstlast_pairs[x][0])
+
+            if os.path.isfile(outputfile):
+                print(f'INFO | {outputfile} already exists and will be modified')
+                init = False
+                with open(outputfile,'r') as f:
+                    header = f.readline().strip('\n').split('\t')
+            else:
+                init = True
+
+            with open(outputfile, 'a+') as output:
+                for i in files_order:
+                    file = files[i]
+                    print(f'  >>> {file}')
+                    with open(file, 'r') as input:
+                        lines = input.readlines()
+                        if init:
+                            header = lines[0].strip('\n').split('\t')
+                            init = False
+                        else:
+                            header_file = lines[0].strip('\n').split('\t')
+                            diff = list(set(header).symmetric_difference(header_file))
+                            if len(diff) != 0:
+                                raise Exception(f'`clean.py` | Header mismatch detected either between temporary files or between a temporary file and the existing output file: {diff}')
+
+                            lines = lines[1:]
+
+                            if header_file != header:
+                                sort_header_file = [header.index(col) for col in header_file]
+                                lines = [line.split('\t') for line in lines]
+                                lines = ['\t'.join([v for _,v in sorted(zip(sort_header_file, line), key=lambda pair: pair[0])]) for line in lines]
+
+                        output.writelines(lines)
+
+    else:
+
+        print("INFO | No processing step specified")
+
     print()
+
+    ###############################################
+    ############### Post-processing ###############
+    ###############################################
 
     print('Post-processing')
     print('---------------')
@@ -1216,13 +1250,12 @@ if __name__ == '__main__':
     print(f"----- End cleaning {config['inputfile_path']} -----")
     print()
 
-    print(f'TIME: {round(time.time() - start_cleaning,0)}s')
-    print()
-    if len(error) != 0:
-        print(indent + f'ERROR:')
-        print(indent + f'SplittingError: {len(error)} observations produced a different number of fields upon splitting compared to the header, and were consequently ignored.')
-        print(f'Refer to lines: {error}')
+    # Store dtypes
 
+    dtypes_mapping = get_dtypes(config, key_type='new')
+    dtypes_outputfile = os.path.join(config['outputdir_path'], 'marinedb_dtypes.json')
+    with open(dtypes_outputfile, 'w') as f:
+        json.dump(dtypes_mapping, f)
 
     # Clean
 
@@ -1230,11 +1263,14 @@ if __name__ == '__main__':
 
         print('* Delete temporary files')
 
-        for file in files:
-            print(f'  >>> {file}')
-            os.remove(file)
+#        for file in files:
+#            print(f'  >>> {file}')
+#            os.remove(file)
+#
+#        if len(os.listdir(outputdir)) == 0:
+#            os.rmdir(outputdir)
 
-        if len(os.listdir(outputdir)) == 0:
-            os.rmdir(outputdir)
+    print()
 
+    print(f'TIME: {round(time.time() - start_cleaning,0)}s')
     print()
