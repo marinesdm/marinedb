@@ -7,11 +7,12 @@ from importlib.resources import files
 import pandas as pd
 import argparse
 import json
+import os
 
 # Internal import
 
-from marinedb.utils import standardizenan
 from marinedb.utils import resolvepath
+from marinedb.utils import standardizenan
 from marinedb.utils.allexport import export
 
 # Global variables
@@ -46,8 +47,9 @@ def apply(inputfile, dataset_name, outputfile=None, outputdir=None):
         outputfile = temp[0] + '_processedby_format'
         if len(temp) == 2:
             outputfile += f'.{temp[1]}'
+        outputfile = resolvepath.apply(outputfile)
     if outputdir is None:
-        outputdir = os.path.dirname(resolvepath(inputfile))
+        outputdir = os.path.dirname(resolvepath.apply(inputfile))
     if len(os.path.dirname(outputfile)) == 0:
         outputfile = os.path.join(outputdir, outputfile)
 
