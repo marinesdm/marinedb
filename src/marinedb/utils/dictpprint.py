@@ -12,4 +12,4 @@ def apply(dictionary, verbose=True, indent=''):
         print('\n'.join(indent + ' ' + '{}: {}'.format(k, v) for k, v in dictionary.items()))
         print(indent + '}')
 
-    return True
+    return None
