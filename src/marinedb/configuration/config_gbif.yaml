@@ -1,0 +1,294 @@
+data:
+
+  inputfile_path: "/mnt/smartbiodiv/gbifbuilding/gbif_marine.txt.gz"
+
+  inputdir_path: "/data/smartbiodiv/eberhocoi/gbif_marinedb/source"
+
+  outputdir_path: "/data/smartbiodiv/eberhocoi/gbif_marinedb/"
+
+  outputfile_path: "gbif_processedby_marinedb.txt"
+
+  processing:
+    - verbatimScientificName:
+        - createwormsfilters:
+            wormscall:
+              - 'scientificname'
+              - 'genus'
+              - 'family'
+              - 'order'
+              - 'cls'
+              - 'phylum'
+              - 'kingdom'
+              - 'match_type'
+              - 'status'
+              - 'valid_AphiaID'
+              - 'isExtinct'
+              - 'isMarine'
+              - 'rank'
+              - 'authority'
+              - 'unacceptreason'
+            identification_level: 'species'
+            doublecheck: True
+            overwrite: True
+            overwrite_parallel: True
+            resume: True
+            resume_parallel: True
+            parallel: True
+            max_attempt: 20
+        - isinworms:
+            stdnan: True
+            rank_mapping:
+              scientificname: 'verbatimScientificName'
+              genus: 'genus'
+              family: 'family'
+              order: 'order'
+              cls: 'class'
+              phylum: 'phylum'
+              kingdom: 'kingdom'
+            wormscall:
+              - 'scientificname'
+              - 'genus'
+              - 'family'
+              - 'order'
+              - 'cls'
+              - 'phylum'
+              - 'kingdom'
+              - 'match_type'
+              - 'status'
+              - 'valid_AphiaID'
+              - 'isExtinct'
+              - 'isMarine'
+              - 'rank'
+              - 'authority'
+              - 'unacceptreason'
+            worms_dtypes:
+              match_type: 'string'
+              status: 'string'
+              valid_AphiaID: 'Int64'
+              isExtinct: 'Int64'
+              isMarine: 'Int64'
+              rank: 'string'
+              authority: 'string'
+              unacceptreason: 'string'
+            check_ambiguity: True
+            fuzzy: True
+            verbatimcolumn: ['verbatimScientificName', 'verbatimScientificNameAuthorship']
+            verbatimauthorshiponly: [False, True]
+            keep_fossil: False
+            inplace: True #False
+            resume: True
+            resume_parallel: True
+            resume_mode: 'soft'
+            store: True
+            store_parallel: True
+            parallel: True
+            overwrite_isinworms: False
+            flag_nomatch: False
+            flag_uncertain: True
+        - isna:
+            flag: False
+    - kingdom:
+        - notisin:
+            values: ['Bacteria', 'Archaea', 'Viruses']
+            flag: False
+            dropna: True
+        - lettersonly: # filtered upstream by createwormsfilters and isinworms
+            flag: False
+            dropna: True
+    - phylum:
+        - lettersonly: # filtered upstream by createwormsfilters and isinworms
+            flag: False
+            dropna: False
+    - class:
+        - notisin:
+            values: ['Aves']
+            flag: True
+            dropna: False
+        - lettersonly: # filtered upstream by createwormsfilters and isinworms
+            flag: False
+            dropna: False
+    - order:
+        - lettersonly:
+            flag: False
+            dropna: False
+    - family:
+        - lettersonly: # filtered upstream by createwormsfilters and isinworms
+            flag: False
+            dropna: False
+    - genus:
+        - lettersonly: # filtered upstream by createwormsfilters and isinworms — no further removal expected, though some edge cases were detected
+            flag: False
+            dropna: False
+    - basisOfRecord:
+        - notisin:
+            values: ['OBSERVATION','OCCURRENCE']
+            flag: True
+            dropna: False
+    - decimalLatitude:
+        - isna:
+            flag: False
+        - isboundedby: # excluded at the data acquisition
+            operator: '>='
+            value: -90
+            flag: False
+            dropna: True
+        - isboundedby: # excluded at the data acquisition
+            operator: '<='
+            value: 90
+            flag: False
+            dropna: True
+        - iszero:
+            flag: True
+            dropna: True
+    - decimalLongitude:
+        - isna:
+            flag: False
+        - isboundedby: # excluded at the data acquisition
+            operator: '>='
+            value: -180
+            flag: False
+            dropna: True
+        - isboundedby: # excluded at the data acquisition
+            operator: '<='
+            value: 180
+            flag: False
+            dropna: True
+        - iszero:
+            flag: True
+            dropna: True
+    - tool:
+        - doeslateqlon:
+            latkey: 'decimalLatitude'
+            lonkey: 'decimalLongitude'
+            flag: True
+            dropna: True
+    - tool:
+        - isbelow_minlatlonprecision:
+            latkey: 'decimalLatitude'
+            lonkey: 'decimalLongitude'
+            value: 2
+            flag: True
+            dropna: True
+    - tool:
+        - temporal:
+            datekey: 'eventDate'
+            yearkey: 'year'
+            monthkey: 'month'
+            daykey: 'day'
+            inplace: True
+            flag: True
+            stdnan: True
+            parallel: True
+            drop_interval: False
+            strategy_interval: 'overlap'
+            maxinterval_number: 1
+            maxinterval_level: 'years'
+            split_date: 'all'
+            drop_mismatch_split: False
+            dropna_date: True
+    - year:
+        - isboundedby: # excluded at the data acquisition
+            operator: '>='
+            value: 1700
+            flag: False
+            dropna: True # may occur
+        - isboundedby:
+            operator: '>='
+            value: 1950
+            flag: True
+            dropna: True
+    - issue:
+        - doesnotcontain:
+            values:
+              - 'COORDINATE_INVALID' # none should be present, excluded at the data acquisition
+              - 'COORDINATE_OUT_OF_RANGE' # none should be present, excluded at the data acquisition
+              - 'COORDINATE_REPROJECTION_FAILED' # marginal, may occur, not excluded at the data acquisition
+#              - 'GEODETIC_DATUM_INVALID' # more prevalent in GBIF marine data, exclusion may be overly strict
+              - 'RECORDED_DATE_UNLIKELY' # none should be present, removed during the processing stage
+              - 'RECORDED_DATE_INVALID' # none should be present, removed during the processing stage
+              - 'INDIVIDUAL_COUNT_CONFLICTS_WITH_OCCURRENCE_STATUS' # marginal
+            flag: False
+            minimize_flagname: True
+            dropna: False
+        - doesnotcontain:
+            values:
+              - 'ZERO_COORDINATE'
+              - 'COORDINATE_REPROJECTION_SUSPICIOUS'
+              - 'COUNTRY_COORDINATE_MISMATCH'
+              - 'CONTINENT_COORDINATE_MISMATCH'
+              - 'DEPTH_UNLIKELY'
+#              - 'TAXON_MATCH_NAME_AND_ID_AMBIGUOUS'
+#              - 'SCIENTIFIC_NAME_AND_ID_INCONSISTENT'
+              - 'RECORDED_DATE_MISMATCH'
+            flag: True
+            minimize_flagname: True
+            dropna: False
+    - occurrenceStatus:
+        - isin:
+            values: ['ABSENT']
+            flag: True
+            dropna: False
+
+  # dtype conversion, select & rename columns
+
+  variables:
+
+   #- original_name:
+   #    new_name: dtypes
+   # OR
+   #- original_name: new_name
+   # OR
+   #- original_name
+   #
+   # Note:
+   # * by default: dtypes=str
+   # * `new_name` may be the same as `old_name`
+
+    - gbifID:
+        gbifID: 'int'
+    - decimalLatitude:
+        decimalLatitude: 'float'
+    - decimalLongitude:
+        decimalLongitude: 'float'
+    - eventDate
+    - year:
+        year: 'int'
+    - month:
+        month: 'int'
+    - day:
+        day: 'int'
+    - depth:
+        depth: 'float'
+    - verbatimScientificName: species
+    - genus
+    - family
+    - order
+    - class
+    - phylum
+    - kingdom
+    - basisOfRecord
+    - occurrenceStatus:
+        occurrenceStatus: 'str'
+    - individualCount:
+        individualCount: 'int'
+    - issue:
+        gbif_issue: 'str'
+    - license
+    - datasetKey        # OBIS/GBIF/JeDI overlap
+    - occurrenceID      # OBIS/GBIF/JeDI overlap
+    - publishingOrgKey  # OBIS/GBIF/JeDI overlap
+    - institutionCode   # OBIS/GBIF/JeDI overlap
+    - collectionCode    # OBIS/GBIF/JeDI overlap
+    - catalogNumber     # OBIS/GBIF/JeDI overlap
+    - recordNumber      # OBIS/GBIF/JeDI overlap
+    - marinedb_mask:
+        marinedb_mask: 'int'
+
+  postprocessing:
+    - tool:
+      - taxasubset:
+          lowerbound: 50
+          flag: True
+          store: True
+          dropna: False
+
