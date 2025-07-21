@@ -9,13 +9,18 @@ import os
 
 from marinedb.utils import resolvepath
 from marinedb.utils.allexport import export
+from marinedb.utils.printverbose import printv
 
 # Global variable
 
 __all__ = [] # populated using the @export decorator
 
 @export
-def apply(inputfile, modulename, outputdir=None, add_processedby=True):
+def apply(inputfile, modulename, outputdir=None, add_processedby=True, verbose=True, indent=''):
+
+    if modulename in inputfile:
+        printv(f"WARNING | `inputfile` already contains '{modulename}' and will therefore not be modified", verbose=verbose, indent=indent)
+        return inputfile
 
     inputfile_split = inputfile.split('.')
 
