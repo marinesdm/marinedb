@@ -4,7 +4,7 @@ data:
 
   inputdir_path: "/data/smartbiodiv/eberhocoi/obis_marinedb/source"
 
-  outputdir_path: "/data/smartbiodiv/eberhocoi/obis_marinedb/flag"
+  outputdir_path: "/data/smartbiodiv/eberhocoi/obis_marinedb/drop"
 
   outputfile_path: "obis_processedby_marinedb.txt"
 
@@ -60,19 +60,20 @@ data:
             fuzzy: True
             verbatimcolumn: ['scientificName', 'scientificNameAuthorship', 'originalScientificName']
             verbatimauthorshiponly: [False, True, False]
-            keep_fossil: True
-            inplace: False
+            keep_fossil: False
+            inplace: True
             resume: True
             resume_parallel: True
             resume_mode: 'soft'
             parallel: True
-            flag_nomatch: True
+            flag_nomatch: False
             flag_uncertain: True
             store_isinworms: False
     - kingdom:
-        - isin:
+        - notisin:
             values: ['Bacteria', 'Archaea', 'Viruses']
-            flag: True
+            flag: False
+            dropna: True
     - class:
         - isin:
             values: ['Aves']
@@ -80,28 +81,31 @@ data:
     - basisOfRecord:
         - mapbasisofrecord:
             inplace: True
-        - notisin:
+        - isin:
             values: ['OBSERVATION','OCCURRENCE']
             flag: True
     - tool:
         - islatloninvalid: # excluded at data acquisition
             latkey: 'decimalLatitude'
             lonkey: 'decimalLongitude'
-            flag: True
+            flag: False
             dropna: True
         - islatlonzero:
             latkey: 'decimalLatitude'
             lonkey: 'decimalLongitude'
-            flag: True
+            flag: False
+            dropna: True
         - doeslateqlon:
             latkey: 'decimalLatitude'
             lonkey: 'decimalLongitude'
-            flag: True
+            flag: False
+            dropna: True
         - isbelow_minlatlonprecision:
             latkey: 'decimalLatitude'
             lonkey: 'decimalLongitude'
             value: 2
-            flag: True
+            flag: False
+            dropna: True
 #    - depth:
 #        - isna:
 #            flag: True
@@ -112,7 +116,7 @@ data:
             yearkey: 'year'
             monthkey: 'month'
             daykey: 'day'
-            inplace: False
+            inplace: True
             stdnan: True
             # process date intervals
             flag_interval: True
@@ -121,19 +125,19 @@ data:
             # split dates
             split_date: 'all'
             drop_mismatch_split: False
-            dropna_date: False
+            dropna_date: True
         - isdateunlikely:
             yearkey: 'year'
-            flag: True
+            flag: False
+            dropna: True # should not occur at this stage
     - year:
-        - isna:
-            flag: True
         - isboundedby:
-            operator: '<'
+            operator: '>='
             value: 1950
-            flag: True
+            flag: False
+            dropna: True
     - flags:
-        - contains:
+        - doesnotcontain:
             values:
               - 'DATE_IN_FUTURE' # none should be present, removed during processing stage
               - 'LON_OUT_OF_RANGE' # none should be present, removed during processing stage
@@ -143,6 +147,7 @@ data:
               - 'NOT_MARINE' # none should be present, removed during processing stage
             flag: False
             minimize_flagname: True
+            dropna: False
         - contains: # none should be present, removed during processing stage
             values:
               - 'NO_DEPTH.*ON_LAND|ON_LAND.*NO_DEPTH'
