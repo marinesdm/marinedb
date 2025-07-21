@@ -46,7 +46,6 @@ def execute_java(multiple_datestr, verbose=True, indent=''): #verbose indent deu
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
     )
-#    p.wait(timeout=TIMEOUT)
 
     keys = []
     stdout = []
@@ -54,7 +53,6 @@ def execute_java(multiple_datestr, verbose=True, indent=''): #verbose indent deu
     i = -1
     for line in p.stdout:
         line = line.decode('utf-8').strip()
-        printv(line, verbose=verbose, indent=indent) #debug
         nsep = line.count('=')
         if nsep == 1:
             if 'SUCCESS' in line:
@@ -71,34 +69,9 @@ def execute_java(multiple_datestr, verbose=True, indent=''): #verbose indent deu
         else:
             raise Exception(f'`parsedate.py` | Unexpected output: more than two equality signs in {line}')
 
-#    stderr = []
-##    unexpected_firstline = True
-##    unexpected_index = []
-#    for line in p.stderr:
-##        print()
-#        print(line)
-##        print()
-#        line = line.decode('utf-8').strip()
-#        stderr.append(line)
-##        if ('ERROR' in decode_line) or ('RAISE' in decode_line):
-##            stderr.append(decode_line)
-##            unexpected_firstline = True
-##        elif unexpected_firstline:
-##            stderr.append(decode_line)
-##            unexpected_index.append(len(stderr) - 1)
-##            unexpected_firstline = False
-
-    assert len(stderr) == Ndates
-
     p.terminate()
 
-#    if len(stdout) != Ndates:
-#        assert len(unexpected_index) != 0
-#        for idx in unexpected_index:
-#            stdout.insert(idx, 'SUCCESS=')
-#    print()
-#    print('stdout:',stdout)
-#    print()
+    assert len(stderr) == Ndates
     assert len(stdout) == Ndates
 
     return keys, stdout, stderr
@@ -128,10 +101,7 @@ def parse_java(multiple_datestr, datekey, raise_javaexception=False, verbose=Tru
 
     # Execute the java command
 
-    keys, stdout, stderr = execute_java(multiple_datestr, verbose=verbose, indent=indent) #debug
-#    print()
-#    print(stderr)
-#    print()
+    keys, stdout, stderr = execute_java(multiple_datestr, verbose=verbose, indent=indent)
 
     # Process the command output
     # format: SUCCESS:date1 date2 or ERROR:error or RAISE:error_message or JAVAEXCEPTION:error_message
@@ -144,15 +114,6 @@ def parse_java(multiple_datestr, datekey, raise_javaexception=False, verbose=Tru
 
         if len(single_stderr) != 2:
             raise Exception(f'`parsedate.py` | [DEV] {keys[i]}: ' + '='.join(single_stderr))
-#
-#            if raise_javaexception:
-#                raise Exception(f'`parsedate.py` | {keys[i]}: ' + '='.join(single_stderr))
-#            else:
-#                stderr_message = '='.join(single_stderr)
-#                error_type = re.search(r'java\..*', stderr_message.split(':')[0]).group()
-#                error_msg = stderr_message.split(':')[1]
-#                printv(f'WARNING | {error_type} raised for {keys[i]}: {error_msg}', verbose=verbose, indent=indent)
-#                stderr[i] = f'{basedatekey}_JAVA_' + error_type.split('.')[-1].upper()
 
         elif len(single_stderr[1]) != 0:
 
@@ -207,7 +168,6 @@ def validate_format(format):
     stderr = stderr[0].split('=')
 
     if len(stderr) != 2:
-#        stderr = [err for err in stderr if err not in ['ERROR','RAISE','JAVAEXCEPTION']]
         raise Exception('`parsedate.py` | ' + '='.join(stderr))
 
     if stderr[0] == 'RAISE':
@@ -316,6 +276,7 @@ def assemble_date(df, datekey, datekeyout, yearkey=None, monthkey=None, daykey=N
     # Exclude lines with a missing or unlikely year value
 
     date2process = (pd.isnull(df[datekeyout])) & (df['issue_parsedate'] != f'{basedatekey}_UNLIKELY')
+#    print(df.loc[date2process,datekey]) #debug
 
     baseyearkey = yearkey.split('_processedby_')[0].upper()
     df[f'TEMPORARYPARSEDATE_{yearkey}'] = df[yearkey].values

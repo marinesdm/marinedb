@@ -21,7 +21,7 @@ __all__ = [] # populated using the @export decorator
 @export
 def isdateinterval(df, datekey):
 
-    flaginterval = pd.Series([False]*len(df))
+    flaginterval = pd.Series([False]*len(df), index=df.index)
 
     isdatemissing = pd.isnull(df[datekey])
     flaginterval[~isdatemissing] = df.loc[~isdatemissing,datekey].astype('string').str.contains('/')

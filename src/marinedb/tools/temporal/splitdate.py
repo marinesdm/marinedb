@@ -21,7 +21,6 @@ from marinedb.tools.temporal import processdateinterval
 
 __all__ = [] # populated using the @export decorator
 
-
 def get_basekey(key, columns):
 
     basekey = key.split('_processedby_')[0]
@@ -226,7 +225,7 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', dr
     if split == 'interval':
         process = df[flagcolumn]
     else:
-        process = pd.Series([True]*len(df))
+        process = pd.Series([True]*len(df), index=df.index)
 
     # Prepare the columns for storing results
     # inplace=True: replace `yearkey`/`monthkey`/`daykey` if the columns already exist
