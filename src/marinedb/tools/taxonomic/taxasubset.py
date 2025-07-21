@@ -4,6 +4,7 @@
 # External import
 
 import os
+import json
 import shutil
 import psutil
 import subprocess
@@ -14,6 +15,7 @@ from importlib.resources import files
 
 # Internal import
 
+from marinedb.utils import resolvepath
 from marinedb.utils import convertbytes
 from marinedb.utils.allexport import export
 from marinedb.utils.printverbose import printv
@@ -157,7 +159,7 @@ def lowerbound_subset_distributed(inputfile, sep='\t', speciesidkey=None, specie
     isspeciesidkey = (speciesidkey is not None)
 
     if (not isspeciesidkey) and ispartialclassification:
-        raise Exception(f'`taxasubset.py` | Either the column containing species identifiers or the columns specifying the taxonomic classification must be provided')
+        raise ValueError(f'`taxasubset.py` | Either the column containing species identifiers or the columns specifying the taxonomic classification must be provided')
 
     if isspeciesidkey and (not ispartialclassification):
         printv(f"INFO | Since `speciesidkey` is provided ('{speciesidkey}'), classification keys will be ignored", verbose=verbose, indent=indent)
@@ -201,15 +203,8 @@ def lowerbound_subset_distributed(inputfile, sep='\t', speciesidkey=None, specie
     cmd = ['bash', column_subset_algorithm, '-f', inputfile, '-c', columns_idx, '-o', tempfile,'-d', sep]
     p = subprocess.run(cmd)
 
-#    if not isspeciesidkey:
-#        other_column = list(set(header) - set(columns))[0]
-#        print('other_column', other_column)
-#        columns.append(other_column)
-#        print(columns)
-
     printv(f'* Loading data from {tempfile}', verbose=verbose, indent=indent)
     df = dd.read_csv(tempfile, sep=sep, dtype='string', skip_blank_lines=False)
-#    df = dd.read_csv(inputfile, sep=sep, dtype='string', skip_blank_lines=False, usecols=columns)
     df = df.assign(idx=1)
     df = df.set_index(df.idx.cumsum() - 1, sorted=True)
     df = df.rename_axis(index=None)
@@ -298,18 +293,23 @@ def upperbound_subset(df, limit=-1, flag=False): #TODO
     return None
 
 @export
-def apply(inputfile, sep='\t', lowerbound=-1, upperbound=-1, flag=False, dropna=False, seed=None, force_distributed=False, speciesidkey=None, specieskey=None, genuskey=None, familykey=None, orderkey=None, classkey=None, phylumkey=None, kingdomkey=None, store=True, outputdir='./', outputfile=None, verbose=True, indent=''):
+def apply(inputfile, sep='\t', lowerbound=-1, upperbound=-1, flag=False, dropna=False, seed=None, force_distributed=False, speciesidkey=None, specieskey=None, genuskey=None, familykey=None, orderkey=None, classkey=None, phylumkey=None, kingdomkey=None, dtypesfile=None, store=True, outputdir='./', outputfile=None, verbose=True, indent=''):
 
     if (upperbound == -1) and (lowerbound == -1):
         # Do not filter taxa based on their number of occurrences in the dataset
         return None
 
-    if (outputfile is None) or (len(outputfile) == 0):
-        outputfile = getdefaultoutputfile.apply(inputfile, 'taxasubset', outputdir=outputdir)
+    outputdir = resolvepath.apply(outputdir)
+    if (outputfile is None) or (len(outputfile) == 0) or (inputfile == outputfile):
+        outputfile = getdefaultoutputfile.apply(inputfile, 'taxasubset', outputdir=outputdir, verbose=verbose, indent=indent)
 
     if lowerbound > 0:
 
         # Filter taxa with less than `lowerbound` occurrences in the dataset
+
+        if dtypesfile is not None:
+            with open(dtypesfile,'r') as f:
+                dtypes = json.load(f)
 
         params = {
                   'speciesidkey': speciesidkey,
@@ -340,13 +340,16 @@ def apply(inputfile, sep='\t', lowerbound=-1, upperbound=-1, flag=False, dropna=
             printv(f'INFO | `taxasubset` will be executed in memory', verbose=verbose, indent=indent)
 
             params['store'] = store
-#            columns = [specieskey, genuskey, familykey, orderkey, classkey, phylumkey, kingdomkey, speciesidkey]
-#            columns = [col for col in columns if col is not None]
+
             printv(f'* Loading data from {inputfile}', verbose=verbose, indent=indent)
-            df = pd.read_csv(inputfile, sep=sep)
-#            df = pd.read_csv(inputfile, sep=sep, usecols=columns, dtype='string')
-#            print(df.memory_usage(deep=True))
-#            print(df.memory_usage(deep=True).sum())
+
+            if dtypesfile is not None:
+#                with open(dtypesfile,'r') as f:
+#                    dtypes = yaml.safe_load(f)
+                df = pd.read_csv(inputfile, sep=sep, dtype=dtypes)
+            else:
+                df = pd.read_csv(inputfile, sep=sep, low_memory=False)
+
             df, outputfile = lowerbound_subset_inmemory(df, **params)
 
         else:
@@ -357,6 +360,15 @@ def apply(inputfile, sep='\t', lowerbound=-1, upperbound=-1, flag=False, dropna=
 
             df = None
             outputfile = lowerbound_subset_distributed(inputfile, **params)
+
+        if inputfile !=  outputfile:
+            printv(f'* Delete {inputfile}', verbose=verbose, indent=indent)
+            os.remove(inputfile) #debug
+
+        if flag and (dtypesfile is not None):
+            dtypes[f'flag_taxasubset_isabove_{lowerbound}'] = 'boolean'
+            with open(dtypesfile,'w') as f:
+                json.dump(dtypes, f, indent=4)
 
     if upperbound > 0:
 
