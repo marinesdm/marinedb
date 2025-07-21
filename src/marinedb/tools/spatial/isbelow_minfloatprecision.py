@@ -25,7 +25,7 @@ def get_floatprecision(series_flt):
     series_flt = series_flt.str.split(pat='.')
     precision = np.where(series_flt.str.len().eq(1) | series_flt.str[1].eq(''), 0, series_flt.str[1].str.len())
 
-    return pd.Series(precision)
+    return pd.Series(precision, index=series_flt.index)
 
 @export
 def apply(df, key, value, flag=False, dropna=False, verbose=True, indent=''):

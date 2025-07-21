@@ -39,4 +39,4 @@ def apply(df, key, flag=False, eps=1e-5, dropna=False, verbose=True, indent=''):
         #   - with null values in `key`
         #   - with missing values in `key` if `dropna`
         iszero[ismissing] = dropna
-        return df[~iszero]
+        return df[~iszero].reset_index(drop=True)

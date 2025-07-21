@@ -40,4 +40,4 @@ def apply(df, latkey, lonkey, flag=False, eps=1e-5, dropna=False, verbose=True, 
         #   - where latitude and longitude are equal
         #   - with missing latitude and/or longitude when `dropna`
         isequal[ismissing] = dropna
-        return df[~isequal]
+        return df[~isequal].reset_index(drop=True)
