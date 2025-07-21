@@ -4,7 +4,7 @@ data:
 
   inputdir_path: "/data/smartbiodiv/eberhocoi/gbif_marinedb/source"
 
-  outputdir_path: "/data/smartbiodiv/eberhocoi/gbif_marinedb/"
+  outputdir_path: "/data/smartbiodiv/eberhocoi/gbif_marinedb/drop/"
 
   outputfile_path: "gbif_processedby_marinedb.txt"
 
@@ -22,6 +22,7 @@ data:
               - 'match_type'
               - 'status'
               - 'valid_AphiaID'
+#              - 'lsid'
               - 'isExtinct'
               - 'isMarine'
               - 'rank'
@@ -45,26 +46,11 @@ data:
               cls: 'class'
               phylum: 'phylum'
               kingdom: 'kingdom'
-            wormscall:
-              - 'scientificname'
-              - 'genus'
-              - 'family'
-              - 'order'
-              - 'cls'
-              - 'phylum'
-              - 'kingdom'
-              - 'match_type'
-              - 'status'
-              - 'valid_AphiaID'
-              - 'isExtinct'
-              - 'isMarine'
-              - 'rank'
-              - 'authority'
-              - 'unacceptreason'
             worms_dtypes:
               match_type: 'string'
               status: 'string'
               valid_AphiaID: 'Int64'
+#              lsid: 'string'
               isExtinct: 'Int64'
               isMarine: 'Int64'
               rank: 'string'
@@ -75,159 +61,106 @@ data:
             verbatimcolumn: ['verbatimScientificName', 'verbatimScientificNameAuthorship']
             verbatimauthorshiponly: [False, True]
             keep_fossil: False
-            inplace: True #False
+            inplace: True
             resume: True
             resume_parallel: True
             resume_mode: 'soft'
-            store: True
-            store_parallel: True
             parallel: True
-            overwrite_isinworms: False
             flag_nomatch: False
             flag_uncertain: True
-        - isna:
-            flag: False
+            store_isinworms: False
     - kingdom:
         - notisin:
             values: ['Bacteria', 'Archaea', 'Viruses']
             flag: False
             dropna: True
-        - lettersonly: # filtered upstream by createwormsfilters and isinworms
-            flag: False
-            dropna: True
-    - phylum:
-        - lettersonly: # filtered upstream by createwormsfilters and isinworms
-            flag: False
-            dropna: False
     - class:
-        - notisin:
+        - isin:
             values: ['Aves']
             flag: True
-            dropna: False
-        - lettersonly: # filtered upstream by createwormsfilters and isinworms
-            flag: False
-            dropna: False
-    - order:
-        - lettersonly:
-            flag: False
-            dropna: False
-    - family:
-        - lettersonly: # filtered upstream by createwormsfilters and isinworms
-            flag: False
-            dropna: False
-    - genus:
-        - lettersonly: # filtered upstream by createwormsfilters and isinworms — no further removal expected, though some edge cases were detected
-            flag: False
-            dropna: False
     - basisOfRecord:
-        - notisin:
+        - isin:
             values: ['OBSERVATION','OCCURRENCE']
             flag: True
-            dropna: False
-    - decimalLatitude:
-        - isna:
-            flag: False
-        - isboundedby: # excluded at the data acquisition
-            operator: '>='
-            value: -90
-            flag: False
-            dropna: True
-        - isboundedby: # excluded at the data acquisition
-            operator: '<='
-            value: 90
-            flag: False
-            dropna: True
-        - iszero:
-            flag: True
-            dropna: True
-    - decimalLongitude:
-        - isna:
-            flag: False
-        - isboundedby: # excluded at the data acquisition
-            operator: '>='
-            value: -180
-            flag: False
-            dropna: True
-        - isboundedby: # excluded at the data acquisition
-            operator: '<='
-            value: 180
-            flag: False
-            dropna: True
-        - iszero:
-            flag: True
-            dropna: True
     - tool:
+        - islatloninvalid: # excluded at data acquisition
+            latkey: 'decimalLatitude'
+            lonkey: 'decimalLongitude'
+            flag: False
+            dropna: True
+        - islatlonzero:
+            latkey: 'decimalLatitude'
+            lonkey: 'decimalLongitude'
+            flag: False
+            dropna: True
         - doeslateqlon:
             latkey: 'decimalLatitude'
             lonkey: 'decimalLongitude'
-            flag: True
+            flag: False
             dropna: True
-    - tool:
         - isbelow_minlatlonprecision:
             latkey: 'decimalLatitude'
             lonkey: 'decimalLongitude'
             value: 2
-            flag: True
+            flag: False
             dropna: True
+#    - depth:
+#        - isna:
+#            flag: True
     - tool:
         - temporal:
+            # parse dates
             datekey: 'eventDate'
             yearkey: 'year'
             monthkey: 'month'
             daykey: 'day'
             inplace: True
-            flag: True
             stdnan: True
-            parallel: True
+            # process date intervals
+            flag_interval: True
             drop_interval: False
             strategy_interval: 'overlap'
-            maxinterval_number: 1
-            maxinterval_level: 'years'
+            # split dates
             split_date: 'all'
-            drop_mismatch_split: False
+            drop_mismatch_split: False # should not occur
             dropna_date: True
-    - year:
-        - isboundedby: # excluded at the data acquisition
-            operator: '>='
-            value: 1700
+        - isdateunlikely: # excluded at data acquisition
+            yearkey: 'year'
             flag: False
-            dropna: True # may occur
+            dropna: True # should not occur at this stage
+    - year:
         - isboundedby:
             operator: '>='
             value: 1950
-            flag: True
+            flag: False
             dropna: True
     - issue:
         - doesnotcontain:
             values:
-              - 'COORDINATE_INVALID' # none should be present, excluded at the data acquisition
-              - 'COORDINATE_OUT_OF_RANGE' # none should be present, excluded at the data acquisition
-              - 'COORDINATE_REPROJECTION_FAILED' # marginal, may occur, not excluded at the data acquisition
-#              - 'GEODETIC_DATUM_INVALID' # more prevalent in GBIF marine data, exclusion may be overly strict
+              - 'COORDINATE_INVALID' # none should be present, excluded at data acquisition
+              - 'COORDINATE_OUT_OF_RANGE' # none should be present, excluded at data acquisition
+              - 'COORDINATE_REPROJECTION_FAILED' # marginal, not excluded at data acquisition, but removed during the processing stage (if replaced by NaN) 
+              - 'ZERO_COORDINATE' # none should be present, removed during the processing stage
               - 'RECORDED_DATE_UNLIKELY' # none should be present, removed during the processing stage
               - 'RECORDED_DATE_INVALID' # none should be present, removed during the processing stage
               - 'INDIVIDUAL_COUNT_CONFLICTS_WITH_OCCURRENCE_STATUS' # marginal
             flag: False
             minimize_flagname: True
             dropna: False
-        - doesnotcontain:
+        - contains:
             values:
-              - 'ZERO_COORDINATE'
               - 'COORDINATE_REPROJECTION_SUSPICIOUS'
+              - 'GEODETIC_DATUM_INVALID' # more prevalent in GBIF marine data, exclusion may be overly strict
               - 'COUNTRY_COORDINATE_MISMATCH'
               - 'CONTINENT_COORDINATE_MISMATCH'
               - 'DEPTH_UNLIKELY'
-#              - 'TAXON_MATCH_NAME_AND_ID_AMBIGUOUS'
-#              - 'SCIENTIFIC_NAME_AND_ID_INCONSISTENT'
               - 'RECORDED_DATE_MISMATCH'
             flag: True
             minimize_flagname: True
-            dropna: False
     - occurrenceStatus:
         - isin:
             values: ['ABSENT']
             flag: True
-            dropna: False
 
   # dtype conversion, select & rename columns
 
@@ -269,11 +202,11 @@ data:
     - basisOfRecord
     - occurrenceStatus:
         occurrenceStatus: 'str'
-    - individualCount:
-        individualCount: 'int'
+#    - individualCount:
+#        individualCount: 'int'
     - issue:
         gbif_issue: 'str'
-    - license
+#    - license
     - datasetKey        # OBIS/GBIF/JeDI overlap
     - occurrenceID      # OBIS/GBIF/JeDI overlap
     - publishingOrgKey  # OBIS/GBIF/JeDI overlap
@@ -286,9 +219,9 @@ data:
 
   postprocessing:
     - tool:
+      - resolvetaxamatch
+    - tool:
       - taxasubset:
           lowerbound: 50
           flag: True
           store: True
-          dropna: False
-
