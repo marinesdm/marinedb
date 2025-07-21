@@ -3,4 +3,4 @@
 
 from . import *
 
-__all__ = ['convertdatetype','parsedate','processdateinterval','splitdate','temporal']
+__all__ = ['convertdatetype','parsedate','processdateinterval','splitdate','temporal','isdateinvalid','isdateunlikely']
