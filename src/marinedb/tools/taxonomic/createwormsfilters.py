@@ -925,11 +925,11 @@ def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level
 
         Nwormsscinames = len(unique_wormsscinames)
 
-        printv(f'{Nwormsscinames} WoRMS-formatted scientific names to process', verbose=verbose, indent=indent + '  ')
-
         ## Break down the query into queries of 50 raw scientific names (WoRMS limit)
 
         nbatch = math.ceil(Nwormsscinames/50)
+
+        printv(f'{Nwormsscinames} WoRMS-formatted scientific names to process ({nbatch} batches)', verbose=verbose, indent=indent + '  ')
 
         if verbose:
             process = tqdm(range(nbatch), desc=indent + '  Progress')
@@ -1250,10 +1250,9 @@ def match_WoRMSByAcceptedSciname(valid_aphiaID, wormscall=WORMSCALL, species_onl
             printv(f'UPDATE | {len(valid_aphiaID)}/{NaphiaID} ({round(len(valid_aphiaID)/NaphiaID*100,2)}%) scientific names remaining to process (`resume`={resume})', verbose=verbose, indent=indent)
 
     NaphiaID = len(valid_aphiaID)
-
-    printv(f'{NaphiaID} WoRMS identifiers to retrieve', verbose=verbose, indent=indent)
-
     nbatch = math.ceil(NaphiaID/50)
+
+    printv(f'{NaphiaID} WoRMS identifiers to retrieve ({nbatch} batches)', verbose=verbose, indent=indent)
 
     if verbose:
         process = tqdm(range(nbatch), desc = indent + 'Progress')
