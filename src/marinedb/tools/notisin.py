@@ -32,12 +32,15 @@ def apply(df, key, values, flag=False, minimize_flagname=False, flagname_mapping
               'outputdir': outputdir
              }
 
+    columns_before = set(df.columns)
+
     try:
         df = isin.apply(df, key, values, **params)
     except Exception as err:
         raise Exception(f"`notisin.py` | {str(err).split('|')[-1]}")
 
-    isin_flagcolumn = [col for col in df.columns if (f'flag_{key}_isin' in col)]
+    diff_columns = list(set(df.columns) - columns_before)
+    isin_flagcolumn = [col for col in diff_columns if (f'flag_{key}_isin' in col)]
     assert len(isin_flagcolumn) == 1
     isin_flagcolumn = isin_flagcolumn[0]
     values_str = isin_flagcolumn.split('_')[-1]
@@ -47,7 +50,7 @@ def apply(df, key, values, flag=False, minimize_flagname=False, flagname_mapping
     ismissing = pd.isnull(df[isin_flagcolumn])
     df.loc[ismissing, isin_flagcolumn] = dropna
 
-    notisin = (~df[isin_flagcolumn])
+    notisin = (~df[isin_flagcolumn]).copy()
 
     # Clean
 
