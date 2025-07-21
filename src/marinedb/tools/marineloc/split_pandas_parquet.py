@@ -39,7 +39,7 @@ def split_pandas(inputfile, columns=None, sep='\t', chunksize=CHUNKSIZE, outputd
               'sep': sep,
               'chunksize': chunksize,
               'skip_blank_lines': False,
-              'on_bad_lines': 'error',
+              'on_bad_lines': 'error', # avoid `usecols` to ensure `on_bad_lines` error triggers
               'engine': 'python'
              }
 
