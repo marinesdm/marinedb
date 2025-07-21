@@ -1,0 +1,217 @@
+data:
+
+  inputfile_path: "/data/smartbiodiv/eberhocoi/obis/obis_marine.txt"
+
+  inputdir_path: "/data/smartbiodiv/eberhocoi/obis_marinedb/source"
+
+  outputdir_path: "/data/smartbiodiv/eberhocoi/obis_marinedb/flag"
+
+  outputfile_path: "obis_processedby_marinedb.txt"
+
+  processing:
+    - species:
+        - createwormsfilters:
+            wormscall:
+              - 'scientificname'
+              - 'genus'
+              - 'family'
+              - 'order'
+              - 'cls'
+              - 'phylum'
+              - 'kingdom'
+              - 'match_type'
+              - 'status'
+              - 'valid_AphiaID'
+#              - 'lsid'
+              - 'isExtinct'
+              - 'isMarine'
+              - 'rank'
+              - 'authority'
+              - 'unacceptreason'
+            identification_level: 'species'
+            doublecheck: True
+            overwrite: True
+            overwrite_parallel: True
+            resume: True
+            resume_parallel: True
+            parallel: True
+            max_attempt: 20
+        - isinworms:
+            stdnan: True
+            rank_mapping:
+              scientificname: 'species'
+              genus: 'genus'
+              family: 'family'
+              order: 'order'
+              cls: 'class'
+              phylum: 'phylum'
+              kingdom: 'kingdom'
+            worms_dtypes:
+              match_type: 'string'
+              status: 'string'
+              valid_AphiaID: 'Int64'
+#              lsid: 'string'
+              isExtinct: 'Int64'
+              isMarine: 'Int64'
+              rank: 'string'
+              authority: 'string'
+              unacceptreason: 'string'
+            check_ambiguity: True
+            fuzzy: True
+            verbatimcolumn: ['scientificName', 'scientificNameAuthorship', 'originalScientificName']
+            verbatimauthorshiponly: [False, True, False]
+            keep_fossil: True
+            inplace: False
+            resume: True
+            resume_parallel: True
+            resume_mode: 'soft'
+            parallel: True
+            flag_nomatch: True
+            flag_uncertain: True
+            store_isinworms: False
+    - kingdom:
+        - isin:
+            values: ['Bacteria', 'Archaea', 'Viruses']
+            flag: True
+    - class:
+        - isin:
+            values: ['Aves']
+            flag: True
+    - basisOfRecord:
+        - mapbasisofrecord:
+            inplace: True
+        - notisin:
+            values: ['OBSERVATION','OCCURRENCE']
+            flag: True
+    - tool:
+        - islatloninvalid: # excluded at data acquisition
+            latkey: 'decimalLatitude'
+            lonkey: 'decimalLongitude'
+            flag: True
+            dropna: True
+        - islatlonzero:
+            latkey: 'decimalLatitude'
+            lonkey: 'decimalLongitude'
+            flag: True
+        - doeslateqlon:
+            latkey: 'decimalLatitude'
+            lonkey: 'decimalLongitude'
+            flag: True
+        - isbelow_minlatlonprecision:
+            latkey: 'decimalLatitude'
+            lonkey: 'decimalLongitude'
+            value: 2
+            flag: True
+#    - depth:
+#        - isna:
+#            flag: True
+    - tool:
+        - temporal:
+            # parse dates
+            datekey: 'eventDate'
+            yearkey: 'year'
+            monthkey: 'month'
+            daykey: 'day'
+            inplace: False
+            stdnan: True
+            # process date intervals
+            flag_interval: True
+            drop_interval: False
+            strategy: 'overlap'
+            # split dates
+            split: 'all'
+            drop_mismatch_split: False
+            dropna_date: False
+        - isdateunlikely:
+            yearkey: 'year'
+            flag: True
+    - year:
+        - isna:
+            flag: True
+        - isboundedby:
+            operator: '<'
+            value: 1950
+            flag: True
+    - flags:
+        - contains:
+            values:
+              - 'DATE_IN_FUTURE' # none should be present, removed during processing stage
+              - 'LON_OUT_OF_RANGE' # none should be present, removed during processing stage
+              - 'LAT_OUT_OF_RANGE' # none should be present, removed during processing stage
+              - 'NO_COORD' # none should be present, removed during processing stage
+              - 'ZERO_COORD' # none should be present, removed during processing stage
+              - 'NOT_MARINE' # none should be present, removed during processing stage
+            flag: False
+            minimize_flagname: True
+        - contains: # none should be present, removed during processing stage
+            values:
+              - 'NO_DEPTH.*ON_LAND|ON_LAND.*NO_DEPTH'
+            flag: True
+            minimize_flagname: True
+            flagname_mapping: {'NO_DEPTH.*ON_LAND|ON_LAND.*NO_DEPTH': 'NO_DEPTH_AND_ON_LAND'}
+    - absence:
+        - isin:
+            values: True
+            flag: True
+
+  # dtype conversion, select & rename columns
+
+  variables:
+
+   #- original_name:
+   #    new_name: dtypes
+   # OR
+   #- original_name: new_name
+   # OR
+   #- original_name
+   #
+   # Note:
+   # * by default: dtypes=str
+   # * `new_name` may be the same as `old_name`
+
+    - id:
+        id: 'int' #ICI
+    - decimalLatitude:
+        decimalLatitude: 'float'
+    - decimalLongitude:
+        decimalLongitude: 'float'
+    - eventDate
+    - year:
+        year: 'int'
+    - month:
+        month: 'int'
+    - day:
+        day: 'int'
+    - depth:
+        depth: 'float'
+    - species
+    - genus
+    - family
+    - order
+    - class
+    - phylum
+    - kingdom
+    - basisOfRecord
+    - absence:
+        absence: 'bool'
+    - flags:
+        obis_issue: 'str'
+#    - license
+    - dataset_id            # OBIS/GBIF/JeDI overlap
+    - datasetID             # OBIS/GBIF/JeDI overlap
+    - occurrenceID          # OBIS/GBIF/JeDI overlap
+    - ownerInstitutionCode  # OBIS/GBIF/JeDI overlap
+    - institutionID         # OBIS/GBIF/JeDI overlap
+    - collectionID          # OBIS/GBIF/JeDI overlap
+    - institutionCode       # OBIS/GBIF/JeDI overlap
+    - collectionCode        # OBIS/GBIF/JeDI overlap
+    - catalogNumber         # OBIS/GBIF/JeDI overlap
+
+  postprocessing:
+    - tool:
+      - resolvetaxamatch
+    - tool:
+      - taxasubset:
+          lowerbound: 50
+          flag: True
+          store: True
