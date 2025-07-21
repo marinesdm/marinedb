@@ -53,4 +53,4 @@ def apply(df, key, flag=False, dropna=False, verbose=True, indent=''):
         #   - where `key` contains non-letter characters
         #   - with missing values in `key` if `dropna`
         islettersonly[ismissing] = (not dropna)
-        return df[islettersonly]
+        return df[islettersonly].reset_index(drop=True)
