@@ -11,6 +11,7 @@ from marinedb.utils.allexport import export
 from marinedb.utils.printverbose import printv
 
 from marinedb.tools import modifyissuecolumn
+from marinedb.tools.temporal import isdateinvalid
 
 # Global variable
 
@@ -47,14 +48,19 @@ def astype_Int64(df, key, drop_empty=True, verbose=True, indent=''):
     # Replace string with missing values if it contains non-numeric characters
     # (excluding floating point)
 
-    notonlynumbers = df[key].str.contains(r'[^.0-9]', regex=True)
-    notfloatingpoint = (df[key].str.count(r'\.') > 1)
-    condition = (notonlynumbers | notfloatingpoint) #debug
-    if condition.any():
-        print(df.loc[condition, key]) #debug
-        print(df.loc[~condition,key])
-    df.loc[notonlynumbers | notfloatingpoint, key] = pd.NA
-    df = modifyissuecolumn.apply(df, issuekey='issue_convertdatetype', issuemsg=f'{basekey}_INVALID', subset=(notonlynumbers | notfloatingpoint))
+    notonlynumbers = df[key].str.contains(r'[^.0-9]|\.0*[^0]', regex=True)
+#    notfloatingpoint = (df[key].str.count(r'\.') > 1) # should not be necessary
+#    condition = (notonlynumbers | notfloatingpoint)
+#    if condition.any():
+    if notonlynumbers.any():
+        print('convertdatetype.py') # debug
+        print(df.loc[notonlynumbers, key]) #debug
+#        print(df.loc[condition, key]) #debug
+#        print(df.loc[~condition,key])
+#    df.loc[notonlynumbers | notfloatingpoint, key] = pd.NA
+    df.loc[notonlynumbers, key] = pd.NA
+#    df = modifyissuecolumn.apply(df, issuekey='issue_convertdatetype', issuemsg=f'{basekey}_INVALID', subset=(notonlynumbers | notfloatingpoint))
+    df = modifyissuecolumn.apply(df, issuekey='issue_convertdatetype', issuemsg=f'{basekey}_INVALID', subset=notonlynumbers)
 
     # Convert to integers
 
@@ -141,26 +147,36 @@ def convert_day(df, daykey, drop_empty=True, verbose=True, indent=''):
 
     return df
 
-def isvaliddate(df, yearkey, monthkey, daykey):
+def isdatevalid(df, yearkey, monthkey, daykey):
 
-    columns = list(df.columns)
-    baseyearkey = get_basekey(yearkey, columns)
-    basemonthkey = get_basekey(monthkey, columns)
-    basedaykey = get_basekey(daykey, columns)
+#    columns = list(df.columns)
+#    baseyearkey = get_basekey(yearkey, columns)
+#    basemonthkey = get_basekey(monthkey, columns)
+#    basedaykey = get_basekey(daykey, columns)
+#
+#    maxdaybymonth = pd.Series([0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31])
+#
+#    # Nonexistent date
+#    ismissing = (pd.isnull(df[daykey]) | pd.isnull(df[monthkey]) | pd.isnull(df[daykey]))
+#    isvaliddate = ismissing
+#    isvaliddate[~ismissing] = (df.loc[~ismissing,daykey] <= maxdaybymonth[df.loc[~ismissing,monthkey]].set_axis(df.loc[~ismissing,:].index))
+#
+#    # Leap years with 29 days in February
+#    isleapyear = (df[yearkey]%4 == 0) & ((df[yearkey]%100 != 0) | (df[yearkey]%400 == 0))
+#    condition = (~ismissing) & isleapyear & (df[monthkey] == 2)
+#    isvaliddate[condition] = (df.loc[condition, daykey] <= 29)
+#
+#    df = modifyissuecolumn.apply(df, issuekey='issue_convertdatetype', issuemsg=f'{baseyearkey}_{basemonthkey}_{basedaykey}_COMBINATION_INVALID', subset=(~isvaliddate))
 
-    maxdaybymonth = pd.Series([0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31])
-
-    # Nonexistent date
-    ismissing = (pd.isnull(df[daykey]) | pd.isnull(df[monthkey]) | pd.isnull(df[daykey]))
-    isvaliddate = ismissing
-    isvaliddate[~ismissing] = (df.loc[~ismissing,daykey] <= maxdaybymonth[df.loc[~ismissing,monthkey]].set_axis(df.loc[~ismissing,:].index))
-
-    # Leap years with 29 days in February
-    isleapyear = (df[yearkey]%4 == 0) & ((df[yearkey]%100 != 0) | (df[yearkey]%400 == 0))
-    condition = (~ismissing) & isleapyear & (df[monthkey] == 2)
-    isvaliddate[condition] = (df.loc[condition, daykey] <= 29)
-
-    df = modifyissuecolumn.apply(df, issuekey='issue_convertdatetype', issuemsg=f'{baseyearkey}_{basemonthkey}_{basedaykey}_COMBINATION_INVALID', subset=(~isvaliddate))
+    _, flags = isdateinvalid.isdatevalid(df, yearkey, monthkey, daykey, flag=True)
+    ismonthinvalid = (~pd.isnull(flags)) & (~flags.str.contains('COMBINATION'))
+    isdayinvalid = (~pd.isnull(flags)) & (flags.str.contains('COMBINATION'))
+    if any(ismonthinvalid):
+        monthmsg = flags[ismonthinvalid].iloc[0]
+        df = modifyissuecolumn.apply(df, issuekey='issue_convertdatetype', issuemsg=monthmsg, subset=ismonthinvalid)
+    if any(isdayinvalid):
+        daymsg = flags[isdayinvalid].iloc[0]
+        df = modifyissuecolumn.apply(df, issuekey='issue_convertdatetype', issuemsg=daymsg, subset=isdayinvalid)
 
     return df
 
@@ -242,7 +258,7 @@ def apply(df, datekey=None, yearkey=None, monthkey=None, daykey=None, format='IS
     if daykey is not None:
         df = convert_day(df, daykey, drop_empty=drop_empty, verbose=verbose, indent=indent)
     if (yearkey is not None) and (monthkey is not None) and (daykey is not None):
-        df = isvaliddate(df, yearkey, monthkey, daykey)
+        df = isdatevalid(df, yearkey, monthkey, daykey)
         df.loc[df['issue_convertdatetype'].astype('string').str.contains('COMBINATION_INVALID'), daykey] = pd.NA
 
     # Ensure hierarchical consistency
