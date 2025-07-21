@@ -4,7 +4,7 @@ data:
 
   inputdir_path: "/data/smartbiodiv/eberhocoi/jedi_marinedb/source"
 
-  outputdir_path: "/data/smartbiodiv/eberhocoi/jedi_marinedb"
+  outputdir_path: "/data/smartbiodiv/eberhocoi/jedi_marinedb/drop"
 
   outputfile_path: "jedi_processedby_marinedb.txt"
 
@@ -26,6 +26,7 @@ data:
               - 'match_type'
               - 'status'
               - 'valid_AphiaID'
+              - 'lsid'
               - 'isExtinct'
               - 'isMarine'
               - 'rank'
@@ -53,6 +54,7 @@ data:
               match_type: 'string'
               status: 'string'
               valid_AphiaID: 'Int64'
+              lsid: 'string'
               isExtinct: 'Int64'
               isMarine: 'Int64'
               rank: 'string'
@@ -65,92 +67,32 @@ data:
             resume: True
             resume_parallel: True
             resume_mode: 'soft'
-#            store_createwormsfilters: True
-#            store_parallel_createwormsfilters: True
             parallel: True
             flag_nomatch: False
             flag_uncertain: True
             store_isinworms: False
-            overwrite_isinworms: False
-        - isna:
-            flag: False
     - kingdom:
         - notisin:
             values: ['Bacteria', 'Archaea', 'Viruses']
             flag: False
             dropna: True
-#        - lettersonly:
-#            flag: False
-#            dropna: True
-#    - phylum:
-#        - lettersonly:
-#            flag: False
-#            dropna: False
     - class:
-        - notisin:
+        - isin:
             values: ['Aves']
             flag: True
-            dropna: False
-#        - lettersonly:
-#            flag: False
-#            dropna: False
-#    - order:
-#        - lettersonly:
-#            flag: False
-#            dropna: False
-#    - family:
-#        - lettersonly:
-#            flag: False
-#            dropna: False
-#    - genus:
-#        - lettersonly:
-#            flag: False
-#            dropna: False
     - samplingProtocol:
         - mapbasisofrecord:
-            inplace: False
-        - notisin:
+            inplace: True
+    - tool:
+        - basisofrecordisin:
             values: ['OBSERVATION','OCCURRENCE']
             flag: True
-            dropna: False
     - tool:
         - islatloninvalid:
             latkey: 'decimalLatitude'
             lonkey: 'decimalLongitude'
             flag: False
             dropna: True
-#    - decimalLatitude:
-#        - isna:
-#            flag: False
-#        - isboundedby:
-#            operator: '>='
-#            value: -90
-#            flag: False
-#            dropna: True
-#        - isboundedby:
-#            operator: '<='
-#            value: 90
-#            flag: False
-#            dropna: True
-#        - iszero:
-#            flag: False
-#            dropna: True
-#    - decimalLongitude:
-#        - isna:
-#            flag: False
-#        - isboundedby:
-#            operator: '>='
-#            value: -180
-#            flag: False
-#            dropna: True
-#        - isboundedby:
-#            operator: '<='
-#            value: 180
-#            flag: False
-#            dropna: True
-#        - iszero:
-#            flag: False
-#            dropna: True
         - islatlonzero:
             latkey: 'decimalLatitude'
             lonkey: 'decimalLongitude'
@@ -183,32 +125,19 @@ data:
             flag_interval: True
             drop_interval: False
             strategy_interval: 'overlap'
-            maxinterval_number: 1
-            maxinterval_level: 'years'
             # split dates
             split_date: 'all'
             drop_mismatch_split: False
             dropna_date: True
-#        - isdateinvalid:
-#            yearkey: 'year'
-#            monthkey: 'month'
-#            daykey: 'day'
-#            flag: False
-#            dropna: True
         - isdateunlikely:
             yearkey: 'year'
             flag: False
             dropna: True
     - year:
-#        - isboundedby:
-#            operator: '>='
-#            value: 1700
-#            flag: False
-#            dropna: True
         - isboundedby:
             operator: '>='
             value: 1950
-            flag: True
+            flag: False
             dropna: True
     - occurrenceStatus:
         - isin:
@@ -219,17 +148,6 @@ data:
   # dtype conversion, select & rename columns
 
   variables:
-
-   #- original_name:
-   #    new_name: dtypes
-   # OR
-   #- original_name: new_name
-   # OR
-   #- original_name
-   #
-   # Note:
-   # * by default: dtypes=str
-   # * `new_name` may be the same as `old_name`
 
     - decimalLatitude:
         decimalLatitude: 'float'
