@@ -11,6 +11,7 @@ import os
 
 # Internal import
 
+from marinedb.utils.printverbose import printv
 from marinedb.utils import resolvepath
 from marinedb.utils import standardizenan
 from marinedb.utils.allexport import export
@@ -40,7 +41,7 @@ def format_jedi(inputfile, outputfile):
 
     return None
 
-def apply(inputfile, dataset_name, outputfile=None, outputdir=None):
+def apply(inputfile, dataset_name, outputfile=None, outputdir=None, overwrite=True, verbose=True, indent=''):
 
     if outputfile is None:
         temp = os.path.basename(inputfile).split('.')
@@ -52,6 +53,13 @@ def apply(inputfile, dataset_name, outputfile=None, outputdir=None):
         outputdir = os.path.dirname(resolvepath.apply(inputfile))
     if len(os.path.dirname(outputfile)) == 0:
         outputfile = os.path.join(outputdir, outputfile)
+
+    if os.path.isfile(outputfile):
+        if overwrite:
+            printv(f'WARNING | {outputfile} already exists and will be overwritten (overwrite={overwrite})', verbose=verbose, indent=indent)
+        else:
+            printv(f'INFO | Reusing existing file {outputfile} without changes (overwrite={overwrite})', verbose=verbose, indent=indent)
+            return outputfile
 
     if dataset_name == 'jedi':
         format_jedi(inputfile, outputfile)
