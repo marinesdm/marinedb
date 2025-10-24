@@ -1866,8 +1866,7 @@ def apply_acceptedfilter(classification, acceptedfilter=None, keep_fossil=False,
             classification.loc[isfossil,'taxamatch_generatedby_isinworms'] = 'nomatch'
             subset_columns = list(set(classification.columns) - set(['classif_matchtype_generatedby_isinworms','taxamatch_generatedby_isinworms']))
             classification.loc[isfossil,subset_columns] = pd.NA
-            print('accepted')
-            print(classification.loc[classification['taxamatch_generatedby_isinworms']=='nomatch', RANK_MAPPING_RENAMED['genus']].value_counts(dropna=False)) #debug
+
     return classification
 
 
@@ -2102,7 +2101,8 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
         df, rankin, rankout = getcolumnname.apply(df, rank, 'isinworms', inplace)
         RANK_MAPPING_RENAMED[key] = rankin
         rankcolumns_mapping[rankin] = rankout
-
+    print('RANK_MAPPING_RENAMED')
+    print(RANK_MAPPING_RENAMED) #debug
     rankcolumns = list(RANK_MAPPING_RENAMED.values())
     wormscolumns = list(set(WORMSCALL) - set(RANK_MAPPING_RENAMED.keys()))
     wormscolumns_mapping = {column : column + '_generatedby_isinworms' for column in wormscolumns}
@@ -2115,6 +2115,10 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
 
         if verbatimauthorshiponly is None:
             verbatimauthorshiponly = [False]*len(verbatimcolumn)
+        if isinstance(verbatimcolumn,str):
+            verbatimcolumn = [verbatimcolumn]
+        if not isinstance(verbatimauthorshiponly, list | tuple):
+            verbatimauthorshiponly = [verbatimauthorshiponly]
 
         if len(verbatimcolumn) != len(verbatimauthorshiponly):
             raise Exception(f'`isinworms.py` | `verbatimcolumn` has a length of {len(verbatimcolumn)}, whereas `verbatimauthorshiponly` has a length of {len(verbatimauthorshiponly)}')
@@ -2122,8 +2126,6 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
         if ('authority' not in WORMSCALL):
             raise Exception(f"`isinworms.py` | `verbatimcolumn` is not None, but 'authority' not in `WORMSCALL`")
 
-        if isinstance(verbatimcolumn,str):
-            verbatimcolumn = [verbatimcolumn]
         for i,col in enumerate(verbatimcolumn):
             df, verbatimcolumn[i], _ = getcolumnname.apply(df, col, '', inplace=True)
 
@@ -2168,6 +2170,7 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
     dfByClassification = df.loc[~pd.isnull(df[tempspecies]), columns].fillna('_MISSING_').groupby(columns, dropna=False) #get_group() doesn't work with NaN
     columns[speidx] = RANK_MAPPING_RENAMED['scientificname']
     taxonomy = pd.DataFrame(list(dfByClassification.groups.keys()), columns=columns)
+    print('taxonomy columns:', list(taxonomy.columns)) #debug
 
     # Get WoRMS-accepted classifications associated with these classifications, if any
 
@@ -2180,7 +2183,7 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
         classification = pd.DataFrame([],columns=COLNAMES)
     else:
         classification = clean_taxonomy(taxonomy.replace('_MISSING_',pd.NA), **params, **params_store, **params_parallel)
-
+    print('taxonomy columns:', list(taxonomy.columns)) #debug
     # Convert WORMS-specific column dtypes
 
     for key, value in WORMS_DTYPES.items():
@@ -2219,12 +2222,15 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
     classification_columns = classification.columns.tolist()
 
     target_columns = []
+    classification_mapping = {}
     for column in classification_columns:
         try:
             target_columns.append(rankcolumns_mapping[column])
+            classification_mapping[column] = rankcolumns_mapping[column]
         except KeyError:
             try:
                 target_columns.append(wormscolumns_mapping[column])
+                classification_mapping[column] = wormscolumns_mapping[column]
             except KeyError:
                 target_columns.append(column)
 
@@ -2232,14 +2238,11 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
         process = tqdm(classification_indices, desc=indent + 'Progress')
     else:
         process = classification_indices
-    # expand harmonized taxonomy to full dataset
     for idx in process:
+        # expand harmonized taxonomy to full dataset
         group = tuple(taxonomy.loc[idx,columns].values)
         indices = dfByClassification.get_group(group).index
         df.loc[indices, target_columns] = classification.loc[idx, classification_columns].values
-
-#    subset_columns = list(set(target_columns) - set(['classif_matchtype_generatedby_isinworms','taxamatch_generatedby_isinworms']))
-#    df.loc[df['taxamatch_generatedby_isinworms'] == 'nomatch', subset_columns] = pd.NA
 
     if check_ambiguity:
         df['issue_isinworms'] = df['issue_isinworms'].astype('string')
@@ -2262,11 +2265,20 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
         if len(os.path.dirname(outputfile)) == 0:
             outputfile = os.path.join(outputdir_isinworms, outputfile)
 
+        print('classif columns:', list(classification.columns))
+        classification = classification.rename(columns=classification_mapping)
+        print('classif columns:', list(classification.columns))
+        taxonomy_mapping = {v:k for k,v in RANK_MAPPING_RENAMED.items()}
+        taxonomy = taxonomy.rename(columns=taxonomy_mapping)
+        print('taxonomy columns:', list(taxonomy.columns))
+        assert len(taxonomy) == len(classification) #debug
+        classification = pd.concat([taxonomy, classification], axis=1)
+
         if os.path.isfile(outputfile):
             if not overwrite_isinworms:
                 with open(outputfile,'r') as f:
                     header = f.readline().strip('\n').split('\t')
-                df = df[header]
+                classification = classification[header]
             else:
                 printv('', verbose=verbose)
                 printv(f'WARNING | {outputfile} already exists and will be overwritten', verbose=verbose, indent=indent)
@@ -2274,7 +2286,7 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
             overwrite_isinworms = True
 
         printv('', verbose=verbose)
-        writedataframe.to_txt(df, outputfile, init=overwrite_isinworms, verbose=verbose, indent=indent)
+        writedataframe.to_txt(classification, outputfile, init=overwrite_isinworms, verbose=verbose, indent=indent)
 
     printv('', verbose=verbose)
 
