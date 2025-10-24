@@ -2,9 +2,10 @@ basisOfRecord_mapping:
 
   # source n° 1: https://github.com/gbif/parsers/blob/dev/src/main/resources/dictionaries/parse/basisOfRecord.tsv
   # OBIS basisOfRecord values & source n°2: https://github.com/gbif/gbif-api/issues/84
+  # modified
 
   # PRESERVED_SPECIMEN:  a speciment that has been preserved 
-  #                      e.g., plant on an herbarium shett, cataloged lot of fish in a jar
+  #                      e.g., plant on an herbarium sheet, cataloged lot of fish in a jar
   # LIVING_SPECIMEN:     a specimen that is alive
   #                      e.g., living plant in a botanical garden, living animal in a zoo
   # MATERIAL_CITATION:   a reference to, or citation of, one, a part of, or multiple specimens in scholarly publications
@@ -13,12 +14,15 @@ basisOfRecord_mapping:
   # MACHINE_OBSERVATION: an output of a machine observation process (ongoing debate)
   #                      e.g., photograph, video, audio recording, remote sensing image, occurrence record based on telemetry
   # HUMAN_OBSERVATION:   an output of human observation process without physical evidence taken
-  #                      e.g., evidence of an occurrence taken from field notes or literature, records of an occurence without physical evidence nor evidence captured with a machine
-  # OBSERVATION:         superset of machine and human observations OR pure "sightings" that do not collect physical material
-  # OCCURRENCE:          catch-all value when the resource type is unknown, existence of an organism at a particular place at a particular time
+  #                      no physical evidence nor evidence captured with a machine
   # FOSSIL_SPECIMEN:     a preserved specimen that is a fossil 
   #                      e.g., body fossil, coprolite, gastrolith, ichnofossil, piece of petrified tree
+  # OCCURRENCE:          catch-all value when the resource type is unknown, existence of an organism at a particular place at a particular time
   # source: https://rs.gbif.org/vocabulary/dwc/basis_of_record.xml
+
+  # The following category is too vague with contradictory definitions ; 
+  # Thus, it has nos been used in this mapping file ;
+  # OBSERVATION:         superset of machine and human observations OR pure "sightings" that do not collect physical material
 
   'PRESERVED_SPECIMEN': PRESERVED_SPECIMEN
   'ACCESSION': PRESERVED_SPECIMEN
@@ -170,40 +174,29 @@ basisOfRecord_mapping:
   'BEACH_COUNT': HUMAN_OBSERVATION
   'BOAT_COUNT': HUMAN_OBSERVATION
   'DOCK_COUNT': HUMAN_OBSERVATION
+  'SIGHT': HUMAN_OBSERVATION
+  'SIGHTING': HUMAN_OBSERVATION
+  'FIELDSURVEY': HUMAN_OBSERVATION
+  'LIVEOBSERVATION': HUMAN_OBSERVATION
+  'OBSFROMBOAT': HUMAN_OBSERVATION
+  'OBSFROMCAR': HUMAN_OBSERVATION
+  'OBSERVATIONUNPUBLISHEDREPORT': HUMAN_OBSERVATION
 
-  'OBSERVATION': OBSERVATION
-  'COMPOUNDOBSERVATION': OBSERVATION
-  'DRAWING': OBSERVATION
-  'DRAWINGORPHOTOGRAPH': OBSERVATION
-  'FIELDSURVEY': OBSERVATION
-  'LIVEOBSERVATION': OBSERVATION
-  'MULTIMEDIAOBJECT': OBSERVATION
-  'O': OBSERVATION
-  'OBS': OBSERVATION
-  'OBSERVACION': OBSERVATION
-  'OBSERVADO': OBSERVATION
-  'OBSERVASJON': OBSERVATION
-  'OBSERVATIONS': OBSERVATION
-  'OBSERVATIONUNPUBLISHEDREPORT': OBSERVATION
-  'OBSFROMBOAT': OBSERVATION
-  'OBSFROMCAR': OBSERVATION
-  'PRESENTONLYSEENORHEARD': OBSERVATION
-  'SIGHT': OBSERVATION
-  'SIGHTING': OBSERVATION
-  'SO': OBSERVATION
-  'SOUND': OBSERVATION
-  'ANECDOTAL': OBSERVATION
-#  'AUDIORECORDING': OBSERVATION # based on source n°1
-#  'FOTO': OBSERVATION # based on source n°1
-#  'IMAGEN': OBSERVATION # based on source n°1
-#  'IMAGENTIPO': OBSERVATION # based on source n°1
-#  'PHOTO': OBSERVATION # based on source n°1
-#  'PHOTOGRAPH': OBSERVATION # based on source n°1
-#  'SOUNDRECORDING': OBSERVATION # based on source n°1
-#  'VIDEORECORDING': OBSERVATION # based on source n°1
-#  'STILLIMAGE': OBSERVATION # based on source n°1
-
+  'OBSERVATION': OCCURRENCE
+  'COMPOUNDOBSERVATION': OCCURRENCE
+  'DRAWING': OCCURRENCE
+  'DRAWINGORPHOTOGRAPH': OCCURRENCE
+  'MULTIMEDIAOBJECT': OCCURRENCE
+  'O': OCCURRENCE
+  'OBS': OCCURRENCE
+  'OBSERVACION': OCCURRENCE
+  'OBSERVADO': OCCURRENCE
+  'OBSERVASJON': OCCURRENCE
+  'OBSERVATIONS': OCCURRENCE
+  'PRESENTONLYSEENORHEARD': OCCURRENCE
+  'SO': OCCURRENCE
+  'SOUND': OCCURRENCE
+  'ANECDOTAL': OCCURRENCE
   'OCCURRENCE': OCCURRENCE
   'UNKNOWN': OCCURRENCE
-
-  'NOMENCLATURALCHECKLIST': TAXON
+  'NOMENCLATURALCHECKLIST': OCCURRENCE
