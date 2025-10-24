@@ -23,7 +23,7 @@ def apply(df, key, flag=False, dropna=False, verbose=True, indent=''):
     df[key] = df[key].astype('string')
 
     # Flag or exclude rank names containing non-letter characters
-    # e.g., GWE2-31-10, UBA1177, and JACPGU01 classes (typically DNA-derived observations)
+    # e.g., GWE2-31-10, UBA1177, and JACPGU01 classes (typically DNA-derived observations, or microbial groups)
     # Note: some edge cases may be incorrectly flagged or excluded,
     # e.g., "Hexabothrium (incertae sedis)" (aphiaID=719046)
     # e.g., "[non-Uristidae]" (aphiaID=875566) genera

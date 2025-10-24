@@ -35,7 +35,6 @@ BASISOFRECORD = BasisOfRecordMapping(BASISOFRECORD)
 @export
 def apply(df, key, additional_values=None, inplace=False, verbose=True, indent=''):
 
-#    df, keyin, keyout = getcolumnname.apply(df, key, 'mapbasisofrecord', inplace=inplace)
     df, keyin, _ = getcolumnname.apply(df, key, '', inplace=True)
     if ('basis' not in keyin.lower()) or ('record' not in keyin.lower()):
         _, _, keyout = getcolumnname.apply(df, 'basisOfRecord', 'mapbasisofrecord', inplace=False)

@@ -381,7 +381,6 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', dr
         df = modifyissuecolumn.apply(df, issuekey, f'{basedaykey}_MISMATCH', subset=isdaymismatch)
 
     if drop_mismatch:
-#        df, datekey, datekeyout = getcolumnname.apply(df, datekey, 'splitdate', inplace=inplace)
         if isyear:
             df.loc[isyearmismatch,[yearkeyout,monthkeyout,daykeyout]] = pd.NA
             df.loc[isyearmismatch,datekeyout] = pd.NA

@@ -57,7 +57,6 @@ SCN_IGNORE: #scn: scientific name
     - taxon
     - higher
     - to
-
     - natio
     - nat
     - pseudovar
@@ -74,7 +73,6 @@ SCN_IGNORE: #scn: scientific name
     - type
     - typ
     - clade
-
     - larvae
     - larva
     - lv
@@ -98,7 +96,7 @@ SCN_IGNORE: #scn: scientific name
     - agamosp
     - agamovar
     - m #male
-    - f #female
+    #- f #female
     - exuviae
     - exuvia
     - ex
@@ -137,7 +135,6 @@ SCN_IGNORE: #scn: scientific name
     - sample
     - marine
     - virus
-
     - indeterminabilis
     - indeterminata
     - indet
@@ -194,7 +191,6 @@ SCN_IGNORE: #scn: scientific name
     - ab
     - unknown
     - unk
-
     - from
     - bold
     - vidi

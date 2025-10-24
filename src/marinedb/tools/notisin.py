@@ -43,7 +43,7 @@ def apply(df, key, values, flag=False, minimize_flagname=False, flagname_mapping
     isin_flagcolumn = [col for col in diff_columns if (f'flag_{key}_isin' in col)]
     assert len(isin_flagcolumn) == 1
     isin_flagcolumn = isin_flagcolumn[0]
-    values_str = isin_flagcolumn.split('_')[-1]
+    values_str = '_'.join(isin_flagcolumn.split('_')[3:])
 
     # Apply missing data handling strategy
 
