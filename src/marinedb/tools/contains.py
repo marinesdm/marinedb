@@ -32,15 +32,18 @@ def apply(df, key, values, flag=False, minimize_flagname=False, flagname_mapping
               'outputdir': outputdir
              }
 
+    columns_before = set(df.columns)
+
     try:
         df = doesnotcontain.apply(df, key, values, **params)
     except ValueError as err:
         raise ValueError(f"`contains.py` | {str(err).split('|')[-1]}")
 
-    doesnotcontain_flagcolumn = [col for col in df.columns if (f'flag_{key}_doesnotcontain' in col)]
+    diff_columns = list(set(df.columns) - columns_before)
+    doesnotcontain_flagcolumn = [col for col in diff_columns if (f'flag_{key}_doesnotcontain' in col)]
     assert len(doesnotcontain_flagcolumn) == 1
     doesnotcontain_flagcolumn = doesnotcontain_flagcolumn[0]
-    value_str = doesnotcontain_flagcolumn.split('_')[-1]
+    value_str = '_'.join(doesnotcontain_flagcolumn.split('_')[3:])
 
     # Apply missing data handling strategy
 
@@ -48,6 +51,8 @@ def apply(df, key, values, flag=False, minimize_flagname=False, flagname_mapping
     df.loc[ismissing, doesnotcontain_flagcolumn] = dropna
 
     doescontain = (~df[doesnotcontain_flagcolumn])
+    if any(doescontain): #debug
+        print(df.loc[doescontain,key])
 
     # Clean
 
