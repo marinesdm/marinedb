@@ -128,18 +128,21 @@ def get_dtypes(config, key_type):
 
 def get_column_mapping(config):
 
-    config_variables = config['variables']
     colnames_mapping = {}
 
-    for coldict in config_variables:
+    if 'variables' in config:
 
-        if isinstance(coldict, str):
-            colnames_mapping[coldict] = coldict
+        config_variables = config['variables']
 
-        else:
-            colname_old = get_key(coldict)
-            colname_new = get_key(coldict[colname_old])
-            colnames_mapping[colname_old] = colname_new
+        for coldict in config_variables:
+
+            if isinstance(coldict, str):
+                colnames_mapping[coldict] = coldict
+
+            else:
+                colname_old = get_key(coldict)
+                colname_new = get_key(coldict[colname_old])
+                colnames_mapping[colname_old] = colname_new
 
     return colnames_mapping
 
@@ -353,37 +356,6 @@ def update_config(df, config, addcolumns=None):
 
                     add = {colname_proc: {colname_proc_new: colname_dtype}}
 
-#        # Retrieve column names post-processing
-#
-#        _, colname_proc, _ = getcolumnname.apply(df, colname_old, '', inplace=True)
-#
-#        if ('processedby' in colname_proc):
-#
-#            # The column has been modified, with modifications
-#            # either applied in place or stored in a new column
-#
-#            add = {colname_proc: {colname_proc: 'string'}}
-#            keep = {colname_old: {colname_old: 'string'}}
-#
-#            if isinstance(coldict, dict):
-#
-#                # Map the derived column to its intended name after renaming
-#
-#                colname_new = get_key(coldict[colname_old])
-#                colname_proc_new = re.sub(colname_old, colname_new, colname_proc)
-#
-#                add = {colname_proc: {colname_proc_new: 'string'}}
-#                keep = {colname_old: {colname_new: 'string'}}
-#
-#                if isinstance(coldict[colname_old], dict):
-#
-#                    # Duplicate dtype conversion settings to the derived column
-#
-#                    colname_dtype = coldict[colname_old][colname_new]
-#
-#                    add = {colname_proc: {colname_proc_new: colname_dtype}}
-#                    keep = {colname_old: {colname_new: colname_dtype}}
-
         if (colname_old in list(df.columns)):
 
             # The column has not been modified in place during processing:
@@ -400,7 +372,6 @@ def update_config(df, config, addcolumns=None):
             config_variables.append(add)
 
         if (colname_old != 'issue') and isinstance(coldict, dict):
-#            colname_new = get_key(coldict[colname_old])
             base_colmapping.update({colname_old: colname_new})
 
     if addcolumns is not None:
@@ -687,6 +658,57 @@ def resume_noparallel_processing(outputfile, configfile, config):
         config_variables_updated = yaml.safe_load(f)
 
     return find_missing_indices, last_index, columns, config_variables_updated, configfile_updated
+
+def assemble_outputfile(outputdir, outputfile, columns):
+
+    assert os.path.isdir(outputdir)
+    print(outputdir)
+    print(f'* Consolidate temporary files')
+    print(f'  Storing in {outputfile}')
+
+    # Concatenate
+
+    files = sorted(glob.glob(os.path.join(outputdir, '*')))
+    firstlast_pairs = [read_firstlastindex(f) for f in files]
+    files_order = sorted(range(len(files)), key=lambda x: firstlast_pairs[x][0])
+
+    if os.path.isfile(outputfile):
+        print(f'  INFO | {outputfile} already exists and will be modified')
+        init = False
+        with open(outputfile,'r') as f:
+            header = f.readline().strip('\n').split('\t')
+    else:
+        init = True
+
+    if (len(files) == 0) and init:
+        with open(outputfile, 'a+') as output:
+            output.write('\t'.join(columns))
+
+    with open(outputfile, 'a+') as output:
+        for i in files_order:
+            file = files[i]
+            print(f'  >>> {file}')
+            with open(file, 'r') as input:
+                lines = input.readlines()
+                if init:
+                    header = lines[0].strip('\n').split('\t')
+                    init = False
+                else:
+                    header_file = lines[0].strip('\n').split('\t')
+                    diff = list(set(header).symmetric_difference(header_file))
+                    if len(diff) != 0:
+                        raise Exception(f'`clean.py` | Header mismatch detected either between temporary files or between a temporary file and the existing output file: {diff}')
+
+                    lines = lines[1:]
+
+                    if header_file != header:
+                        sort_header_file = [header.index(col) for col in header_file]
+                        lines = [line.split('\t') for line in lines]
+                        lines = ['\t'.join([v for _,v in sorted(zip(sort_header_file, line), key=lambda pair: pair[0])]) for line in lines]
+
+                output.writelines(lines)
+
+    return None
 
 if __name__ == '__main__':
 
@@ -998,6 +1020,17 @@ if __name__ == '__main__':
         if isinworms_params['rank_mapping']['scientificname'] != isinworms_column:
             raise ValueError(f"`clean.py` | The value associated with the 'scientificname' key in the 'rank_mapping' argument of the `isinworms` function (i.e., '{isinworms_params['rank_mapping']['scientificname']}') must match the name of the column the filter is applied to (i.e., '{isinworms_column}')")
 
+        is_isinworms_verbatim = False
+        if 'verbatimcolumn' in isinworms_args:
+            verbatim_columns = isinworms_params['verbatimcolumn']
+            if (verbatim_columns is not None) and (len(verbatim_columns) != 0): # None, empty string, empty list
+                is_isinworms_verbatim = True
+                if isinstance(verbatim_columns, str):
+                    verbatim_columns = [verbatim_columns]
+                verbatim_authorshiponly = isinworms_params['verbatimauthorshiponly']
+                if not isinstance(verbatim_authorshiponly, list | tuple):
+                    verbatim_authorshiponly = [verbatim_authorshiponly]
+
         ## Load existing filters or generate new ones if none are found
 
         print('Initialization')
@@ -1033,26 +1066,31 @@ if __name__ == '__main__':
     print('----------')
     print()
 
+    parallel = args.parallel
+    if not parallel:
+        cpu_max = 1
+    else:
+        cpu_max = args.cpu_max
+    parallel, cpu_main = set_cpu(config, parallel, cpu_main=None, cpu_max=cpu_max)
+
+    if ('variables' in config.keys()):
+        config['variables'].append({'index_marinedb': {'index_marinedb': 'int'}})
+        if is_isinworms_verbatim and ('resolvetaxamatch' in str(config['postprocessing'])):
+            for col in verbatim_columns:
+                config['variables'].append({col: {col: 'string'}})
+            for col in verbatim_authorshiponly:
+                config['variables'].append({col: {col: 'boolean'}})
+
+    if parallel:
+        outputdir = os.path.join(outputdir,'marinedb_parallel')
+        try:
+            os.mkdir(outputdir)
+        except FileExistsError:
+            pass
+    else:
+        outputdir = ''
+
     if (len(config['processing']) != 0):
-
-        parallel = args.parallel
-        if not parallel:
-            cpu_max = 1
-        else:
-            cpu_max = args.cpu_max
-
-        parallel, cpu_main = set_cpu(config, parallel, cpu_main=None, cpu_max=cpu_max)
-        if ('variables' in config.keys()):
-            config['variables'].append({'index_marinedb': {'index_marinedb': 'int'}})
-
-        if parallel:
-            outputdir = os.path.join(outputdir,'marinedb_parallel')
-            try:
-                os.mkdir(outputdir)
-            except FileExistsError:
-                pass
-        else:
-            outputdir = ''
 
         nbatch = 0
         resume = False
@@ -1086,6 +1124,22 @@ if __name__ == '__main__':
                 resume = True
                 init_storage = False
                 indices2process, lastindex, columns, config_variables_updated, config_variables_updated_outputfile = resume_noparallel_processing(outputfile, args.config_file, config)
+
+###################################
+#        with open('/data/smartbiodiv/eberhocoi/obis_marinedb/drop/marinedb_parallel/obis_processedby_marinedb_temp01130.txt','r') as f:
+#            columns_manual = f.readline().strip('\n').split('\t')
+#
+#        configfile_updated_manual = '/data/smartbiodiv/eberhocoi/obis_marinedb/drop/config_obis_updated.yaml'
+#        with open(configfile_updated_manual,'r') as f:
+#            config_variables_updated_manual = yaml.safe_load(f)
+#        dtypes_mapping = get_dtypes(config_variables_updated_manual, key_type='new')
+#        dtypes_outputfile = os.path.join(config['outputdir_path'], 'marinedb_dtypes.json')
+#        with open(dtypes_outputfile, 'w') as f:
+#            json.dump(dtypes_mapping, f, indent=4)
+#
+#        indices2process, lastindex, nbatch, columns, config_variables_updated, config_variables_updated_outputfile = eval('lambda x: (x > 113076217)'), 113076217, 1130, columns_manual, config_variables_updated_manual, configfile_updated_manual
+#        resume = True
+###################################
 
         open_file, decode_line = readfile.apply(config['inputfile_path'])
         skip = resume
@@ -1249,7 +1303,7 @@ if __name__ == '__main__':
                 params['verbose'] = False
                 params['init_storage'] = True
 
-                res_ = process(delayed(process_one_dataframe)(chunk, cpu_idx=(i+nbatch), **params) for i,chunk in enumerate(chunks))
+                res, _ = process(delayed(process_one_dataframe)(chunk, cpu_idx=(i+nbatch), **params) for i,chunk in enumerate(chunks))
                 print(res) # besoin de config_variables_updated, columns
                 del chunks
 
@@ -1274,46 +1328,51 @@ if __name__ == '__main__':
 
         if parallel:
 
-            print(f'* Consolidate temporary files')
-            print(f'  Storing in {outputfile}')
-
-            # Concatenate
-
-            files = sorted(glob.glob(os.path.join(outputdir, '*')))
-            firstlast_pairs = [read_firstlastindex(f) for f in files]
-            files_order = sorted(range(len(files)), key=lambda x: firstlast_pairs[x][0])
-
-            if os.path.isfile(outputfile):
-                print(f'  INFO | {outputfile} already exists and will be modified')
-                init = False
-                with open(outputfile,'r') as f:
-                    header = f.readline().strip('\n').split('\t')
-            else:
-                init = True
-
-            with open(outputfile, 'a+') as output:
-                for i in files_order:
-                    file = files[i]
-                    print(f'  >>> {file}')
-                    with open(file, 'r') as input:
-                        lines = input.readlines()
-                        if init:
-                            header = lines[0].strip('\n').split('\t')
-                            init = False
-                        else:
-                            header_file = lines[0].strip('\n').split('\t')
-                            diff = list(set(header).symmetric_difference(header_file))
-                            if len(diff) != 0:
-                                raise Exception(f'`clean.py` | Header mismatch detected either between temporary files or between a temporary file and the existing output file: {diff}')
-
-                            lines = lines[1:]
-
-                            if header_file != header:
-                                sort_header_file = [header.index(col) for col in header_file]
-                                lines = [line.split('\t') for line in lines]
-                                lines = ['\t'.join([v for _,v in sorted(zip(sort_header_file, line), key=lambda pair: pair[0])]) for line in lines]
-
-                        output.writelines(lines)
+            assemble_outputfile(outputdir, outputfile, columns)
+#            print(f'* Consolidate temporary files')
+#            print(f'  Storing in {outputfile}')
+#
+#            # Concatenate
+#
+#            files = sorted(glob.glob(os.path.join(outputdir, '*')))
+#            firstlast_pairs = [read_firstlastindex(f) for f in files]
+#            files_order = sorted(range(len(files)), key=lambda x: firstlast_pairs[x][0])
+#
+#            if os.path.isfile(outputfile):
+#                print(f'  INFO | {outputfile} already exists and will be modified')
+#                init = False
+#                with open(outputfile,'r') as f:
+#                    header = f.readline().strip('\n').split('\t')
+#            else:
+#                init = True
+#
+#            if (len(files) == 0) and init:
+#                with open(outputfile, 'a+') as output:
+#                    output.write('\t'.join(columns))
+#
+#            with open(outputfile, 'a+') as output:
+#                for i in files_order:
+#                    file = files[i]
+#                    print(f'  >>> {file}')
+#                    with open(file, 'r') as input:
+#                        lines = input.readlines()
+#                        if init:
+#                            header = lines[0].strip('\n').split('\t')
+#                            init = False
+#                        else:
+#                            header_file = lines[0].strip('\n').split('\t')
+#                            diff = list(set(header).symmetric_difference(header_file))
+#                            if len(diff) != 0:
+#                                raise Exception(f'`clean.py` | Header mismatch detected either between temporary files or between a temporary file and the existing output file: {diff}')
+#
+#                            lines = lines[1:]
+#
+#                            if header_file != header:
+#                                sort_header_file = [header.index(col) for col in header_file]
+#                                lines = [line.split('\t') for line in lines]
+#                                lines = ['\t'.join([v for _,v in sorted(zip(sort_header_file, line), key=lambda pair: pair[0])]) for line in lines]
+#
+#                        output.writelines(lines)
 
             if clean_intermediate:
 
@@ -1328,20 +1387,30 @@ if __name__ == '__main__':
                     print(f'  >>> {outputdir}')
                     os.rmdir(outputdir)
 
+        # Store dtypes
+
+        dtypes_mapping = get_dtypes(config_variables_updated, key_type='new')
+        dtypes_outputfile = os.path.join(config['outputdir_path'], 'marinedb_dtypes.json')
+        with open(dtypes_outputfile, 'w') as f:
+            json.dump(dtypes_mapping, f, indent=4)
+
     else:
 
         print("INFO | No processing step specified")
 
+        if not os.path.isfile(outputfile):
+            print()
+            if 'marinedb' not in outputdir:
+                outputdir = os.path.join(outputdir,'marinedb_parallel')
+            if not os.path.isdir(outputdir):
+                raise Exception(f'`clean.py` | Neither the output file ({outputfile}) nor the parallelism-related output directory ({outputdir}) exists')
+            assemble_outputfile(outputdir, outputfile, columns='')
+
+        dtypes_outputfile = os.path.join(config['outputdir_path'], 'marinedb_dtypes.json')
+
     print()
     print(f'TIME: {round(time.time() - start_cleaning,0)}s')
     print()
-
-    # Store dtypes
-
-    dtypes_mapping = get_dtypes(config_variables_updated, key_type='new')
-    dtypes_outputfile = os.path.join(config['outputdir_path'], 'marinedb_dtypes.json')
-    with open(dtypes_outputfile, 'w') as f:
-        json.dump(dtypes_mapping, f, indent=4)
 
     ###############################################
     ############### Post-processing ###############
@@ -1382,7 +1451,20 @@ if __name__ == '__main__':
                 if proc_name == 'resolvetaxamatch':
 
                     if is_isinworms:
+
+                        print('rank mapping before:') #debug
+                        print(isinworms_params['rank_mapping'])
+                        colnames_old_proc = pd.DataFrame([], columns=list(config_variables_updated.keys()))
+                        keys = list(isinworms_params['rank_mapping'].keys())
+                        values = list(itemgetter(*keys)(isinworms_params['rank_mapping']))
+                        for i,value in enumerate(values):
+                            _, value_proc, _ = getcolumnname.apply(colnames_old_proc, value, '', inplace=True)
+                            isinworms_params['rank_mapping'][keys[i]] = config_variables_updated[value_proc]
+                        print('rank mapping after:') #debug
+                        print(isinworms_params['rank_mapping'])
+
                         proc_params['isinworms_params'] = isinworms_params
+                        proc_params['remove_keys'] = verbatim_columns
 
                     if (not is_isinworms) and ('isinworms_params' not in proc_params):
                         raise Exception(f'`clean.py` | `resolvetaxamatch.py` requires prior execution of `isinworms.py`. Taxonomic harmonization must be performed before resolving uncertain matches.')
@@ -1450,8 +1532,6 @@ if __name__ == '__main__':
 
     # Store dtypes
 
-#    dtypes_mapping = get_dtypes(config_variables_updated, key_type='new')
-#    dtypes_outputfile = os.path.join(config['outputdir_path'], 'marinedb_dtypes.json')
     with open(dtypes_outputfile, 'w') as f:
         json.dump(dtypes_mapping, f, indent=4)
 
@@ -1461,16 +1541,6 @@ if __name__ == '__main__':
 
         print('* Delete intermediate files generated during processing')
         print()
-
-#        if parallel:
-#
-#            for file in files:
-#                print(f'  >>> {file}')
-#                os.remove(file)
-#
-#            if len(os.listdir(outputdir)) == 0:
-#                print(f'  >>> {outputdir}')
-#                os.rmdir(outputdir)
 
         if ('temp_file' in locals()):
             print(f'  >>> {temp_file}')
