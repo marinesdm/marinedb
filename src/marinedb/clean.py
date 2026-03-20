@@ -12,6 +12,7 @@ import time
 import copy
 import math
 import glob
+import shutil
 import inspect
 import argparse
 import pandas as pd
@@ -33,6 +34,7 @@ from marinedb.tools.taxonomic import createwormsfilters as cwf
 from marinedb.utils import readfile
 from marinedb.utils import tqdmjoblib
 from marinedb.utils import resolvepath
+from marinedb.utils import convertbytes
 from marinedb.utils import writedataframe
 from marinedb.utils import standardizenan
 from marinedb.utils import getdefaultargs
@@ -85,6 +87,15 @@ class MyDumper(yaml.Dumper):
 
     def increase_indent(self, flow=False, indentless=False):
         return super(MyDumper, self).increase_indent(flow, False)
+
+class SplittingError(Exception):
+
+    def __init__(self, line_number, field_count, header_count, line):
+        message = (
+            f"Line {line_number} has {field_count} fields but the header has "
+            f"{header_count}.\nLine: {line}"
+        )
+        super().__init__(message)
 
 # Parse the configuration file
 
@@ -163,27 +174,53 @@ def get_procfunc(config, key):
 def order_postprocfunc(config):
 
     config_postproc = config['postprocessing']
+#    print(config_postproc)
 
+    # Split combined post-processing steps into separate steps
+    config_postproc_normalized = []
     funcs = []
-    procidx = []
     for i, procstep in enumerate(config_postproc):
         colname = get_key(procstep)
         for func in procstep[colname]:
+            config_postproc_normalized.append({colname : [func]})
             funcs.append(func)
-            procidx.append(i)
+#        if len(procstep[colname]) > 1:
+#            for func in procstep[colname]:
+#                config_postproc.append({colname : [func]})
+#            removeidx.append(i)
+#    for j in removeidx :
+#        config_postproc.pop(j)
 
+    # Move 'resolvetaxamatch' to the beginning if present
     if 'resolvetaxamatch' in funcs:
         resolvetaxamatch_idx = funcs.index('resolvetaxamatch')
-        resolvetaxamatch_procidx = procidx[resolvetaxamatch_idx]
-#        indices = list(range(max(proci) + 1))
-        config_postproc.insert(0,config_postproc.pop(resolvetaxamatch_procidx))
-        config['postprocessing'] = config_postproc
+        config_postproc_normalized.insert(0,config_postproc_normalized.pop(resolvetaxamatch_idx))
+
+#    funcs = []
+#    procidx = []
+#    for i, procstep in enumerate(config_postproc):
+#        colname = get_key(procstep)
+#        if len(procstep[colname]) == 1:
+#            funcs.append(procstep[colname][0])
+#            procidx.append(i)
+#        else:
+#            print("ERROR")
+#            raise
+#
+#    if 'resolvetaxamatch' in funcs:
+#        resolvetaxamatch_idx = funcs.index('resolvetaxamatch')
+#        resolvetaxamatch_procidx = procidx[resolvetaxamatch_idx]
+##        indices = list(range(max(proci) + 1))
+#        config_postproc.insert(0,config_postproc.pop(resolvetaxamatch_procidx))
+#        config['postprocessing'] = config_postproc
+
+    config['postprocessing'] = config_postproc_normalized
 
     return config
 
 # Update the configuration file
 
-def overwrite_outputdir_stdnan_dropempty(config, inputdir, outputdir):
+def overwrite_outputdir_stdnan_dropempty_cleanup(config, inputdir, outputdir, cleanup):
 
     isprint = False
 
@@ -205,6 +242,14 @@ def overwrite_outputdir_stdnan_dropempty(config, inputdir, outputdir):
 
             # For all functions with an `outputdir` argument, substitute the argument
             # with the configuration file's `inputdir_path` or `outputdir_path value`
+
+            if funcname == 'marineloc':
+                if 'uncompressed_chunks_dir' not in config[proccat][i][colname][j][funcname].keys():
+                    config[proccat][i][colname][j][funcname]['uncompressed_chunks_dir'] = os.path.join(inputdir, 'marineloc', 'split')
+                    print() #debug
+                    print('check marineloc')
+                    print(funcname, ': ', config[proccat][i][colname][j][funcname]['uncompressed_chunks_dir'])
+                    print()
 
             if 'outputdir' in funcargs:
                 if funcname in ['marineloc', 'createwormsfilters']:
@@ -232,12 +277,19 @@ def overwrite_outputdir_stdnan_dropempty(config, inputdir, outputdir):
                 config[proccat][i][colname][j][funcname]['stdnan'] = False
                 isprint = True
 
-            # For all functions with an `stdnan` argument, set `drop_empty` to False
+            # For all functions with an `drop_empty` argument, set `drop_empty` to False
             # to ensure that each batch has the same number of columns after processing
 
             if 'drop_empty' in funcargs:
                 print(f"INFO | '{colname}': set `drop_empty` argument in `{funcname}` to False")
                 config[proccat][i][colname][j][funcname]['drop_empty'] = False
+                isprint = True
+
+            # For all functions with a `cleanup` argument, replace it with the value provided when calling the script
+
+            if 'cleanup' in funcargs:
+                print(f"INFO | '{colname}': set `cleanup` argument in `{funcname}` to {cleanup}")
+                config[proccat][i][colname][j][funcname]['cleanup'] = cleanup
                 isprint = True
 
         if proccat == 'processing':
@@ -308,17 +360,27 @@ def set_cpu(config, parallel, cpu_main=None, cpu_max=None):
 
     return parallel, cpu_main
 
-def update_config(df, config, addcolumns=None):
+def update_config_variables(df, config, addcolumns=None):
 
     config_variables_updated = {}
 
     config_variables = []
     base_colmapping = {}
 
+    # NEW NEW NEW 
+    df = df.convert_dtypes()
+
     for idx, coldict in enumerate(config['variables']):
 
         colname_old = get_key(coldict)
-        keep = {colname_old: {colname_old: 'string'}}
+        default_dtype = 'string'
+        try: # NEW NEW NEW
+            default_dtype = str(df[colname_old].dtypes)
+            default_dtype = (default_dtype if (default_dtype != 'object') else 'string')
+        except KeyError:
+            pass
+#        keep = {colname_old: {colname_old: 'string'}}
+        keep = {colname_old: {colname_old: default_dtype}} # NEW NEW
 
         # Retrieve column names post-processing
 
@@ -331,19 +393,23 @@ def update_config(df, config, addcolumns=None):
             # The column has been modified, with modifications
             # either applied in place or stored in a new column
 
-            add = {colname_proc: {colname_proc: 'string'}}
+#            if not isvariable: # NEW NEW NEW
+            default_dtype = str(df[colname_proc].dtype)
+            default_dtype = (default_dtype if (default_dtype != 'object') else 'string')
+
+            add = {colname_proc: {colname_proc: default_dtype}}
 
         if isinstance(coldict, dict):
 
             colname_new = get_key(coldict[colname_old])
-            keep = {colname_old: {colname_new: 'string'}}
+            keep = {colname_old: {colname_new: default_dtype}}
 
             if isprocessedby:
 
                 # Map the derived column to its intended name after renaming
 
                 colname_proc_new = re.sub(colname_old, colname_new, colname_proc)
-                add = {colname_proc: {colname_proc_new: 'string'}}
+                add = {colname_proc: {colname_proc_new: default_dtype}}
 
             if isinstance(coldict[colname_old], dict):
 
@@ -380,21 +446,158 @@ def update_config(df, config, addcolumns=None):
         # to the list of columns to keep
 
         selected_columns = get_keys(config_variables)
+        addcolumns = list(set(addcolumns) - set(selected_columns))
         for col in addcolumns:
-            if col not in selected_columns:
-                dtype = str(df[col].dtype)
-                dtype = (dtype if (dtype != 'object') else 'string')
-                add = {col:{col:dtype}}
-                for colname_old, colname_new in base_colmapping.items():
-                    if colname_old in col:
-                        col_new = re.sub(colname_old, colname_new, col)
-                        add = {col:{col_new:dtype}}
-                        break
-                config_variables.append(add)
+#            if col not in selected_columns:
+            dtype = str(df[col].dtype)
+            dtype = (dtype if (dtype != 'object') else 'string')
+            add = {col:{col:dtype}}
+
+            for colname_old, colname_new in base_colmapping.items():
+                if colname_old in col: # si c'est généré, alors ce cas ne devrait pas se présenter, si ? #debug
+                                       # ah si, genre eventDate_intervalwidth
+                    col_new = re.sub(colname_old, colname_new, col)
+#                    print('before (update config) :',add)
+                    add = {col:{col_new:dtype}}
+#                    print('after (update config) :',add)
+                    break
+
+            config_variables.append(add)
 
     config_variables_updated['variables'] = config_variables
 
     return config_variables_updated
+
+def update_config_postprocessing(config, inputfile, isvariable, is_isinworms, is_isinworms_verbatim=False, dtypes=None):
+
+    # Update to reflect the final column names after processing and renaming
+    # original column -> renamed column -> processed column
+
+    with open(inputfile,'rt') as f:
+        header = f.readline().strip('\n').split('\t')
+    processed_colnames = pd.DataFrame([], columns=header)
+
+    if isvariable:
+
+        colnames_mapping = get_column_mapping(config)
+        mapping_values = set(colnames_mapping.values())
+        mapping_keys = set(colnames_mapping.keys())
+
+    for idx_step, procstep in enumerate(config['postprocessing']):
+
+        step_name = list(procstep.keys())[0]
+
+        for idx_proc, proc in enumerate(procstep[step_name]):
+
+            if isinstance(proc, dict):
+                proc_name = list(proc.keys())[0]
+            else:
+                proc_name = proc
+                config['postprocessing'][idx_step][step_name][idx_proc][proc_name] = {}
+
+            config['postprocessing'][idx_step][step_name][idx_proc][proc_name]['verbose'] = True
+            config['postprocessing'][idx_step][step_name][idx_proc][proc_name]['indent'] = '   '
+            config['postprocessing'][idx_step][step_name][idx_proc][proc_name]['inputfile'] = inputfile
+
+            # `resolvetaxamatch`
+
+            if proc_name == 'resolvetaxamatch':
+
+                ## `rank_mapping`
+
+                rank_mapping = config['postprocessing'][idx_step][step_name][idx_proc][proc_name]['isinworms_params']['rank_mapping'].items()
+
+                for rank, original_colname in rank_mapping:
+
+                    if isvariable:
+                        if (original_colname not in mapping_keys) and (original_colname not in mapping_values):
+                            raise ValueError(f"`resolvetaxamatch.py` | '{original_colname}' column is not defined in the `variables` section and was therefore dropped. Please add it to the `variables` section.")
+                        if (original_colname in mapping_keys):
+                            renamed_colname = colnames_mapping[original_colname]
+                        else:
+                            renamed_colname = original_colname
+                    else:
+                        renamed_colname = original_colname
+
+                    _, processed_colname, _ = getcolumnname.apply(processed_colnames, renamed_colname, '', inplace=True)
+                    if processed_colname not in header:
+                        raise ValueError(f"`resolvetaxamatch.py` | Column '{processed_colname}' specified in `rank_mapping` (`isinworms_params`) was not found in '{os.path.basename(inputfile)}'")
+
+                    config['postprocessing'][idx_step][step_name][idx_proc][proc_name]['isinworms_params']['rank_mapping'][rank] = processed_colname
+
+                ## `verbatimcolumn`
+
+                if is_isinworms_verbatim:
+
+                    for idx, original_colname in enumerate(params['isinworms_params']['verbatimcolumn']):
+
+                        if isvariable:
+                            if (original_colname not in mapping_keys) and (original_colname not in mapping_values):
+                                raise ValueError(f"`resolvetaxamatch.py` | '{original_colname}' column is not defined in the `variables` section and was therefore dropped. Please add it to the `variables` section.")
+                            if (original_colname in mapping_keys):
+                                renamed_colname = colnames_mapping[original_colname]
+                            else:
+                                renamed_colname = original_colname
+                        else:
+                            renamed_colname = original_colname
+
+                        _, processed_colname, _ = getcolumnname.apply(processed_colnames, renamed_colname, '', inplace=True)
+                        if processed_colname not in header:
+                            raise ValueError(f"`resolvetaxamatch.py` | Column '{processed_colname}' specified in `verbatimcolumn` (`isinworms_params`) was not found in '{os.path.basename(inputfile)}'")
+
+                        config['postprocessing'][idx_step][step_name][idx_proc][proc_name]['isinworms_params']['verbatimcolumn'][idx] = processed_colname
+
+            # `taxasubset`
+
+            if proc_name == 'taxasubset':
+
+                if is_isinworms:
+
+                    original_colname = 'valid_AphiaID'
+
+                    if isvariable:
+                        if original_colname in mapping_keys:
+                            renamed_colname = colnames_mapping[original_colname]
+                        else:
+                            renamed_colname = original_colname
+                    else:
+                        renamed_colname = original_colname
+
+                    renamed_colname = renamed_colname + '_generatedby_isinworms'
+                    _, processed_colname, _ = getcolumnname.apply(processed_colnames, renamed_colname, '', inplace=True)
+
+                    config['postprocessing'][idx_step][step_name][idx_proc][proc_name]['speciesidkey'] = processed_colname
+#                    print(processed_colname) #debug
+                else:
+
+                    params = config['postprocessing'][idx_step][step_name][idx_proc][proc_name]
+                    ranks = [keycol for keycol in params.keys() if 'key' in keycol]
+
+                    if len(ranks) == 0:
+                        raise Exception(f'`taxasubset.py` | Either the column containing species identifiers or the columns specifying taxonomic classification must be provided')
+
+                    for rank in ranks:
+
+                        if isvariable:
+                            if (params[rank] not in mapping_keys) and (params[rank] not in mapping_values):
+                                raise ValueError(f"`taxasubset.py` | '{proc_params[rank]}' column is not defined in the `variables` section and was therefore dropped. Please add it to the `variables` section.")
+                            if (params[rank] in mapping_keys):
+                                renamed_colname = colnames_mapping[params[rank]]
+                            else:
+                                renamed_colname = params[rank]
+                        else:
+                            renamed_colname = params[rank]
+
+                        _, processed_colname, _ = getcolumnname.apply(processed_colnames, renamed_colname, '', inplace=True)
+                        if processed_colname not in header:
+                            raise ValueError(f"`taxasubset.py` | Column '{processed_colname}' specified for `{rank}` was not found in '{os.path.basename(inputfile)}'")
+
+                        config['postprocessing'][idx_step][step_name][idx_proc][proc_name][rank] = processed_colname
+
+                if dtypes is not None:
+                     config['postprocessing'][idx_step][step_name][idx_proc][proc_name]['dtypesfile'] = dtypes
+
+    return config
 
 # Apply configuration settings
 
@@ -459,9 +662,9 @@ def dtypeconversion(df, config, verbose=True, indent=''):
 
     return df
 
-def curate_data(df, config, config_variables_updated, init=False, verbose=True, indent='', partition=None): #debug i
+def curate_data(df, config, config_variables_updated, isvariable, init=False, verbose=True, indent='', partition=None): #debug i
 
-    isvariable = ('variables' in config.keys())
+#    isvariable = ('variables' in config.keys())
 
     # Standardize the missing values
 
@@ -485,7 +688,7 @@ def curate_data(df, config, config_variables_updated, init=False, verbose=True, 
                     df[key] = df[key].astype('Float64').astype('Int64')
                 else:
                     df[key] = df[key].astype(value)
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, KeyError): # KeyError : valid_AphiaID ajouté mais n'existe pas encore à ce stade
                 pass
 
     # Perform multiple processing steps to curate the dataset
@@ -494,12 +697,21 @@ def curate_data(df, config, config_variables_updated, init=False, verbose=True, 
 
     # Update `variables` section in `config`
 
-    if isvariable and init:
+#    if isvariable and init:
+    if init:
+
         columns_after = set(df.columns)
         generated_columns = list(columns_after - columns_before)
-        config_variables_updated = update_config(df, config, addcolumns=generated_columns)
+        config_variables_updated = update_config_variables(df, config, addcolumns=generated_columns)
+#        print()
+#        print('config_variables_updated')
+#        print(config_variables_updated) #debug
+#        print()
+
 
     if isvariable:
+
+#        print('HERE isvariable curate') #debug
 
         # Select the columns
 
@@ -528,10 +740,10 @@ def curate_data(df, config, config_variables_updated, init=False, verbose=True, 
 
     return df, config, config_variables_updated
 
-def process_one_dataframe(df, config, config_variables_updated, outputfile, outputdir='', columns=None, cpu_idx=None, init_process=False, init_storage=False, verbose=True, indent=''):
+def process_one_dataframe(df, config, config_variables_updated, isvariable, outputfile, outputdir='', columns=None, cpu_idx=None, init_process=False, init_storage=False, verbose=True, indent=''):
 
     if cpu_idx is not None:
-        if (cpu_idx!=0) and (len(outputdir) == 0): #debug
+        if (cpu_idx != 0) and (len(outputdir) == 0): #debug
             raise Exception #debug
         temp = os.path.basename(outputfile).split('.')
         outputfile = temp[0] + '_temp%05d' % cpu_idx
@@ -554,7 +766,9 @@ def process_one_dataframe(df, config, config_variables_updated, outputfile, outp
               'partition': cpu_idx
              }
 
-    df, config, config_variables_updated = curate_data(df, config, config_variables_updated, **params)
+    df, config, config_variables_updated = curate_data(df, config, config_variables_updated, isvariable, **params)
+#    print("columns:", columns) #debug
+#    print("df columns:", df.columns) #debug
 
     # Store data
 
@@ -562,17 +776,19 @@ def process_one_dataframe(df, config, config_variables_updated, outputfile, outp
         columns = list(df.columns)
 
     if len(df) != 0:
+        # debug
+#        print('here columns forced')
         writedataframe.to_txt(df[columns], outputfile, init=init_storage, verbose=False, indent=indent)
 
     end = time.time()
 
     if cpu_idx is not None:
-        printv(f'CPU n°{cpu_idx}: {len(df)} lines remaining | TIME : {round(end-start,0)}s', verbose=True, indent=indent)
+        printv(f'CPU n°{cpu_idx}: {len(df)} lines remaining | TIME : {round(end-start)}s', verbose=True, indent=indent)
         if len(df) != 0:
             printv(f'>>> save to {outputfile}', verbose=True, indent=indent)
         printv('', verbose=True)
     else:
-        printv(f'>>>>>> {nlines} lines done | TIME : {round(end-start,0)}s', verbose=verbose)
+        printv(f'>>>>>> {nlines} lines done | TIME : {round(end-start)}s', verbose=verbose)
         printv('', verbose=verbose)
 
     return config_variables_updated, columns
@@ -609,7 +825,7 @@ def minmax_consecutive(numbers):
 
     return minmax_groups
 
-def resume_parallel_processing(outputdir, configfile, config):
+def resume_parallel_processing(outputdir, configfile, config, verbose=True, indent=''):
 
     fileslist = glob.glob(os.path.join(outputdir, '*'))
     filesnumber = pd.Series(fileslist).str.findall(r'(?<=_temp)[0-9]+')
@@ -637,14 +853,27 @@ def resume_parallel_processing(outputdir, configfile, config):
     with open(fileslist[0],'r') as f:
         columns = f.readline().strip('\n').split('\t')
 
+# debug Est-ce vraiment nécessaire ?? oui si resume saute processing
     configfile = os.path.basename(configfile).split('.')[0]
     configfile_updated = os.path.join(config['outputdir_path'], f'{configfile}_updated.yaml')
-    with open(configfile_updated,'r') as f:
-        config_variables_updated = yaml.safe_load(f)
+    if os.path.isfile(configfile_updated):
+        with open(configfile_updated,'r') as f:
+            config_variables_updated = yaml.safe_load(f)
+    else:
+        config_variables_updated = None
+        configfile_updated =  None
+#        try:
+#            df = pd.DataFrame([], columns=columns)
+#            config_variables_updated = update_config(df, config, addcolumns=None)
+#            print(config_variables_updated) #debug
+#        except:
+#            printv('WARNING | Resume failed. Processing data from scratch.', verbose=verbose, indent=indent)
+#            return None, None, None, None, None
 
     return find_missing_indices, last_index, last_file, columns, config_variables_updated, configfile_updated
+#    return find_missing_indices, last_index, last_file, columns
 
-def resume_noparallel_processing(outputfile, configfile, config):
+def resume_noparallel_processing(outputfile, configfile, config, verbose=True, indent=''):
 
     _, last_index = read_firstlastindex(outputfile)
     find_missing_indices = eval(f'lambda x: x > {last_index}')
@@ -652,17 +881,36 @@ def resume_noparallel_processing(outputfile, configfile, config):
     with open(outputfile,'r') as f:
         columns = f.readline().strip('\n').split('\t')
 
+# debug Est-ce vraiment nécessaire ??
     configfile = os.path.basename(configfile).split('.')[0]
     configfile_updated = os.path.join(config['outputdir_path'], f'{configfile}_updated.yaml')
-    with open(configfile_updated,'r') as f:
-        config_variables_updated = yaml.safe_load(f)
-
+    if os.path.isfile(configfile_updated):
+        with open(configfile_updated,'r') as f:
+            config_variables_updated = yaml.safe_load(f)
+    else:
+        config_variables_updated = None
+        configfile_updated =  None
+#        df = pd.DataFrame([], columns=columns)
+#        config_variables_updated = update_config(df, config, addcolumns=None)
+#        try:
+#            df = pd.DataFrame([], columns=columns)
+#            colnames_mapping = get_column_mapping(config)     
+#            config_variables_updated = update_config(df, config, addcolumns=None)
+#            print()
+#            print('config_variables_updated')
+#            print(config_variables_updated) #debug
+#            print()
+#        except:
+#            printv('WARNING | Resume failed. Processing data from scratch.', verbose=verbose, indent=indent)
+#            return None, None, None, None, None
+#    print('columns :', columns) #debug
     return find_missing_indices, last_index, columns, config_variables_updated, configfile_updated
+#    return find_missing_indices, last_index, columns
 
-def assemble_outputfile(outputdir, outputfile, columns):
+def assemble_outputfile(outputdir, outputfile, columns, cleanup=True):
 
     assert os.path.isdir(outputdir)
-    print(outputdir)
+#    print(outputdir) #debug
     print(f'* Consolidate temporary files')
     print(f'  Storing in {outputfile}')
 
@@ -708,6 +956,20 @@ def assemble_outputfile(outputdir, outputfile, columns):
 
                 output.writelines(lines)
 
+    if cleanup:
+
+        print()
+        print('* Cleaning up intermediate files')
+
+        for file in files:
+            print(f'  >>> {file}')
+            os.remove(file)
+
+        if len(os.listdir(outputdir)) == 0:
+            print(f'  >>> {outputdir}')
+            os.rmdir(outputdir)
+
+
     return None
 
 if __name__ == '__main__':
@@ -719,7 +981,7 @@ if __name__ == '__main__':
     parser.add_argument('--cleanup', action=argparse.BooleanOptionalAction, help='delete all intermediate files generated during processing', default=True)
     args = parser.parse_args()
 
-    clean_intermediate = args.cleanup
+    cleanup = args.cleanup
 
     with open(args.config_file,'r') as f:
         config = yaml.safe_load(f)
@@ -733,56 +995,91 @@ if __name__ == '__main__':
 
     config = config['data']
 
+    # Input file
+
     if ('inputfile_path' not in config.keys()):
         raise KeyError("`clean.py` | The configuration file must include a 'inputfile_path' section")
     config['inputfile_path'] = resolvepath.apply(config['inputfile_path'])
+
     if (not os.path.isfile(config['inputfile_path'])):
         raise FileNotFoundError(f"`clean.py` | No such file: '{config['inputfile_path']}'")
+
+    # Input directory
 
     if ('inputdir_path' not in config.keys()):
         raise KeyError("`clean.py` | The configuration file must include a 'inputdir_path' section")
     config['inputdir_path'] = resolvepath.apply(config['inputdir_path'])
+
     if (not os.path.isdir(config['inputdir_path'])):
         raise FileNotFoundError(f"`clean.py` | No such directory: '{config['inputdir_path']}'")
+
     initial_files = os.listdir(config['inputdir_path'])
-    print('initial_files',initial_files)
+#    print('initial_files',initial_files) #debug
+
+    # Output directory
 
     if ('outputdir_path' not in config.keys()):
         raise KeyError("`clean.py` | The configuration file must include a 'outputdir_path' section")
     config['outputdir_path'] = resolvepath.apply(config['outputdir_path'])
+
     if (not os.path.isdir(config['outputdir_path'])):
         try:
             os.mkdir(config['outputdir_path'])
         except FileExistsError:
             pass
 
-    if ('outputfile_path' not in config.keys()):
-         inputfile = os.path.basename(config['inputfile_path']).split('.')
-         if len(inputfile) > 2:
-             raise Exception("`clean.py` | `inputfile` contains dots ('.') outside of the file extension")
-         config['outputfile_path'] = inputfile[0] + f'_processedby_marinedb'
-         if len(inputfile) == 2:
-             config['outputfile_path'] += f'.{inputfile[1]}'
-         print(f"INFO | The processed file will be saved as {config['outputfile_path']}")
+    # Output file
+
+    if ('outputfile_path' not in config.keys()) or (config['inputfile_path'] == config['outputfile_path']): # NEW NEW ne pas permettre inputfile = outputfile : code crash probable sinon
+
+         filename = os.path.basename(config['inputfile_path'])
+         name, ext = os.path.splitext(filename)
+
+         if '.' in name:
+             raise Exception(f"`clean.py` | {filename}: multi-part extensions are not supported (e.g. '.tar.gz')")
+
+         config['outputfile_path'] = name + f'_processedby_marinedb' + ext
+
     if len(os.path.dirname(config['outputfile_path'])) == 0:
         config['outputfile_path'] = os.path.join(config['outputdir_path'], config['outputfile_path'])
+
     config['outputfile_path'] = resolvepath.apply(config['outputfile_path'])
 
-    if ('processing' not in config.keys()):
-        raise KeyError("`clean.py` | The configuration file must include a 'processing' section")
+    print(f"INFO | The processed file will be saved as {config['outputfile_path']}")
 
     outputdir = config['outputdir_path']
     outputfile = config['outputfile_path']
 
-    isvariable = ('variables' in config.keys())
-    if not isvariable:
-        print('INFO | `variables` section not found: column filtering, type casting, and renaming will be skipped')
+    # Processing section
 
-    # Verify that only supported functions are specified in the configuration file
+    if ('processing' not in config.keys()):
+        raise KeyError("`clean.py` | The configuration file must include a 'processing' section")
 
     if config['processing'] is None:
         # No processing step
         config['processing'] = []
+
+    # Post-processing section
+
+    if ('postprocessing' not in config.keys()):
+        raise KeyError("`clean.py` | The configuration file must include a `postprocessing` section")
+
+    if config['postprocessing'] is None:
+        # No post-processing step
+        config['postprocessing'] = []
+
+    # Variables section
+
+    if 'variables' not in config.keys():
+        print('INFO | `variables` section not found: column filtering, type casting, and renaming will be skipped')
+
+    if config['variables'] is None:
+        config['variables'] = []
+
+    isvariable = (len(config['variables']) != 0)
+#    print('isvariable :', isvariable) # debug
+
+    # Verify that only supported functions are specified in the configuration file
 
     procfuncs = get_procfunc(config, 'processing')
     unsupported_funcs = set(procfuncs) - set(SUPPORTED_PROCFUNCTIONS)
@@ -806,13 +1103,11 @@ if __name__ == '__main__':
     config = yaml.safe_load(config)
 
     # For all functions with an `outputdir` argument, substitute the argument
-    # with the configuration file's inputdir_path or outputdir_path value
+    # with the configuration file's `inputdir_path` or `outputdir_path` value
 
-    config = overwrite_outputdir_stdnan_dropempty(config, config['inputdir_path'], config['outputdir_path'])
+    config = overwrite_outputdir_stdnan_dropempty_cleanup(config, config['inputdir_path'], config['outputdir_path'], cleanup)
 
-    ispreprocessing = False
-
-    print()
+#    print()
     print(f"----- Start cleaning: {config['inputfile_path']} -----")
     print()
 
@@ -822,6 +1117,13 @@ if __name__ == '__main__':
     ############### Pre-Processing ###############
     ##############################################
 
+    print('Preprocessing')
+    print('-------------')
+    print()
+
+    start_preprocessing = time.time()
+    ispreprocessing = False # NEW
+
     # If specified, apply the `format` function
 
     format_function = [(idx, filter) for idx,filter in enumerate(config['processing']) if 'format' in str(filter)]
@@ -830,6 +1132,10 @@ if __name__ == '__main__':
         raise Exception(f"`clean.py` | `format` should be specified only once in the `config` file")
 
     if len(format_function) == 1:
+
+        ispreprocessing = True # NEW NEW
+        start = time.time()
+
         format_idx = format_function[0][0]
         format_params = format_function[0][1]['tool'][0]['format']
         format_params['inputfile'] = config['inputfile_path']
@@ -838,12 +1144,12 @@ if __name__ == '__main__':
             format_params['outputfile'] = temp + '_processedby_format.txt'
             format_params['outputfile'] = os.path.join(outputdir, format_params['outputfile'])
 
-        if not ispreprocessing:
-            print('Preprocessing')
-            print('--------------')
-            print()
-            ispreprocessing = True
-            start = time.time()
+#        if not ispreprocessing:
+#            print('Preprocessing')
+#            print('--------------')
+#            print()
+#            ispreprocessing = True
+#            start = time.time()
 
         print('* dataframe')
         print('** format')
@@ -856,7 +1162,8 @@ if __name__ == '__main__':
 
         del config['processing'][format_idx]
 
-        print(f'TIME: {round(time.time() - start,0)}s')
+        end = time.time()
+        print(f'TIME | step: {round(end - start)}s [total: {round(end - start_cleaning)}s]')
         print()
 
     # If specified, apply the `marineloc` filter
@@ -868,6 +1175,9 @@ if __name__ == '__main__':
 
     if len(marineloc_filter) == 1:
 
+        ispreprocessing = True # NEW NEW
+        start = time.time()
+
         marineloc_idx = marineloc_filter[0][0]
         marineloc_params = marineloc_filter[0][1]['tool'][0]['marineloc']
         marineloc_params['inputfile'] = config['inputfile_path']
@@ -875,12 +1185,12 @@ if __name__ == '__main__':
         if args.cpu_max is not None:
             marineloc_params['cpu'] = args.cpu_max
 
-        if not ispreprocessing:
-            print('Preprocessing')
-            print('--------------')
-            print()
-            ispreprocessing = True
-            start = time.time()
+#        if not ispreprocessing:
+#            print('Preprocessing')
+#            print('--------------')
+#            print()
+#            ispreprocessing = True
+#            start = time.time()
 
         if ('latkey' in marineloc_params) and ('lonkey' in marineloc_params):
             print(f"* {marineloc_params['latkey']}, {marineloc_params['lonkey']}")
@@ -888,7 +1198,7 @@ if __name__ == '__main__':
         print()
 
         config['inputfile_path'] = marineloc.apply(**marineloc_params)
-        if ('temp_file' in locals()) and clean_intermediate:
+        if ('temp_file' in locals()) and cleanup:
             os.remove(temp_file)
             temp_file = config['inputfile_path']
 
@@ -896,8 +1206,17 @@ if __name__ == '__main__':
 
         del config['processing'][marineloc_idx]
 
-        print(f'TIME: {round(time.time() - start,0)}s')
+        end = time.time()
+        print(f'TIME | step: {round(end - start)}s [total: {round(end - start_cleaning)}s]')
         print()
+
+    if not ispreprocessing:
+        print("INFO | No preprocessing steps specified (format, marineloc)")
+        print()
+
+    end = time.time()
+    print(f'TIME | preprocessing: {round(end - start_preprocessing)}s [total: {round(end - start_cleaning)}s]')
+    print()
 
     # If `createwormsfilters` or `isinworms` is specified,
     # generate the necessary filters using `createwormsfilters`
@@ -909,18 +1228,51 @@ if __name__ == '__main__':
     if len(createwormsfilters_filter) > 1:
         raise Exception(f"`clean.py` | `createwormsfilters.py` must be applied to a single column. Select either {','.join(createwormsfilters_column[:-1])} or {createwormsfilters_column[-1]}")
 
+    is_createwormsfilters = (len(createwormsfilters_filter) == 1)
+
     ## Verify if `isinworms` is specified
     isinworms_filter = [(idx, filter) for idx,filter in enumerate(config['processing']) if "'isinworms'" in str(filter)]
     isinworms_column = get_keys([filter[1] for filter in isinworms_filter])
+
     if len(isinworms_filter) > 1:
         raise Exception(f"`clean.py` | `isinworms.py` must be applied to a single column. Select either {','.join(isinworms_column[:-1])} or {isinworms_column[-1]}")
 
-    is_createwormsfilters = (len(createwormsfilters_filter) == 1)
     is_isinworms = (len(isinworms_filter) == 1)
+    is_isinworms_verbatim = False
+
+    ## Verify if `resolvetaxamatch` is specified
+    resolvetaxamatch_filter = [(idx, filter) for idx,filter in enumerate(config['postprocessing']) if "'resolvetaxamatch'" in str(filter)]
+    resolvetaxamatch_column = get_keys([filter[1] for filter in resolvetaxamatch_filter])
+
+    if len(resolvetaxamatch_filter) > 1:
+        raise Exception(f"`clean.py` | `resolvetaxamatch.py` must be applied to a single column. Select either {','.join(resolvetaxamatch_column[:-1])} or {resolvetaxamatch_column[-1]}")
+
+    is_resolvetaxamatch = (len(resolvetaxamatch_filter) == 1)
 
     ## Ensure that if `createworms` is specified, `isinworms` is specified as well
     if is_createwormsfilters and not is_isinworms:
         raise Exception(f'`clean.py` | `isinworms` must be specified when using `createwormsfilter`')
+
+    ## Ensure that `isinworms_params` is specified if `resolvetaxamatch` is used but `isinworms` is not
+
+    if is_resolvetaxamatch:
+
+        resolvetaxamatch_column_idx = resolvetaxamatch_filter[0][0]
+        resolvetaxamatch_column = resolvetaxamatch_column[0]
+        resolvetaxamatch_idx = get_keys(config['postprocessing'][resolvetaxamatch_column_idx][resolvetaxamatch_column]).index('resolvetaxamatch')
+        resolvetaxamatch_params = config['postprocessing'][resolvetaxamatch_column_idx][resolvetaxamatch_column][resolvetaxamatch_idx]
+        if isinstance(resolvetaxamatch_params, str):
+            config['postprocessing'][resolvetaxamatch_column_idx][resolvetaxamatch_column][resolvetaxamatch_idx] = {'resolvetaxamatch':{}}
+            resolvetaxamatch_params = config['postprocessing'][resolvetaxamatch_column_idx][resolvetaxamatch_column][resolvetaxamatch_idx]
+        resolvetaxamatch_params = resolvetaxamatch_params['resolvetaxamatch']
+
+        if (not is_isinworms):
+
+            if 'isinworms_params' not in resolvetaxamatch_params.keys():
+                raise Exception(f'`clean.py` | `isinworms_params` must be specified for `resolvetaxamatch` if `isinworms` is not defined in the configuration file')
+
+            if 'rank_mapping' not in resolvetaxamatch_params['isinworms_params'].keys():
+                config['postprocessing'][resolvetaxamatch_column_idx][resolvetaxamatch_column][resolvetaxamatch_idx]['resolvetaxamatch']['isinworms_params']['rank_mapping'] = getdefaultargs.apply(eval(f'tools.isinworms.apply'))['rank_mapping']
 
     if is_isinworms:
 
@@ -1005,9 +1357,11 @@ if __name__ == '__main__':
             for arg, val in createwormsfilters_params.items():
                 if arg not in exclude_args:
                     if arg in ['overwrite', 'overwrite_parallel', 'outputdir', 'store', 'store_parallel']:
-                        config['processing'][isinworms_column_idx][isinworms_column][isinworms_idx]['isinworms'][f'{arg}_createwormsfilters'] = createwormsfilters_params[arg]
+#                        config['processing'][isinworms_column_idx][isinworms_column][isinworms_idx]['isinworms'][f'{arg}_createwormsfilters'] = createwormsfilters_params[arg]
+                         isinworms_params[f'{arg}_createwormsfilters'] = createwormsfilters_params[arg]
                     else:
-                        config['processing'][isinworms_column_idx][isinworms_column][isinworms_idx]['isinworms'][arg] = createwormsfilters_params[arg]
+#                        config['processing'][isinworms_column_idx][isinworms_column][isinworms_idx]['isinworms'][arg] = createwormsfilters_params[arg]
+                        isinworms_params[arg] = createwormsfilters_params[arg]
 
         else:
 
@@ -1015,21 +1369,29 @@ if __name__ == '__main__':
 
         if 'rank_mapping' not in isinworms_args:
             isinworms_params['rank_mapping'] = getdefaultargs.apply(eval(f'tools.isinworms.apply'))['rank_mapping']
-        else:
-            isinworms_params['rank_mapping'] = isinworms_params['rank_mapping']
+
         if isinworms_params['rank_mapping']['scientificname'] != isinworms_column:
             raise ValueError(f"`clean.py` | The value associated with the 'scientificname' key in the 'rank_mapping' argument of the `isinworms` function (i.e., '{isinworms_params['rank_mapping']['scientificname']}') must match the name of the column the filter is applied to (i.e., '{isinworms_column}')")
 
-        is_isinworms_verbatim = False
         if 'verbatimcolumn' in isinworms_args:
-            verbatim_columns = isinworms_params['verbatimcolumn']
-            if (verbatim_columns is not None) and (len(verbatim_columns) != 0): # None, empty string, empty list
+            if (isinworms_params['verbatimcolumn'] is not None) and (len(isinworms_params['verbatimcolumn']) != 0): # None, empty string, empty list
                 is_isinworms_verbatim = True
-                if isinstance(verbatim_columns, str):
-                    verbatim_columns = [verbatim_columns]
-                verbatim_authorshiponly = isinworms_params['verbatimauthorshiponly']
-                if not isinstance(verbatim_authorshiponly, list | tuple):
-                    verbatim_authorshiponly = [verbatim_authorshiponly]
+                if isinstance(isinworms_params['verbatimcolumn'], str):
+                    isinworms_params['verbatimcolumn'] = [isinworms_params['verbatimcolumn']]
+#                if not isinstance(verbatim_authorshiponly, list | tuple):
+                if isinstance(isinworms_params['verbatimauthorshiponly'], str):
+                    isinworms_params['verbatimauthorshiponly'] = [isinworms_params['verbatimauthorshiponly']]
+
+        config['processing'][isinworms_column_idx][isinworms_column][isinworms_idx]['isinworms'] = isinworms_params # NEW NEW NEW
+
+        # If `resolvetaxamatch` is specified, overwrite its `isinworms_params` parameter
+        # with those defined in the main `isinworms` configuration
+
+        if is_resolvetaxamatch:
+
+            print("INFO | `resolvetaxamatch` will use the `isinworms` parameters defined in the main configuration")
+            print()
+            config['postprocessing'][resolvetaxamatch_column_idx][resolvetaxamatch_column][resolvetaxamatch_idx]['resolvetaxamatch']['isinworms_params'] = isinworms_params
 
         ## Load existing filters or generate new ones if none are found
 
@@ -1053,8 +1415,17 @@ if __name__ == '__main__':
         if is_createwormsfilters:
             del config['processing'][createwormsfilters_column_idx][createwormsfilters_column][createwormsfilters_idx]
 
-        print(f'TIME: {round(time.time() - start,0)}s')
+        end = time.time()
+        print(f'TIME | step: {round(end - start)}s [total: {round(end - start_cleaning)}s]')
         print()
+
+    if is_resolvetaxamatch:
+
+        resolvetaxamatch_params = config['postprocessing'][resolvetaxamatch_column_idx][resolvetaxamatch_column][resolvetaxamatch_idx]['resolvetaxamatch']
+
+        if ('flag_uncertain' not in resolvetaxamatch_params['isinworms_params'].keys()) or (not resolvetaxamatch_params['isinworms_params']['flag_uncertain']):
+            raise Exception(f'`resolvetaxamatch.py` | `resolvetaxamatch.py` requires prior execution of `isinworms.py` with flag_uncertain=True (`isinworms_params`). Questionable taxonomic matches must be retained in order to resolve them interactively.')
+
 
     ##########################################
     ############### Processing ###############
@@ -1066,6 +1437,8 @@ if __name__ == '__main__':
     print('----------')
     print()
 
+    start_processing = time.time()
+
     parallel = args.parallel
     if not parallel:
         cpu_max = 1
@@ -1073,20 +1446,47 @@ if __name__ == '__main__':
         cpu_max = args.cpu_max
     parallel, cpu_main = set_cpu(config, parallel, cpu_main=None, cpu_max=cpu_max)
 
-    if ('variables' in config.keys()):
-        config['variables'].append({'index_marinedb': {'index_marinedb': 'int'}})
-        if is_isinworms_verbatim and ('resolvetaxamatch' in str(config['postprocessing'])):
-            for col in verbatim_columns:
+    # NEW NEW NEW ################################################
+
+    # TODO: open the file with 'rt' instead of 'r' to avoid using `decode_line`
+    open_file, decode_line = readfile.apply(config['inputfile_path'])
+
+    if not isvariable:
+        with open_file(config['inputfile_path'],'r') as data:
+            header = decode_line(data.readline()).strip('\n').split('\t')
+        config['variables'] = header
+#        print(config['variables']) #debug
+
+    config['variables'].append({'index_marinedb': {'index_marinedb': 'int'}})
+
+    if is_isinworms and is_isinworms_verbatim and ('resolvetaxamatch' in str(config['postprocessing'])):
+        variables = get_keys(config['variables'])
+        for col in isinworms_params['verbatimcolumn']:
+            if col not in variables:
                 config['variables'].append({col: {col: 'string'}})
-            for col in verbatim_authorshiponly:
+        for col in isinworms_params['verbatimauthorshiponly']:
+            if col not in variables:
                 config['variables'].append({col: {col: 'boolean'}})
 
+    if is_isinworms and ('taxasubset' in str(config['postprocessing'])):
+        config['variables'].append({'valid_AphiaID': {'valid_AphiaID': 'Int64'}})
+    # NEW NEW NEW ###############################################
+
+#    if ('variables' in config.keys()):
+#        config['variables'].append({'index_marinedb': {'index_marinedb': 'int'}})
+#        if is_isinworms_verbatim and ('resolvetaxamatch' in str(config['postprocessing'])):
+#            for col in verbatim_columns:
+#                config['variables'].append({col: {col: 'string'}})
+#            for col in verbatim_authorshiponly:
+#                config['variables'].append({col: {col: 'boolean'}})
+
     if parallel:
-        outputdir = os.path.join(outputdir,'marinedb_parallel')
-        try:
-            os.mkdir(outputdir)
-        except FileExistsError:
-            pass
+        if 'marinedb_parallel' not in outputdir.split('/'):
+            outputdir = os.path.join(outputdir,'marinedb_parallel')
+            try:
+                os.mkdir(outputdir)
+            except FileExistsError:
+                pass
     else:
         outputdir = ''
 
@@ -1101,29 +1501,50 @@ if __name__ == '__main__':
 
         ## Resume processing
 
-        existing_files = os.listdir(config['outputdir_path'])
-        outputfile_basename = os.path.basename(outputfile).split('.')[0]
-        existing_outputfile = [file[:len(outputfile)] for file in existing_files if (file[:len(outputfile_basename)] == outputfile_basename)]
-        assert len(existing_outputfile) <= 1
-        if len(existing_outputfile) == 1:
-            outputfile = os.path.join(config['outputdir_path'], existing_outputfile[0])
-            config['outputfile_path'] = outputfile
+#        # cette partie c'est seulement pour parallel ?? debug
+#        # JE NE COMPRENDS PAS pourquoi j'avais besoin de ces lignes de code
+#        existing_files = os.listdir(config['outputdir_path'])
+#        outputfile_basename = os.path.basename(outputfile).split('.')[0]
+##        existing_outputfile = [file[:len(outputfile)] for file in existing_files if (file[:len(outputfile_basename)] == outputfile_basename)] #pourquoi file[:len(outputfile)] ?? debug
+#        existing_outputfile = [file for file in existing_files if (file[:len(outputfile_basename)] == outputfile_basename)] # je ne comprends pas pourquoi j'ai codé comme ça ...
+#        assert len(existing_outputfile) <= 1
+#        if len(existing_outputfile) == 1:
+#            outputfile = os.path.join(config['outputdir_path'], existing_outputfile[0])
+#            config['outputfile_path'] = outputfile # pourquoi j'aurais besoin de changer ? peut-être lié au parallèle, à voir
 
         if parallel:
             if len(os.listdir(outputdir)) != 0:
                 print(f'* Restart processing from {outputdir}')
                 resume = True
-                indices2process, lastindex, nbatch, columns, config_variables_updated, config_variables_updated_outputfile = resume_parallel_processing(outputdir, args.config_file, config)
+                #debug
+                indices2process, lastindex, nbatch, columns, config_variables_updated, config_variables_updated_outputfile = resume_parallel_processing(outputdir, args.config_file, config, verbose=True)
+#                indices2process, lastindex, nbatch, columns = resume_parallel_processing(outputdir, args.config_file, config, verbose=True)
+                if indices2process is None:
+                    resume = False
+                print()
             elif os.path.isfile(outputfile):
                 print(f'* Restart processing from {outputfile}')
                 resume = True
-                indices2process, lastindex, columns, config_variables_updated, config_variables_updated_outputfile = resume_noparallel_processing(outputfile, args.config_file, config)
+                # debug
+                indices2process, lastindex, columns, config_variables_updated, config_variables_updated_outputfile = resume_noparallel_processing(outputfile, args.config_file, config, verbose=True)
+#                indices2process, lastindex, columns = resume_noparallel_processing(outputfile, args.config_file, config, verbose=True)
+                if indices2process is None:
+                    resume = False
+                print()
         else:
             if os.path.isfile(outputfile):
                 print(f'* Restart processing from {outputfile}')
                 resume = True
                 init_storage = False
-                indices2process, lastindex, columns, config_variables_updated, config_variables_updated_outputfile = resume_noparallel_processing(outputfile, args.config_file, config)
+                # debug
+                indices2process, lastindex, columns, config_variables_updated, config_variables_updated_outputfile = resume_noparallel_processing(outputfile, args.config_file, config, verbose=True)
+#                indices2process, lastindex, columns = resume_noparallel_processing(outputfile, args.config_file, config, verbose=True)
+                if indices2process is None:
+                    resume = False
+                    init_storage = True
+                print()
+
+#        print('config_variables_updated:', config_variables_updated)
 
 ###################################
 #        with open('/data/smartbiodiv/eberhocoi/obis_marinedb/drop/marinedb_parallel/obis_processedby_marinedb_temp01130.txt','r') as f:
@@ -1141,7 +1562,7 @@ if __name__ == '__main__':
 #        resume = True
 ###################################
 
-        open_file, decode_line = readfile.apply(config['inputfile_path'])
+#        open_file, decode_line = readfile.apply(config['inputfile_path']) # NEW NEW => déplacé plus haut
         skip = resume
         dtypes_mapping = get_dtypes(config, key_type='old')
         dtypes_mapping['index_marinedb'] = 'Int64'
@@ -1156,7 +1577,7 @@ if __name__ == '__main__':
             data2clean = []
             init_process = True
 
-            for idx, line in enumerate(data):
+            for idx, line in enumerate(data, start=2):
 
                 if skip:
                     if idx == lastindex:
@@ -1174,10 +1595,11 @@ if __name__ == '__main__':
                     data2clean.append(obs)
                     batch += 1
                 else:
-                    error.append(idx+2)
-                    print(f'SplittingError: splitting line n°{idx+2} yields a different number of fields ({len(obs)}) than the header ({header_length}).')
-                    print(f'line n°{idx+2} is skipped : {line}')
-                    print()
+                    raise SplittingError(idx, len(obs), header_length, line) # NEW NEW NEW
+#                    error.append(idx)
+#                    print(f'SplittingError: Line {idx} has {len(obs)} fields but the header has {header_length}.')
+#                    print(f'line {idx} is skipped : {line}')
+#                    print()
 
                 if init_process and (batch == BATCH_SIZE):
 
@@ -1198,7 +1620,7 @@ if __name__ == '__main__':
                     else:
                         cpu_idx = None
 
-                    config_variables_updated, columns = process_one_dataframe(df2clean, config, config_variables_updated, outputfile, outputdir=outputdir, columns=columns, cpu_idx=cpu_idx, verbose=True, init_process=init_process, init_storage=init_storage)
+                    config_variables_updated, columns = process_one_dataframe(df2clean, config, config_variables_updated, isvariable, outputfile, outputdir=outputdir, columns=columns, cpu_idx=cpu_idx, verbose=True, init_process=init_process, init_storage=init_storage)
 
                     config_variables_updated_outputfile = os.path.basename(args.config_file).split('.')[0]
                     config_variables_updated_outputfile = os.path.join(config['outputdir_path'], f'{config_variables_updated_outputfile}_updated.yaml')
@@ -1230,6 +1652,7 @@ if __name__ == '__main__':
                     params = {
                               'config': config,
                               'config_variables_updated': config_variables_updated,
+                              'isvariable': isvariable,
                               'outputfile': outputfile,
                               'outputdir': outputdir,
                               'columns': columns,
@@ -1288,6 +1711,7 @@ if __name__ == '__main__':
             params = {
                       'config': config,
                       'config_variables_updated': config_variables_updated,
+                      'isvariable': isvariable,
                       'outputfile': outputfile,
                       'outputdir': outputdir,
                       'columns': columns,
@@ -1303,8 +1727,9 @@ if __name__ == '__main__':
                 params['verbose'] = False
                 params['init_storage'] = True
 
-                res, _ = process(delayed(process_one_dataframe)(chunk, cpu_idx=(i+nbatch), **params) for i,chunk in enumerate(chunks))
-                print(res) # besoin de config_variables_updated, columns
+                results = process(delayed(process_one_dataframe)(chunk, cpu_idx=(i+nbatch), **params) for i,chunk in enumerate(chunks)) #results debug
+                res, _ = zip(*results) # debug
+                print(res) # debug
                 del chunks
 
             else:
@@ -1317,18 +1742,20 @@ if __name__ == '__main__':
                 _ = process_one_dataframe(df2clean, **params)
                 del df2clean
 
-        print(f'TIME: {round(time.time() - start,0)}s')
-        print()
-        if len(error) != 0:
-            print(indent + f'ERROR:')
-            print(indent + f'SplittingError: {len(error)} observations produced a different number of fields upon splitting compared to the header, and were consequently ignored.')
-            print(f'Refer to lines: {error}')
-            print()
+# NEW je ne pense pas pertinent, print time plus loin
+#        print(f'TIME: {round(time.time() - start,0)}s')
+#        print()
+
+#        if len(error) != 0: # NEW NEW NEW (comment)
+#            print(indent + f'ERROR:')
+#            print(indent + f'SplittingError: {len(error)} observations produced a different number of fields upon splitting compared to the header, and were consequently ignored.')
+#            print(f'Refer to lines: {error}')
+#            print()
 
 
         if parallel:
 
-            assemble_outputfile(outputdir, outputfile, columns)
+            assemble_outputfile(outputdir, outputfile, columns, cleanup)
 #            print(f'* Consolidate temporary files')
 #            print(f'  Storing in {outputfile}')
 #
@@ -1374,22 +1801,97 @@ if __name__ == '__main__':
 #
 #                        output.writelines(lines)
 
-            if clean_intermediate:
-
-                print()
-                print('* Delete intermediate files generated during processing')
-
-                for file in files:
-                    print(f'  >>> {file}')
-                    os.remove(file)
-
-                if len(os.listdir(outputdir)) == 0:
-                    print(f'  >>> {outputdir}')
-                    os.rmdir(outputdir)
+# NEW NEW NEW : commenté -> direct fonction assemble
+#            if cleanup:
+#
+#                print()
+#                print('* Delete intermediate files generated during processing')
+#
+#                files = sorted(glob.glob(os.path.join(outputdir, '*')))
+#
+#                for file in files:
+#                    print(f'  >>> {file}')
+#                    os.remove(file)
+#
+#                if len(os.listdir(outputdir)) == 0:
+#                    print(f'  >>> {outputdir}')
+#                    os.rmdir(outputdir)
 
         # Store dtypes
 
-        dtypes_mapping = get_dtypes(config_variables_updated, key_type='new')
+        if config_variables_updated is not None:
+            dtypes_mapping = get_dtypes(config_variables_updated, key_type='new')
+            dtypes_outputfile = os.path.join(config['outputdir_path'], 'marinedb_dtypes.json')
+            with open(dtypes_outputfile, 'w') as f:
+                json.dump(dtypes_mapping, f, indent=4)
+
+        # Prepare for post-processing
+
+        inputfile = outputfile
+
+    elif isvariable: # NEW NEW NEW
+
+        # Select and rename columns, and write the output as an uncompressed file
+
+        ## Ensure enough disk space is available for the output file
+
+        outputfile_dir = os.path.dirname(outputfile)
+        _, _, available_disk_space = shutil.disk_usage(outputfile_dir)
+        inputfile_size = os.stat(config['inputfile_path']).st_size
+
+        if readfile.isgzip.apply(config['inputfile_path']):
+            required_space = inputfile_size * 6 # 8 to be sure
+#            print_factor = '6'
+        else:
+            required_space = inputfile_size + inputfile_size // 10
+#            print_factor = '1.1'
+
+        if available_disk_space < required_space:
+            raise Exception(
+                f"`clean.py` | Not enough disk space in {outputfile_dir}: "
+                f"{convertbytes.apply(available_disk_space)} available, "
+                f"at least {convertbytes.apply(required_space)} required."
+             )
+#            raise Exception(f'`clean.py` | The available disk space at {outputfile_dir} (i.e. {convertbytes.apply(available_disk_space)}) should be at least equal to {print_factor} times the size of {config["inputfile_path"]} (i.e {convertbytes.apply(required_space)})')
+
+        ## Process data
+
+        with open_file(config['inputfile_path'],'rt', encoding='utf-8') as src:
+
+            header_old = src.readline().rstrip('\n').split('\t')
+            header_length = len(header_old)
+            colnames_mapping = get_column_mapping(config)
+
+            indices = [idx for idx, col in enumerate(header_old) if col in colnames_mapping]
+            if len(indices) == 0:
+                raise Exception("The `variables` section does not contain any columns from the input file.")
+            header_new = [colnames_mapping[col] for col in header_old if col in colnames_mapping]
+
+#            if isgzip.apply(config['inputfile_path']):
+#                outputfile += '.gz'
+
+#            with open_file(outputfile, 'wt', encoding='utf-8') as dst:
+            with open(outputfile, 'wt', encoding='utf-8') as dst:
+
+                dst.write('\t'.join(header_new) + '\n')
+
+                for i, line in enumerate(src, start=2):
+
+                    fields = line.rstrip('\n').split('\t')
+
+                    if len(fields) != header_length :
+                        raise SplittingError(i, len(fields), header_length, line)
+
+                    selected = [fields[idx] for idx in indices]
+                    dst.write('\t'.join(selected) + '\n')
+
+#                shutil.copyfileobj(src, dst)
+
+        # Prepare for post-processing
+
+        inputfile = outputfile
+
+        dtypes_mapping = get_dtypes(config, key_type='new')
         dtypes_outputfile = os.path.join(config['outputdir_path'], 'marinedb_dtypes.json')
         with open(dtypes_outputfile, 'w') as f:
             json.dump(dtypes_mapping, f, indent=4)
@@ -1398,18 +1900,24 @@ if __name__ == '__main__':
 
         print("INFO | No processing step specified")
 
-        if not os.path.isfile(outputfile):
-            print()
-            if 'marinedb' not in outputdir:
-                outputdir = os.path.join(outputdir,'marinedb_parallel')
-            if not os.path.isdir(outputdir):
-                raise Exception(f'`clean.py` | Neither the output file ({outputfile}) nor the parallelism-related output directory ({outputdir}) exists')
-            assemble_outputfile(outputdir, outputfile, columns='')
+        inputfile = config['inputfile_path']
 
-        dtypes_outputfile = os.path.join(config['outputdir_path'], 'marinedb_dtypes.json')
+# Ce qui suit n'est pas logique du point de vue de l'utilisateur.
+#        if not os.path.isfile(outputfile):
+#            print()
+#            print(outputdir) # debug
+##            if 'marinedb' not in outputdir: # CRÉÉ PRÉALABLEMENT !
+##                outputdir = os.path.join(outputdir,'marinedb_parallel')
+##            if not os.path.isdir(outputdir):
+#            if (len(outputdir) == 0) or (len(os.listdir(outputdir)) == 0):
+#                raise Exception(f'`clean.py` | Neither the output file ({outputfile}) nor the parallelism-related output directory ({outputdir}) exists')
+#            assemble_outputfile(outputdir, outputfile, columns='', cleanup=cleanup)
+#
+#        dtypes_outputfile = os.path.join(config['outputdir_path'], 'marinedb_dtypes.json')
 
+    end = time.time()
     print()
-    print(f'TIME: {round(time.time() - start_cleaning,0)}s')
+    print(f'TIME | processing: {round(end - start_processing)}s [total: {round(end - start_cleaning)}s]')
     print()
 
     ###############################################
@@ -1420,16 +1928,25 @@ if __name__ == '__main__':
     print('---------------')
     print()
 
-    start = time.time()
+    start_postprocessing = time.time()
 
-    if ('postprocessing' in config.keys()) and (len(config['postprocessing']) != 0):
+    if len(config['postprocessing']) != 0:
+
+        # Verify that only supported functions are specified in the configuration file
 
         postprocfuncs = get_procfunc(config, 'postprocessing')
         unsupported_funcs = set(postprocfuncs) - set(SUPPORTED_POSTPROCFUNCTIONS)
         if len(unsupported_funcs) != 0:
             raise ValueError(f"`clean.py` | {','.join(list(unsupported_funcs))} are not supported functions.")
 
+        if 'dtypes_outputfile' not in locals(): # NEW NEW
+	        dtypes_outputfile = None
+
         config = order_postprocfunc(config)
+#        if config_variables_updated not in locals(): # NEW NEW NEW
+#            config_variables_updated = {}
+#            config_variables_updated['variables'] = config['variables']
+        config = update_config_postprocessing(config, inputfile, isvariable, is_isinworms, is_isinworms_verbatim, dtypes_outputfile)
 
         for procstep in config['postprocessing']:
 
@@ -1444,74 +1961,164 @@ if __name__ == '__main__':
                     proc_name = proc
                     proc_params = {}
 
-                proc_params['verbose'] = True
-                proc_params['indent'] = '   '
-                proc_params['inputfile'] = config['outputfile_path']
+# Commenter : update_config_postprocessing()
+#                proc_params['verbose'] = True
+#                proc_params['indent'] = '   '
+                proc_params['inputfile'] = inputfile
 
                 if proc_name == 'resolvetaxamatch':
 
-                    if is_isinworms:
+#                    if (not is_isinworms) and ('isinworms_params' not in proc_params):
+#                        raise Exception(f'`clean.py` | `resolvetaxamatch.py` requires prior execution of `isinworms.py`. Taxonomic harmonization must be performed before resolving uncertain matches.')
+#
+#                    # Update `rank_mapping` to reflect the final column names after processing and renaming
+#                    # original column -> processed column (if any) -> final renamed column
+#
+#                    if is_isinworms:
+#
+#                        print('rank mapping before:') #debug
+#                        print(isinworms_params['rank_mapping'])
+#
+#                        if config_variables_updated is not None:
+#                            print('isinworms config file') #debug
+#
+#                            colnames_mapping = get_column_mapping(config_variables_updated)
+#                            mapping_keys = set(colnames_mapping.keys())
+#                            processed_colnames = pd.DataFrame([], columns=list(colnames_mapping)) #NEW NEW NEW
+#                            print(processed_colnames) #debug  
+#
+#                            for rank, original_colname in isinworms_params['rank_mapping'].items():
+#                                _, processed_colname, _ = getcolumnname.apply(processed_colnames, original_colname, '', inplace=True)
+#                                renamed_colname = colnames_mapping[processed_colname]
+#                                isinworms_params['rank_mapping'][rank] = renamed_colname
+## NON car les variables finales doivent obligatoirement être dans variables, sinon erreur
+##                                if processed_colname in mapping_keys:
+##                                    renamed_colname = colnames_mapping[processed_colname]
+##                                    isinworms_params['rank_mapping'][rank] = renamed_colname
+##                                else:
+##                                    isinworms_params['rank_mapping'][rank] = processed_colname
+#
+#                            if is_isinworms_verbatim:
+#                                for idx, original_colname in enumerate(isinworms_params['verbatimcolumn']):
+#                                    _, processed_colname, _ = getcolumnname.apply(processed_colnames, original_colname, '', inplace=True)
+#                                    renamed_colname = colnames_mapping[processed_colname]
+#                                    isinworms_params['verbatimcolumn'][idx] = renamed_colname
+#
+#                        else:
+#                            print('isinworms without config file updated ...') #debug
+#                            with open(inputfile,'rt') as f:
+#                                header = f.readline().strip('\n').split('\t')
+#                            processed_colnames = pd.DataFrame([], columns=header)
+#
+#                            colnames_mapping = get_column_mapping(config)
+#
+#                            for rank, original_colname in isinworms_params['rank_mapping'].items():
+#                                renamed_colname = colnames_mapping[original_colname]
+#                                _, isinworms_params['rank_mapping'][rank], _ = getcolumnname.apply(processed_colnames, renamed_colname, '', inplace=True)
+## NON car les variables finales doivent obligatoirement être dans variables, sinon erreur
+##                                if original_colname in colnames_mapping.keys():
+##                                    renamed_colname = colnames_mapping[original_colname]
+##                                    _, isinworms_params['rank_mapping'][rank], _ = getcolumnname.apply(processed_colnames, renamed_colname, '', inplace=True)
+##                                else:
+##                                    _, isinworms_params['rank_mapping'][rank], _ = getcolumnname.apply(processed_colnames, original_colname, '', inplace=True)
+#
+#                            if is_isinworms_verbatim:
+#                                for idx, original_colname in enumerate(isinworms_params['verbatimcolumn']):
+#                                    _, processed_colname, _ = getcolumnname.apply(processed_colnames, original_colname, '', inplace=True)
+#                                    renamed_colname = colnames_mapping[processed_colname]
+#                                    isinworms_params['verbatimcolumn'][idx] = renamed_colname
+#
+#
+# #                       keys = list(isinworms_params['rank_mapping'].keys())
+# #                       values = list(itemgetter(*keys)(isinworms_params['rank_mapping']))
+# #                       for i,value in enumerate(values):
+# #                           _, value_proc, _ = getcolumnname.apply(colnames_proc, value, '', inplace=True)
+# #                           isinworms_params['rank_mapping'][keys[i]] = config_variables_updated[value_proc]
+#
+#                        print('rank mapping after:') #debug
+#                        print(isinworms_params['rank_mapping'])
+#
+#                        proc_params['isinworms_params'] = isinworms_params # Fais plus haut
+#
+##                        if is_isinworms_verbatim: # NEW NEW
+##                            proc_params['remove_keys'] = verbatim_columns
+#
+#                    # MAIS EN FAIT PAS BESOIN ?????????? À VOIR !! si sinon ces cas sont supprimés ? oui
+#                    if ('flag_uncertain' not in proc_params['isinworms_params'].keys()) or (not proc_params['isinworms_params']['flag_uncertain']):
+#                        raise Exception(f'`resolvetaxamatch.py` | `resolvetaxamatch.py` requires prior execution of `isinworms.py` with flag_uncertain=True. Questionable taxonomic matches must be retained in order to resolve them interactively.')
+#
+#                    # NEW NEW NEW NEW NEW : bonne idée ? debug
+#                    if (not is_isinworms) and (isvariable):
+#                        print('isvariable') #debug
+##                        colnames_mapping = get_column_mapping(config) # doit déjà exister à ce stade : voir isvariable block au-dessus
+#                        mapping_values = set(colnames_mapping.values())
+#                        mapping_keys = set(colnames_mapping.keys())
+#                        for rank, original_colname in proc_params['isinworms_params']['rank_mapping'].items():
+#                            if (original_colname not in mapping_keys) and (original_colname not in mapping_values):
+#                                raise ValueError(f"`resolvetaxamatch.py` | '{original_colname}' column is not defined in the `variables` section and was therefore dropped. Please add it to the `variables` section.")
+#                            if (original_colname in mapping_keys):
+#                                renamed_colname = colnames_mapping[original_colname]
+#                                proc_params['isinworms_params']['rank_mapping'][rank] = renamed_colname
+#
+##                    if (not is_isinworms) and (not isvariable):
+#
+##                    if original_colname in column_mapping.keys(): # l'inverse ne devrait jamais arriver
+##                    isinworms_rank_mapping_keys = list(proc_params['isinworms_params']['rank_mapping'].keys())
+##                    for key in isinworms_rank_mapping_keys:
+##                        value = proc_params['isinworms_params']['rank_mapping'][key]
 
-                        print('rank mapping before:') #debug
-                        print(isinworms_params['rank_mapping'])
-                        colnames_old_proc = pd.DataFrame([], columns=list(config_variables_updated.keys()))
-                        keys = list(isinworms_params['rank_mapping'].keys())
-                        values = list(itemgetter(*keys)(isinworms_params['rank_mapping']))
-                        for i,value in enumerate(values):
-                            _, value_proc, _ = getcolumnname.apply(colnames_old_proc, value, '', inplace=True)
-                            isinworms_params['rank_mapping'][keys[i]] = config_variables_updated[value_proc]
-                        print('rank mapping after:') #debug
-                        print(isinworms_params['rank_mapping'])
+#                    print('proc_params') #debug
+#                    print(proc_params['isinworms_params'])
 
-                        proc_params['isinworms_params'] = isinworms_params
-                        proc_params['remove_keys'] = verbatim_columns
-
-                    if (not is_isinworms) and ('isinworms_params' not in proc_params):
-                        raise Exception(f'`clean.py` | `resolvetaxamatch.py` requires prior execution of `isinworms.py`. Taxonomic harmonization must be performed before resolving uncertain matches.')
-
-                    if ('flag_uncertain' in proc_params['isinworms_params'].keys()) and (not proc_params['isinworms_params']['flag_uncertain']):
-                        raise Exception(f'`resolvetaxamatch.py` | `resolvetaxamatch.py` requires prior execution of `isinworms.py` with flag_uncertain=True. Questionable taxonomic matches must be retained in order to resolve them interactively.')
-
-                    column_mapping = get_column_mapping(config)
-                    isinworms_rank_mapping_keys = list(proc_params['isinworms_params']['rank_mapping'].keys())
-                    for key in isinworms_rank_mapping_keys:
-                        value = proc_params['isinworms_params']['rank_mapping'][key]
-                        if value in column_mapping.keys():
-                            new_value = column_mapping[value]
-                            proc_params['isinworms_params']['rank_mapping'][key] = new_value
+                    # Process data
 
                     print('* dataframe')
                     print('** resolvetaxamatch')
                     print()
 
                     outputfile = resolvetaxamatch.apply(**proc_params)
+                    inputfile = outputfile
 
                 elif proc_name == 'taxasubset':
 
                     if is_isinworms:
-                        proc_params['speciesidkey'] = 'valid_AphiaID'
-                        print(f'* valid_AphiaID')
+#                        proc_params['speciesidkey'] = 'valid_AphiaID'
+                        columns = [proc_params['speciesidkey']]
+#                        print(f'* valid_AphiaID')
                     else:
-                        columns = [keycol for keycol in proc_params.keys() if 'key' in keycol]
-                        if len(columns) == 0:
-                            raise Exception(f'`taxasubset.py` | Either the column containing species identifiers or the columns specifying taxonomic classification must be provided')
-                        columns = ', '.join(columns)
-                        print(f'* {columns}')
+                        columns = [proc_params[key] for key in ['specieskey', 'genuskey', 'familykey', 'orderkey', 'classkey', 'phylumkey', 'kingdomkey']]
+#                        if len(ranks) == 0:
+#                            raise Exception(f'`taxasubset.py` | Either the column containing species identifiers or the columns specifying taxonomic classification must be provided')
+#
+#                        if isvariable: # NEW NEW NEW 
+#                            mapping_values = set(colnames_mapping.values())
+#                            mapping_keys = set(colnames_mapping.keys())
+#                            for rank in ranks:
+#                                if (proc_params[rank] not in mapping_keys) and (proc_params[rank] not in mapping_values):
+#                                    raise ValueError(f"`taxasubset.py` | '{proc_params[rank]}' column is not defined in the `variables` section and was therefore dropped. Please add it to the `variables` section.")
+#                                if (proc_params[rank] in mapping_keys):
+#                                    renamed_colname = colnames_mapping[proc_params[rank]]
+#                                    proc_params[rank] = renamed_colname
+#
+#                        columns = ', '.join(columns)
+#                        print(f'* {columns}')
+
+                    columns = ', '.join(columns)
+                    print(f'* {columns}')
                     print('** taxasubset')
                     print()
 
-                    with open(outputfile,'r') as data:
+                    with open(outputfile,'r') as data: # debug ?
                         header_before = data.readline().strip('\n').split('\t')
 
-                    proc_params['dtypesfile'] = dtypes_outputfile
-                    _, outputfile = taxasubset.apply(**proc_params)
+                    outputfile = taxasubset.apply(**proc_params)
 
-                    with open(outputfile,'r') as data:
+                    with open(outputfile,'r') as data: # debug ?
                         header_after = data.readline().strip('\n').split('\t')
 
-                    header_diff = list(set(header_after) - set(header_before))
+                    header_diff = list(set(header_after) - set(header_before)) # debug ?
                     assert len(header_diff) <= 1
-                    if len(header_diff) == 1:
+                    if ('dtypes_outputfile' in locals()) and (len(header_diff) == 1):
                         dtypes_mapping[header_diff[0]] = 'boolean'
 
                 else:
@@ -1524,7 +2131,8 @@ if __name__ == '__main__':
     else:
         print("INFO | No post-processing step specified")
 
-    print(f'TIME: {round(time.time() - start,0)}s')
+    end = time.time()
+    print(f'TIME | post-processing: {round(end - start_postprocessing)}s [total: {round(end - start_cleaning)}s]')
     print()
 
     print(f"----- End cleaning {config['inputfile_path']} -----")
@@ -1532,15 +2140,15 @@ if __name__ == '__main__':
 
     # Store dtypes
 
-    with open(dtypes_outputfile, 'w') as f:
-        json.dump(dtypes_mapping, f, indent=4)
+    if ('dtypes_outputfile' in locals()) and (dtypes_outputfile is not None):
+        with open(dtypes_outputfile, 'w') as f:
+            json.dump(dtypes_mapping, f, indent=4)
 
     # Clean
 
-    if clean_intermediate:
+    if cleanup:
 
-        print('* Delete intermediate files generated during processing')
-        print()
+        print('* Cleaning up intermediate files')
 
         if ('temp_file' in locals()):
             print(f'  >>> {temp_file}')
@@ -1560,10 +2168,11 @@ if __name__ == '__main__':
             print(f"  >>> {config['inputdir_path']}")
             os.rmdir(config['inputdir_path'])
 
-        print(f'  >>> {config_variables_updated_outputfile}')
-        os.remove(config_variables_updated_outputfile)
+        if ('config_variables_updated_outputfile' in locals()) and (config_variables_updated_outputfile is not None):
+            print(f'  >>> {config_variables_updated_outputfile}')
+            os.remove(config_variables_updated_outputfile)
 
     print()
 
-    print(f'TIME: {round(time.time() - start_cleaning,0)}s')
+    print(f'TIME: {round(time.time() - start_cleaning)}s')
     print()
