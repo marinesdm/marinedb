@@ -350,7 +350,7 @@ def filter_uncompressed_gzip(inputfile, filterfile, controlkey=None, inputfile_s
     return error, count
 
 @export
-def apply(inputfile, filterfile, inputfile_format='uncompressed_gzip', controlkey=None, keep_mask=False, inputfile_sep='\t', filter_sep='\t', outputfile='', verbose=True, indent=''):
+def apply(inputfile, filterfile, inputfile_format='uncompressed_gzip', controlkey=None, keep_mask=False, inputfile_sep='\t', filter_sep='\t', outputfile='', cleanup=True, verbose=True, indent=''):
 
     inputfile_sep = inputfile_sep.encode('utf-8').decode('unicode_escape')
     filter_sep = filter_sep.encode('utf-8').decode('unicode_escape')
@@ -375,6 +375,11 @@ def apply(inputfile, filterfile, inputfile_format='uncompressed_gzip', controlke
         raise ValueError(f"`filtermarinelocations.py` | '{inputfile_format}' not supported for `inputfile_format`. Must be either 'parquet' or 'uncompressed_gzip'")
 
     end = time.time()
+
+    if cleanup: # NEW NEW NEW
+        printv('* Cleaning up intermediate files', verbose=verbose, indent=indent)
+        printv(f'  >>> {filterfile}', verbose=verbose, indent=indent)
+        os.remove(filterfile)
 
     printv(f'TIME : {round(end-start,0)}s', verbose=verbose, indent=indent)
     printv(f'COUNT: {count} marine data', verbose=verbose, indent=indent)
