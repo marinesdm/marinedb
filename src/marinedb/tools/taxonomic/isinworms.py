@@ -50,7 +50,7 @@ IGNOREWORDS = '|'.join([fr'{word}' for word in IGNOREWORDS])
 
 ## Rank names in the file to be processed
 
-# schema: RANK_MAPPING = {WoRMS_rank_name: rank_name_in_the_file}
+# schema: RANK_MAPPING = { worms_rank_name : rank_name_in_the_file }
 
  #######################################################################################
  # Leave `WoRMS_rank_name` unchanged, modify only `rank_name_in_the_file` if necessary #
@@ -1659,8 +1659,8 @@ def apply_matchfilter(classification, matchfilter=None, interactive_mode=False, 
                     printv(f'Candidate index: {worms_idx}', verbose=True, indent=indent)
                     printv('------------------', verbose=True, indent=indent)
                     dictpprint.apply(candidate, verbose=True, indent=indent)
+                    printv('', verbose=True, indent=indent)
 
-                printv('', verbose=True, indent=indent)
                 printv('*************************', verbose=True, indent=indent)
                 printv('********* Taxon *********', verbose=True, indent=indent)
                 printv('*************************', verbose=True, indent=indent)
@@ -1671,6 +1671,7 @@ def apply_matchfilter(classification, matchfilter=None, interactive_mode=False, 
 
                 isvalid = False
                 while not isvalid:
+                    printv('', verbose=True, indent=indent)
                     replace = input(indent + f'Do you want to overwrite the data with WoRMS information? (y/n) ')
                     if (replace != 'y') and (replace != 'n'):
                         printv("Invalid input. Please enter 'y' for yes or 'n' for no", verbose=True, indent=indent)
@@ -1682,8 +1683,8 @@ def apply_matchfilter(classification, matchfilter=None, interactive_mode=False, 
                     if len(worms_classif) > 1:
                         isvalid = False
                         while not isvalid:
-                            worms_index = input(indent + 'Select the WoRMS candidate to keep (enter index): ')
-                            if worms_index not in worms_indices:
+                            index = input(indent + 'Select the WoRMS candidate to keep (enter index): ')
+                            if index not in worms_indices:
                                 printv(f"Invalid index. Please select one of the following: {','.join(map(str, worms_indices))}", verbose=True, indent=indent)
                             else:
                                 isvalid = True
@@ -2279,9 +2280,9 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
                 with open(outputfile,'r') as f:
                     header = f.readline().strip('\n').split('\t')
                 classification = classification[header]
-            else:
-                printv('', verbose=verbose)
-                printv(f'WARNING | {outputfile} already exists and will be overwritten', verbose=verbose, indent=indent)
+#            else: # pris en charge dans writedaframe
+#                printv('', verbose=verbose)
+#                printv(f'WARNING | {outputfile} already exists and will be overwritten', verbose=verbose, indent=indent)
         else:
             overwrite_isinworms = True
 

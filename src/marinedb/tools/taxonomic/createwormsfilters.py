@@ -57,7 +57,7 @@ LOWER_THAN_SPECIES = subsetranks.apply('species', lower=True, strict=True)
 ## Map custom vocabulary to WoRMS vocabulary
 
  ###########################################
- # Do not remove starred dictionary keys #
+ #  Do not remove starred dictionary keys  #
  ###########################################
 
 WORMSCALL = [
@@ -96,6 +96,7 @@ def setup(wormscall=WORMSCALL):
     global CONTROL_COLUMN
 
     CONTROL_COLUMN = ('kingdom' if ('kingdom' in wormscall) else 'rank')
+
 
 ### Get unique raw scientific names ###
 
@@ -953,7 +954,7 @@ def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level
             if (((batch+1)%200) == 0) or (end == Nwormsscinames):
                 store_fullwormsmatch = pd.DataFrame(fullwormsmatch, columns=['wormssciname']+wormscall)
                 store_fullwormsmatch = astype_Int64(store_fullwormsmatch, wormscall, isrecognizedmatch=True)
-                writedataframe.to_txt(store_fullwormsmatch, tempfile, init=True, verbose=False, indent=indent)
+                writedataframe.to_txt(store_fullwormsmatch, tempfile, init=True, verbose=False)
 
         fullwormsmatch = pd.DataFrame(fullwormsmatch, columns=['wormssciname']+wormscall)
         fullwormsmatch = pd.merge(raw2worms_scinames, fullwormsmatch, how='left', on=['wormssciname'])
@@ -1026,7 +1027,7 @@ def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level
     # Store
 
     if store:
-        writedataframe.to_txt(wormsmatch, outputfile, init=True, verbose=verbose, indent=indent)
+        writedataframe.to_txt(wormsmatch, outputfile, init=True, verbose=False)
 
     printv(f'TIME: {round(time.time() - time_start)}s', verbose=verbose, indent=indent)
     printv('', verbose=verbose)
@@ -1274,7 +1275,7 @@ def match_WoRMSByAcceptedSciname(valid_aphiaID, wormscall=WORMSCALL, species_onl
         if store and (((batch+1)%200) == 0):
             store_wormsaccepted = pd.DataFrame(wormsaccepted,columns=colnames)
             store_wormsaccepted = astype_Int64(store_wormsaccepted, wormscall, isrecognizedmatch=False)
-            writedataframe.to_txt(store_wormsaccepted, outputfile, init=True, verbose=False, indent=indent)
+            writedataframe.to_txt(store_wormsaccepted, outputfile, init=True, verbose=False)
 
     wormsaccepted = pd.DataFrame(wormsaccepted,columns=colnames)
     wormsaccepted = astype_Int64(wormsaccepted, wormscall, isrecognizedmatch=False)
@@ -1283,7 +1284,7 @@ def match_WoRMSByAcceptedSciname(valid_aphiaID, wormscall=WORMSCALL, species_onl
         wormsaccepted = pd.concat([previous_wormsaccepted[wormsaccepted.columns],wormsaccepted],axis=0).reset_index(drop=True)
 
     if store:
-        writedataframe.to_txt(wormsaccepted, outputfile, init=True, verbose=verbose, indent=indent)
+        writedataframe.to_txt(wormsaccepted, outputfile, init=True, verbose=False)
 
     printv(f'TIME: {round(time.time() - time_start)}s', verbose=verbose, indent=indent)
     printv('', verbose=verbose)
@@ -1470,7 +1471,7 @@ def parallel_WoRMSmatch(wormsfunc, data, wormscall, cpu, max_attempt=3, verbose=
     # Store
 
     if store_parallel:
-        writedataframe.to_txt(wormsmatch, outputfile, init=True, verbose=verbose, indent=indent)
+        writedataframe.to_txt(wormsmatch, outputfile, init=True, verbose=False)
 
     printv(f'TIME: {round(time.time() - time_start)}s', verbose=verbose, indent=indent)
     printv('', verbose=verbose)
@@ -1808,7 +1809,7 @@ def create_WoRMSrecognizedfilter(unique_rawscinames, wormscall=WORMSCALL, identi
     # Store WoRMS-recognized filter
 
     if store:
-        writedataframe.to_txt(worms_matchfilter, params_func['outputfile'], init=True, verbose=False, indent=indent)
+        writedataframe.to_txt(worms_matchfilter, params_func['outputfile'], init=True, verbose=False)
 
     return worms_matchfilter
 
