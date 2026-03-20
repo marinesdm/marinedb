@@ -18,30 +18,44 @@ __all__ = [] # populated using the @export decorator
 @export
 def apply(inputfile, modulename, outputdir=None, add_processedby=True, verbose=True, indent=''):
 
-    if modulename in inputfile:
-        printv(f"WARNING | `inputfile` already contains '{modulename}' and will therefore not be modified", verbose=verbose, indent=indent)
+    filename = os.path.basename(inputfile)
+    name, ext = os.path.splitext(filename)
+
+    if '.' in name:
+        raise ValueError(f"{filename}: multi-part extensions are not supported (e.g. '.tar.gz')")
+
+    if modulename in name.split('_'):
+        printv(
+            f"WARNING | '{filename}' already contains '{modulename}' and will therefore not be modified",
+            verbose=verbose,
+            indent=indent
+        )
         return inputfile
 
-    inputfile_split = inputfile.split('.')
+#    inputfile_split = inputfile.split('.')
 
     if (outputdir is None) or (len(outputdir) == 0):
-        start = inputfile_split[0]
-    else:
-        start = os.path.basename(inputfile_split[0])
-        start = os.path.join(outputdir, start)
+        outputdir = os.path.dirname(inputfile)
+#        start = inputfile_split[0]
+#    else:
+#        start = os.path.basename(inputfile_split[0])
+#        start = os.path.join(outputdir, start)
 
-    if len(inputfile_split) > 2:
-        raise ValueError(f"`getdefaultoutputfile.py` | `inputfile` must contain only one dot ('.') in its name ({inputfile})")
-    elif len(inputfile_split) == 2:
-        end = '.' + inputfile_split[1]
-    else:
-        end = ''
+#    if len(inputfile_split) > 2:
+#        raise ValueError(f"`getdefaultoutputfile.py` | `inputfile` must contain only one dot ('.') in its name ({inputfile})")
+#    elif len(inputfile_split) == 2:
+#        end = '.' + inputfile_split[1]
+#    else:
+#        end = ''
 
-    if ('processedby' in start) or (not add_processedby):
-        outputfile = start + f'_{modulename}' + end
+    if ('processedby' in name) or (not add_processedby):
+#        outputfile = start + f'_{modulename}' + end
+        outputname = f"{name}_{modulename}{ext}"
     else:
-        outputfile = start + f'_processedby_{modulename}' + end
+#        outputfile = start + f'_processedby_{modulename}' + end
+        outputname = f"{name}_processedby_{modulename}{ext}"
 
-    outputfile = resolvepath.apply(outputfile)
+#    outputfile = resolvepath.apply(outputfile)
+    outputfile = os.path.join(outputdir, outputname)
 
     return outputfile
