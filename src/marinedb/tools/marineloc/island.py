@@ -6,6 +6,7 @@
 
 # External import
 
+import re
 import os
 import glob
 import time
@@ -276,7 +277,7 @@ def island(lat, lon, verbose=True, indent=''):
 @export
 def process_one_file(filepath, latkey, lonkey, idxkey, controlkey=None, sep='\t', outputdir='./', store_time=True, parallel=False, mask_filepath=None, verbose=True, indent='', cluster_mode=False):
 
-    outputdir = resolvepath(outputdir)
+    outputdir = resolvepath.apply(outputdir)
 
     verbose_func = (not parallel)
 
@@ -328,14 +329,14 @@ def process_one_file(filepath, latkey, lonkey, idxkey, controlkey=None, sep='\t'
     return str(span)+'\n'
 
 @export
-def apply(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=None, outputdir='', store_time=True, parallel=False, cpu=None, verbose=True, indent='', controlkey=None, cluster_mode=False):
+def apply(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=None, outputdir='', store_time=True, store_stats=True, overwrite=True, parallel=False, cpu=None, verbose=True, indent='', controlkey=None, cluster_mode=False):
 
     if cluster_mode:
         verbose = False
 
     sep = sep.encode('utf-8').decode('unicode_escape')
 
-    inputdir = resolvepath(inputdir)
+    inputdir = resolvepath.apply(inputdir)
     if not os.path.isdir(inputdir):
         raise FileNotFoundError(f'`island.py` | Directory specified for `inputdir` not found: {inputdir}')
 
@@ -344,7 +345,7 @@ def apply(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=N
     if fileslist is not None:
         if not isinstance(fileslist, str):
             raise TypeError(f'`island.py` | `fileslist` must be a string path')
-        fileslist = resolvepath(fileslist)
+        fileslist = resolvepath.apply(fileslist)
         if not os.path.exists(fileslist):
             raise FileNotFoundError(f'`island.py` | File specified for `fileslist` not found: {fileslist}')
 
@@ -353,7 +354,7 @@ def apply(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=N
     if maskfile is not None:
         if not isinstance(maskfile, str):
             raise TypeError(f'`island.py` | `maskfile` must be a string path')
-        maskfile = resolvepath(maskfile)
+        maskfile = resolvepath.apply(maskfile)
         if not os.path.exists(maskfile):
             raise FileNotFoundError(f'`island.py` | File specified for `maskfile` not found: {maskfile}')
 
@@ -368,7 +369,7 @@ def apply(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=N
     if len(outputdir) == 0:
         outputdir = inputdir
     else:
-        outputdir = resolvepath(outputdir)
+        outputdir = resolvepath.apply(outputdir)
     if 'processed' not in outputdir.split('/'):
         outputdir = join(outputdir,'processed')
     try:
@@ -428,6 +429,13 @@ def apply(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=N
 
     if parallel:
         printv('', verbose=verbose, indent=indent)
+        stats_outputdir = re.sub('processed', '', str(outputdir))
+        if store_time:
+            concat_times(outputdir, outputdir=stats_outputdir, delete=True, overwrite=overwrite, verbose=verbose, indent=indent)
+        if store_stats:
+            land_sea_statistics(outputdir, outputdir=stats_outputdir, overwrite=overwrite, verbose=verbose, indent=indent)
+        printv('', verbose=verbose, indent=indent)
+
     printv(f'TIME : {round(end - start,0)}s', verbose=verbose, indent=indent)
 
     return outputdir
@@ -484,12 +492,15 @@ def list_unprocessed_files(inputdir, outputdir):
 ## Times
 
 @export
-def concat_times(inputdir, outputfile='time.txt', delete=False, overwrite=False):
+def concat_times(inputdir, outputdir='', outputfile='time.txt', delete=False, overwrite=False, verbose=True, indent=''):
 
     files2process = [join(inputdir,file) for file in os.listdir(inputdir) if 'time_' in file]
 
+    if len(outputdir) == 0:
+        outputdir = inputdir
+
     if os.path.dirname(outputfile) == '':
-        directory = join(inputdir,'stats')
+        directory = join(outputdir,'stats')
         try:
             os.mkdir(directory)
         except FileExistsError:
@@ -508,9 +519,9 @@ def concat_times(inputdir, outputfile='time.txt', delete=False, overwrite=False)
                     outputfile_temp += f'.{outputfile[1]}'
             outputfile = outputfile_temp
         else:
-            print(f'WARNING | {ouputfile} will be overwritten')
+            printv(f'WARNING | {outputfile} will be overwritten', verbose=verbose, indent=indent)
 
-    print(f'* Store times in {outputfile}')
+    printv(f'* Store times in {outputfile}', verbose=verbose, indent=indent)
 
     init = True
     columns = ['filename_input', 'machine','time']
@@ -540,7 +551,7 @@ def concat_times(inputdir, outputfile='time.txt', delete=False, overwrite=False)
 ## Land/sea/coast statistics
 
 @export
-def land_sea_statistics(inputdir, outputfile='statistics.txt', sep='\t', overwrite=False):
+def land_sea_statistics(inputdir, outputdir='', outputfile='statistics.txt', sep='\t', overwrite=False, verbose=True, indent=''):
 
     sep = sep.encode('utf-8').decode('unicode_escape')
 
@@ -548,7 +559,7 @@ def land_sea_statistics(inputdir, outputfile='statistics.txt', sep='\t', overwri
 
     # Compute statistics
 
-    print(f'* Compute land/sea/coast statistics ({len(files)} files)')
+    printv(f'* Compute land/sea/coast statistics ({len(files)} files)', verbose=verbose, indent=indent)
 
     stats=[]
     for filepath in files:
@@ -586,15 +597,18 @@ def land_sea_statistics(inputdir, outputfile='statistics.txt', sep='\t', overwri
         del df
 
         if ((len(stats)+1)%100) == 0:
-            print(f'Processing | {len(stats)+1} files done')
+            printv(f'Processing | {len(stats)+1} files done', verbose=verbose, indent=indent)
 
     stats = pd.DataFrame(stats, columns=['filename_output','filename_input','mask_0','mask_1','mask_2','sea','land'])
     stats['pct_coast'] = np.round(stats['mask_2']/stats[['mask_0','mask_1','mask_2']].sum(axis=1),2)
 
     # Store
 
+    if len(outputdir) == 0:
+        outputdir = inputdir
+
     if os.path.dirname(outputfile) == '':
-        directory = join(inputdir,'stats')
+        directory = join(outputdir,'stats')
         try:
             os.mkdir(directory)
         except FileExistsError:
@@ -613,10 +627,10 @@ def land_sea_statistics(inputdir, outputfile='statistics.txt', sep='\t', overwri
                     outputfile_temp += f'.{outputfile[1]}'
             outputfile = outputfile_temp
         else:
-            print(f'WARNING | {ouputfile} will be overwritten')
+            printv(f'WARNING | {outputfile} will be overwritten', verbose=verbose, indent=indent)
 
 
-    print(f'* Store land/sea/coast statistics in {outputfile}')
+    printv(f'* Store land/sea/coast statistics in {outputfile}', verbose=verbose, indent=indent)
     stats.to_csv(outputfile, sep=sep, mode='w', index=False)
 
     return stats
