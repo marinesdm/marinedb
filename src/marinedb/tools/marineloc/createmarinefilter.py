@@ -4,6 +4,7 @@
 # External import
 
 import os
+import glob
 import time
 import argparse
 import numpy as np
@@ -32,7 +33,7 @@ def write(df, txt_filename, sep='\t', init=False):
 
     return True
 
-def extract_marine_locations(inputdir, latkey, lonkey, idxkey, controlkey=None, sep='\t', fileslist=None, maskfile=None, outputdir='', store_time=True, parallel=False, cpu=None, verbose=True, indent=''):
+def extract_marine_locations(inputdir, latkey, lonkey, idxkey, controlkey=None, sep='\t', fileslist=None, maskfile=None, outputdir='', store_time=True, store_stats=True, parallel=False, cpu=None, verbose=True, indent=''):
 
     sep = sep.encode('utf-8').decode('unicode_escape')
 
@@ -48,6 +49,7 @@ def extract_marine_locations(inputdir, latkey, lonkey, idxkey, controlkey=None, 
               'parallel': parallel,
               'cpu': cpu,
               'store_time': store_time,
+              'store_stats': store_stats,
               'verbose': verbose,
               'indent': indent
              }
@@ -85,11 +87,16 @@ def extract_marine_indices(inputdir, controlkey=None, outputfile='marine_filter'
 
     printv(f'* Deduplicate entries across the {Nfiles} files in {inputdir}', verbose=verbose, indent=indent + '  ')
 
-    files2process = pd.DataFrame(files, columns=['filepath'])
-    files2process['basename'] = ['_'.join(os.path.basename(file).split('_')[:-1]) for file in files2process['filepath']] # format: 'inputfilename_device'
-    files2process = files2process.drop_duplicates(subset=['basename'], keep='first', ignore_index=True)
-    files = files2process['filepath'].tolist()
-    del files2process
+#    files2process = pd.DataFrame(files, columns=['filepath'])
+#    files2process['basename'] = ['_'.join(os.path.basename(file).split('_')[:-1]) for file in files2process['filepath']] # format: 'inputfilename_device'
+#    files2process = files2process.drop_duplicates(subset=['basename'], keep='first', ignore_index=True)
+#    files = files2process['filepath'].tolist()
+#    del files2process
+    unique_files = {}
+    for f in files:
+        basename = os.path.basename(f).rsplit('_', 1)[0]
+        unique_files.setdefault(basename, f)
+    files = list(unique_files.values())
 
     # Keep only the indices corresponding to locations not classified as land
 
@@ -105,12 +112,13 @@ def extract_marine_indices(inputdir, controlkey=None, outputfile='marine_filter'
         process = tqdm(files, total=len(files), desc=indent + '  Progress')
     else:
         process = files
+
     for file in process:
 
         df_file = pd.read_csv(file, sep=sep, engine='python')
         df_file = df_file[~df_file['island']]
 
-        if init_array and len(df_file) != 0:
+        if init_array and (len(df_file) != 0):
 
             marinedata = df_file[columns].values
             init_array = False
@@ -138,7 +146,7 @@ def extract_marine_indices(inputdir, controlkey=None, outputfile='marine_filter'
     return outputfile
 
 @export
-def apply(inputdir, latkey, lonkey, idxkey, controlkey=None, sep='\t', fileslist=None, maskfile=None, outputdir='', store_time=True, parallel=False, cpu=None, outputfile='marine_filter', verbose=True, indent=''):
+def apply(inputdir, latkey, lonkey, idxkey, controlkey=None, sep='\t', fileslist=None, maskfile=None, outputdir='', store_time=True, store_stats=True, parallel=False, cpu=None, outputfile='marine_filter', cleanup=True, verbose=True, indent=''):
 
     sep = sep.encode('utf-8').decode('unicode_escape')
 
@@ -155,6 +163,7 @@ def apply(inputdir, latkey, lonkey, idxkey, controlkey=None, sep='\t', fileslist
                         'parallel': parallel,
                         'cpu': cpu,
                         'store_time': store_time,
+                        'store_stats': store_stats,
                         'verbose': verbose,
                         'indent': indent
                        }
@@ -173,6 +182,27 @@ def apply(inputdir, latkey, lonkey, idxkey, controlkey=None, sep='\t', fileslist
                        }
 
     outputfile = extract_marine_indices(**params_marineidx)
+
+    if cleanup: # NEW NEW NEW
+
+        printv('* Cleaning up intermediate files', verbose=verbose, indent=indent)
+
+        files = glob.glob(os.path.join(inputdir, '*'))
+        files += [os.path.join(outputdir,file)
+                  for file in os.listdir(outputdir)
+                  if os.path.isfile(os.path.join(outputdir,file)) and ('time' not in file) and ('filter' not in file)]
+
+        for file in files:
+            printv(f'  >>> {file}', verbose=verbose, indent=indent)
+            os.remove(file)
+
+        if len(os.listdir(inputdir)) == 0:
+            printv(f'  >>> {inputdir}', verbose=verbose, indent=indent)
+            os.rmdir(inputdir)
+
+        if len(os.listdir(outputdir)) == 0:
+            printv(f'  >>> {outputdir}', verbose=verbose, indent=indent)
+            os.rmdir(outputdir)
 
     return outputfile
 
