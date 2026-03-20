@@ -22,9 +22,19 @@ __all__ = ['apply']
 
 CHUNKSIZE = 100000
 
-def apply(inputfile, latkey='', lonkey='', idxkey='', controlkey='', uncompressed_chunks_dir='',  sep='\t', fileslist=None, kernel_type=None, kernel_size=None, maskfile=None, chunksize=CHUNKSIZE, split_type='', keep_mask=False, outputdir='', store_time=True, parallel=False, cpu=None, filterfile='marine_filter', outputfile='', verbose=True, indent=''):
+def apply(inputfile, latkey='', lonkey='', idxkey='', controlkey='', uncompressed_chunks_dir='',  sep='\t', split_type='', chunksize=CHUNKSIZE, fileslist=None, kernel_type=None, kernel_size=None, maskfile=None, keep_mask=False, outputdir='./marineloc', store_time=True, store_stats=True, parallel=False, cpu=None, filterfile='marine_filter', outputfile='', cleanup=True, verbose=True, indent=''):
 
     sep = sep.encode('utf-8').decode('unicode_escape')
+
+    if len(outputdir) == 0:
+        outputdir = './marineloc'
+    if 'marineloc' not in outputdir.split('/'):
+        outputdir = os.path.join(outputdir, 'marineloc')
+
+    try:
+        os.mkdir(outputdir)
+    except FileExistsError:
+        pass
 
     if (len(filterfile) == 0) or ((len(filterfile) != 0) and (not os.path.isfile(filterfile))):
 
@@ -35,32 +45,66 @@ def apply(inputfile, latkey='', lonkey='', idxkey='', controlkey='', uncompresse
 
         # Split the file into CHUNKSIZE-line chunks
 
-        issplitdir = (len(uncompressed_chunks_dir) != 0)
-        if not issplitdir:
-            uncompressed_chunks_dir = os.path.dirname(inputfile)
+        issplitdirname = (len(uncompressed_chunks_dir) != 0)
+        if not issplitdirname:
+            uncompressed_chunks_dir = os.path.join(os.path.dirname(inputfile), 'marineloc')
+        print() # debug
+        print('uncompressed_chunks_dir:', uncompressed_chunks_dir)
+        print()
 
-        isnotempty = os.path.isdir(uncompressed_chunks_dir) and (len(os.listdir(uncompressed_chunks_dir)) != 0)
-        issplit = issplitdir and isnotempty
+        issplitdir = os.path.isdir(uncompressed_chunks_dir)
+        isnotempty = issplitdir and any(os.path.isfile(f) for f in glob.glob(os.path.join(uncompressed_chunks_dir, '*_split*')))
+        issplit = issplitdirname and isnotempty
+        print('issplit', issplit) # debug
         if not issplit:
+
             columns = [latkey, lonkey]
             if len(controlkey) != 0:
                 columns.append(controlkey)
-            uncompressed_chunks_dir = split_pandas_parquet.apply(inputfile, split_type=split_type, columns=columns, sep=sep, chunksize=chunksize, outputdir=uncompressed_chunks_dir, verbose=verbose, indent=indent)
+
+            params = {
+                      'split_type': split_type,
+                      'columns': columns,
+                      'sep': sep,
+                      'chunksize': chunksize,
+                      'outputdir': uncompressed_chunks_dir,
+                      'verbose': verbose,
+                      'indent': indent
+                     }
+
+            uncompressed_chunks_dir = split_pandas_parquet.apply(inputfile, **params)
             idxkey = 'index'
             printv('', verbose=verbose)
-        else:
-            if len(idxkey) == 0:
-                raise ValueError('`marineloc.py` | `idxkey` must be specified when `inputfile` has already been split into multiple files')
 
-        if len(outputdir) == 0:
-            uncompressed_chunks_dir_wo_split = '/'.join(uncompressed_chunks_dir.split('/')[:-1])
-            outputdir = os.path.join(uncompressed_chunks_dir_wo_split,'marineloc')
         else:
-            outputdir = os.path.join(outputdir, 'marineloc')
-        try:
-            os.mkdir(outputdir)
-        except FileExistsError:
-            pass
+
+            printv(
+                f"INFO | Reusing existing split chunks in {uncompressed_chunks_dir}",
+                verbose=verbose,
+                indent=indent
+            )
+
+            if len(idxkey) == 0:
+
+                files = [os.path.isfile(f) for f in glob.glob(os.path.join(uncompressed_chunks_dir, '*_split*'))]
+                print('files :', files)
+                with open(files[0],'r') as f:
+                    header = f.readline().strip('\n').split(sep)
+                if 'index' in header:
+                    idxkey = 'index'
+                else:
+                    raise ValueError('`marineloc.py` | `idxkey` must be specified when `inputfile` has already been split into multiple files')
+
+#        if len(outputdir) == 0:
+#            uncompressed_chunks_dir_wo_split = '/'.join(uncompressed_chunks_dir.split('/')[:-1])
+#            outputdir = os.path.join(uncompressed_chunks_dir_wo_split,'marineloc')
+#        if 'marineloc' not in outputdir.split('/'):
+#            outputdir = os.path.join(outputdir, 'marineloc')
+
+#        try:
+#            os.mkdir(outputdir)
+#        except FileExistsError:
+#            pass
 
         # Generate a mask differentiating land, sea, and coast
 
@@ -106,6 +150,8 @@ def apply(inputfile, latkey='', lonkey='', idxkey='', controlkey='', uncompresse
                                'parallel': parallel,
                                'cpu': cpu,
                                'store_time': store_time,
+                               'store_stats': store_stats,
+                               'cleanup': cleanup,
                                'verbose': verbose,
                                'indent': indent + '   '
                               }
@@ -129,7 +175,7 @@ def apply(inputfile, latkey='', lonkey='', idxkey='', controlkey='', uncompresse
                 pass
 
         if (outputfile is None) or (len(outputfile) == 0):
-            outputfile = getdefaultoutputfile.apply(inputfile, 'marine', outputdir=outputdir, add_processedby=False)
+            outputfile = getdefaultoutputfile.apply(inputfile, 'marineloc', outputdir=outputdir, add_processedby=False, verbose=verbose, indent=indent)
         if len(os.path.dirname(outputfile)) == 0:
             outputfile = os.path.join(outputdir, outputfile)
 
@@ -142,6 +188,7 @@ def apply(inputfile, latkey='', lonkey='', idxkey='', controlkey='', uncompresse
                          'filter_sep': sep,
                          'keep_mask': keep_mask,
                          'outputfile': outputfile,
+                         'cleanup': cleanup,
                          'verbose': verbose,
                          'indent': indent  + '   '
                         }
