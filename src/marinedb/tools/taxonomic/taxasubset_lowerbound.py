@@ -5,6 +5,7 @@
 
 import os
 import json
+import time
 import shutil
 import psutil
 import subprocess
@@ -21,7 +22,6 @@ from marinedb.utils.allexport import export
 from marinedb.utils.printverbose import printv
 from marinedb.utils import getdefaultoutputfile
 
-from marinedb.tools import getcolumnname
 from marinedb.tools.taxonomic import taxasubset_species_identifier
 
 # Global variable
@@ -30,15 +30,21 @@ __all__ = [] # populated using the @export decorator
 
 
 @export
-def lowerbound_subset_inmemory(inputfile, sep='\t', dtypes=None, speciesidkey=None, specieskey=None, genuskey=None, familykey=None, orderkey=None, classkey=None, phylumkey=None, kingdomkey=None, limit=50, flag=False, dropna=False, verbose=True, indent='', outputdir='./', outputfile='', store=True):
+def lowerbound_subset_inmemory(inputfile, sep='\t', dtypes=None, speciesidkey=None, specieskey=None, genuskey=None, familykey=None, orderkey=None, classkey=None, phylumkey=None, kingdomkey=None, limit=50, flag=False, dropna=False, verbose=True, indent='', outputdir='./', outputfile=''):
 
-    if store and (len(outputfile) == 0):
-        raise ValueError(f'`taxasubset.py` | `outputfile` is required when store=True')
+    if len(outputfile) == 0:
+        raise ValueError(f'`taxasubset.py` | `outputfile` is required')
+
+    start = time.time()
+
+    printv(f'* Loading data from {inputfile}', verbose=verbose, indent=indent)
 
     if dtypes is not None:
         df = pd.read_csv(inputfile, sep=sep, dtype=dtypes)
     else:
         df = pd.read_csv(inputfile, sep=sep, low_memory=False)
+
+    nobs_before = len(df)
 
     # Generate species identifiers from taxonomic classification if no `speciesidkey` is provided
 
@@ -68,13 +74,20 @@ def lowerbound_subset_inmemory(inputfile, sep='\t', dtypes=None, speciesidkey=No
     ismissing = pd.isnull(df[speciesidkey])
     isabovelimit[ismissing] = pd.NA
 
-    if (not is_species_id):
+    nspecies = len(count)
+    nspecies_below_limit = (count < limit).sum()
+    pct = round((nspecies_below_limit / nspecies) * 100, 2)
 
-        df.drop(columns=speciesidkey, inplace=True)
+#    if (not is_species_id):
+#
+#        df.drop(columns=speciesidkey, inplace=True)
 
     if flag:
 
         # Flag rows corresponding to taxa with more than `limit` occurrences in the dataset
+
+        printv(f'* Flag species with more than {limit} occurrences', verbose=verbose, indent=indent)
+        printv(f'INFO | {nspecies_below_limit} species below threshold ({pct}%)', verbose=verbose, indent=indent + '  ')
 
         df[f'flag_taxasubset_isabove_{limit}'] = isabovelimit
 
@@ -84,16 +97,23 @@ def lowerbound_subset_inmemory(inputfile, sep='\t', dtypes=None, speciesidkey=No
         #   - corresponding to taxa with less than `limit` occurrences in the dataset
         #   - with missing values in `speciesidkey` if `dropna`
 
+        printv(f'* Filter out species with fewer than {limit} occurrences', verbose=verbose, indent=indent)
+        printv(f'INFO | {nspecies_below_limit} species below threshold ({pct}%)', verbose=verbose, indent=indent + '  ')
+
         isabovelimit[ismissing] = (not dropna)
         df = df[isabovelimit]
 
-    if store:
-        printv(f'* Save to {outputfile}', verbose=verbose, indent=indent)
-        if len(os.path.dirname(outputfile)) == 0:
-            outputfile = os.path.join(outputdir, outputfile)
-        df.to_csv(outputfile, sep=sep, index=False)
+    printv(f'* Save to {outputfile}', verbose=verbose, indent=indent)
+    if len(os.path.dirname(outputfile)) == 0:
+        outputfile = os.path.join(outputdir, outputfile)
+    df.to_csv(outputfile, sep=sep, index=False)
 
-    return outputfile
+    nobs_after = len(df)
+    printv(f'taxasubset (lowerbound) | before: {nobs_before:,d}, after : {nobs_after:,d} ({nobs_after - nobs_before:,d})', verbose=verbose, indent=indent)
+    printv('', verbose=verbose, indent=indent)
+    printv(f'TIME | substep: {round(time.time() - start)}s', verbose=verbose, indent=indent)
+
+    return outputfile, speciesidkey
 
 def store_lines(lines, outputfile, verbose=True, indent=''):
 
@@ -155,6 +175,8 @@ def lowerbound_subset_distributed(inputfile, sep='\t', limit=50, speciesidkey=No
                 f"at least {convertbytes.apply(required_space)} required."
              )
 
+    start = time.time()
+
     # Generate species identifiers from taxonomic classification if no `speciesidkey` is provided
 
     params = {
@@ -173,39 +195,59 @@ def lowerbound_subset_distributed(inputfile, sep='\t', limit=50, speciesidkey=No
                'indent': indent
               }
 
-    species_id_values = taxasubset_species_identifier.apply(inputfile, **params)
+    species_id_values, speciesidkey = taxasubset_species_identifier.apply(inputfile, **params)
+    nobs_before = len(species_id_values)
 
     # Count the number of observations per species
 
     printv(f'* Count observations per species', verbose=verbose, indent=indent)
 
     count = species_id_values.value_counts()
+
+    # Filter out or flag underrepresented species based on threshold
+
     isabovelimit = list(count[count >= limit].index)
     isabovelimit = species_id_values.isin(isabovelimit).astype('boolean')
     ismissing = pd.isnull(species_id_values)
 
     assert len(isabovelimit) == len(ismissing)
 
+    nspecies = len(count)
+    nspecies_below_limit = (count < limit).sum()
+    pct = round((nspecies_below_limit / nspecies) * 100, 2)
+
     ismissing_indices = list(ismissing[ismissing].index)
     if flag:
+
         # Flag rows corresponding to taxa with more than `limit` occurrences in the dataset
+
+        printv(f'* Flag species with more than {limit} occurrences', verbose=verbose, indent=indent)
+        printv(f'INFO | {nspecies_below_limit} species below threshold ({pct}%)', verbose=verbose, indent=indent + '  ')
+
         isabovelimit_indices = isabovelimit[isabovelimit].index
         isabovelimit_indices = sorted(list(set(isabovelimit_indices) - set(ismissing_indices)))
+        nobs_after = nobs_before
+
     else:
+
         # Drop rows:
         #   - corresponding to taxa with less than `limit` occurrences in the dataset
         #   - with missing values in `speciesidkey` if `dropna`
+
+        printv(f'* Filter out species with fewer than {limit} occurrences', verbose=verbose, indent=indent)
+        printv(f'INFO | {nspecies_below_limit} species below threshold ({pct}%)', verbose=verbose, indent=indent + '  ')
+
         isabovelimit[ismissing] = (not dropna)
         isabovelimit_indices = list(isabovelimit[isabovelimit].index)
+        nobs_after = len(isabovelimit_indices)
 
     ismissing_indices = deque(ismissing_indices)
     isabovelimit_indices = deque(isabovelimit_indices)
 
-    printv(f'* Filter or flag species with more than {limit} observations', verbose=verbose, indent=indent)
+#    printv(f'* Filter or flag species with more than {limit} observations', verbose=verbose, indent=indent)
 
     tempfile = os.path.join(outputdir, 'taxasubset_file.temp')
-#    printv(f'INFO | {tempfile} will be overwritten', verbose=verbose, indent=indent)
-
+    check = 0 # debug
     with open(inputfile,'r') as inputdata:
 
         header = inputdata.readline().strip('\n').split(sep)
@@ -222,6 +264,7 @@ def lowerbound_subset_distributed(inputfile, sep='\t', limit=50, speciesidkey=No
             stop = populate_lines(lines, idx, line, isabovelimit_indices, ismissing_indices, sep)
 
             if len(lines) == 100000:
+                check += len(lines) # debug
                 store_lines(lines, tempfile, verbose=verbose, indent=indent)
                 lines.clear()
 
@@ -232,19 +275,28 @@ def lowerbound_subset_distributed(inputfile, sep='\t', limit=50, speciesidkey=No
                 break
 
     if len(lines) != 0:
+        check += len(lines) # debug
         store_lines(lines, tempfile, verbose=verbose, indent=indent)
-        printv(f'Processing | {idx + 1} lines done', verbose=verbose, indent=indent)
+#        printv(f'Processing | {idx + 1} lines done', verbose=verbose, indent=indent)
+
+    assert check == nobs_after #debug
+
+    # Output file
 
     if (outputfile is None) or (len(outputfile) == 0):
         outputfile = getdefaultoutputfile.apply(inputfile, 'taxasubset', outputdir=outputdir)
 
-    printv(f'* Renaming {tempfile} to {outputfile}', verbose=verbose, indent=indent)
+    printv(f'* Renaming {os.path.basename(tempfile)} to {os.path.basename(outputfile)}', verbose=verbose, indent=indent)
     os.rename(tempfile, outputfile)
 
-    return outputfile
+    printv(f'taxasubset (lowerbound) | before: {nobs_before:,d}, after : {nobs_after:,d} ({nobs_after - nobs_before:,d})', verbose=verbose, indent=indent)
+    printv('', verbose=verbose, indent=indent)
+    printv(f'TIME | substep: {round(time.time() - start)}s', verbose=verbose, indent=indent)
+
+    return outputfile, speciesidkey
 
 @export
-def apply(inputfile, sep='\t', limit=50, flag=False, dropna=False, force_distributed=False, speciesidkey=None, specieskey=None, genuskey=None, familykey=None, orderkey=None, classkey=None, phylumkey=None, kingdomkey=None, dtypesfile=None, store=True, outputdir='./', outputfile=None, verbose=True, indent=''):
+def apply(inputfile, sep='\t', limit=50, flag=False, dropna=False, force_distributed=False, speciesidkey=None, specieskey=None, genuskey=None, familykey=None, orderkey=None, classkey=None, phylumkey=None, kingdomkey=None, dtypesfile=None, outputdir='./', outputfile=None, verbose=True, indent=''):
 
     # Filter taxa with less than `limit` occurrences in the dataset
 
@@ -281,13 +333,11 @@ def apply(inputfile, sep='\t', limit=50, flag=False, dropna=False, force_distrib
 
         printv(f'INFO | `taxasubset` will be executed in memory', verbose=verbose, indent=indent)
 
-        params['store'] = store
         if dtypesfile is not None:
             params['dtypes'] = dtypes
 
-        printv(f'* Loading data from {inputfile}', verbose=verbose, indent=indent)
-
-        outputfile = lowerbound_subset_inmemory(inputfile, **params)
+        outputfile, speciesidkey = lowerbound_subset_inmemory(inputfile, **params)
+#        printv('', verbose=verbose, indent=indent)
 
     else:
 
@@ -295,18 +345,21 @@ def apply(inputfile, sep='\t', limit=50, flag=False, dropna=False, force_distrib
 
         printv(f'INFO | `taxasubset` will be executed using distributed computation', verbose=verbose, indent=indent)
 
-        outputfile = lowerbound_subset_distributed(inputfile, **params)
+        outputfile, speciesidkey = lowerbound_subset_distributed(inputfile, **params)
+#        printv('', verbose=verbose, indent=indent)
 
     # Clean
 
     if inputfile !=  outputfile:
         printv(f'* Delete {inputfile}', verbose=verbose, indent=indent)
-        os.remove(inputfile)
+#        os.remove(inputfile) #debug
 
     if flag and (dtypesfile is not None):
         dtypes[f'flag_taxasubset_isabove_{limit}'] = 'boolean'
         with open(dtypesfile,'w') as f:
             json.dump(dtypes, f, indent=4)
 
-    return outputfile
+#    printv('', verbose=verbose, indent=indent)
+
+    return outputfile, speciesidkey
 
