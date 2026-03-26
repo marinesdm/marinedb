@@ -192,10 +192,12 @@ def get_uniqueRawSciname(inputfile, colname, resume=True, store=False, overwrite
     if store:
         store_uniqueRawSciname(unique_rawsciname, outputfile, verbose=verbose, indent=indent)
 
-    printv(f'TIME: {round(time.time()-start)}s', verbose=verbose, indent=indent)
+    printv('', verbose=verbose, indent=indent)
+    printv(f'TIME | substep: {round(time.time()-start)}s', verbose=verbose, indent=indent)
 
     if error != 0:
-        printv(f'ERROR:', verbose=verbose, indent=indent)
+        printv('', verbose=verbose, indent=indent)
+        printv(f'ERROR', verbose=verbose, indent=indent)
         printv(f'SplittingError: {error} observations produced a different number of fields upon splitting compared to the header, and were consequently ignored.', verbose=verbose, indent=indent)
 
     printv('', verbose=verbose)
@@ -1029,7 +1031,8 @@ def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level
     if store:
         writedataframe.to_txt(wormsmatch, outputfile, init=True, verbose=False)
 
-    printv(f'TIME: {round(time.time() - time_start)}s', verbose=verbose, indent=indent)
+    printv('', verbose=verbose)
+    printv(f'TIME | substep: {round(time.time() - time_start)}s', verbose=verbose, indent=indent)
     printv('', verbose=verbose)
 
     # Clean
@@ -1286,7 +1289,8 @@ def match_WoRMSByAcceptedSciname(valid_aphiaID, wormscall=WORMSCALL, species_onl
     if store:
         writedataframe.to_txt(wormsaccepted, outputfile, init=True, verbose=False)
 
-    printv(f'TIME: {round(time.time() - time_start)}s', verbose=verbose, indent=indent)
+    printv('', verbose=verbose)
+    printv(f'TIME | substep: {round(time.time() - time_start)}s', verbose=verbose, indent=indent)
     printv('', verbose=verbose)
 
     if return_filename:
@@ -1431,13 +1435,13 @@ def parallel_WoRMSmatch(wormsfunc, data, wormscall, cpu, max_attempt=3, verbose=
                            cpu -= 1
 
                            printv(f'FAILURE | More than {max_attempt} attempts: slice {id} will be skipped. Please try again later.', verbose=verbose, indent=indent)
-                           printv(f'TIME: {round(time.time()-start)}s', verbose=verbose, indent=indent)
+                           printv(f'[TIME] {round(time.time()-start)}s', verbose=verbose, indent=indent)
                            printv(f'Exception: {future.exception()}', verbose=verbose, indent=indent)
 
                        else:
 
                            printv(f'FAILURE | Retrying slice {id} (attempt n°{count})', verbose=verbose, indent=indent)
-                           printv(f'TIME: {round(time.time()-start)}s', verbose=verbose, indent=indent)
+                           printv(f'[TIME] {round(time.time()-start)}s', verbose=verbose, indent=indent)
                            printv(f'Exception: {future.exception()}', verbose=verbose, indent=indent)
 
                    else:
@@ -1448,7 +1452,7 @@ def parallel_WoRMSmatch(wormsfunc, data, wormscall, cpu, max_attempt=3, verbose=
                        completed += 1
 
                        printv(f'SUCCESS | slice {tasks[future]["id"]} completed ({tasks[future]["count"]} attempt(s))', verbose=verbose, indent=indent)
-                       printv(f'TIME: {round(time.time()-start)}s', verbose=verbose, indent=indent)
+                       printv(f'[TIME] {round(time.time()-start)}s', verbose=verbose, indent=indent)
 
                    tasks.pop(future)
 
@@ -1473,7 +1477,8 @@ def parallel_WoRMSmatch(wormsfunc, data, wormscall, cpu, max_attempt=3, verbose=
     if store_parallel:
         writedataframe.to_txt(wormsmatch, outputfile, init=True, verbose=False)
 
-    printv(f'TIME: {round(time.time() - time_start)}s', verbose=verbose, indent=indent)
+    printv('', verbose=verbose)
+    printv(f'TIME | substep: {round(time.time() - time_start)}s', verbose=verbose, indent=indent)
     printv('', verbose=verbose)
 
     # Clean
@@ -1625,7 +1630,8 @@ def process_partialmatch(wormsfilter, wormsfuncname, parallel, wormscall=WORMSCA
 
         printv(f'* WoRMS filter (partially recognized marine taxa) | 0 unique scientific name', verbose=verbose, indent=indent)
 
-    printv(f'TIME: {round(time.time() - time_start)}s', verbose=verbose, indent=indent)
+    printv('', verbose=verbose)
+    printv(f'TIME | substep: {round(time.time() - time_start)}s', verbose=verbose, indent=indent)
     printv('', verbose=verbose)
 
     return wormsfilter
@@ -1906,7 +1912,8 @@ def create_WoRMSacceptedfilter(unaccepted_aphiaID, wormscall=WORMSCALL, species_
 
         subspecies, cyclic_status, cyclic_valid_AphiaID = process_subspecies(worms_acceptedfilter, parallel, **params_dict)
 
-    printv(f'TIME: {round(time.time() - time_start)}s', verbose=verbose, indent=indent)
+    printv('', verbose=verbose)
+    printv(f'TIME | substep: {round(time.time() - time_start)}s', verbose=verbose, indent=indent)
     printv('', verbose=verbose)
 
     worms_acceptedfilter = worms_acceptedfilter.drop(columns=['cyclic_status','cyclic_valid_AphiaID'])
@@ -1935,6 +1942,7 @@ def create_WoRMSacceptedfilter(unaccepted_aphiaID, wormscall=WORMSCALL, species_
 @export
 def apply(inputfile, colname, wormscall=WORMSCALL, identification_level='species', min_length=3, doublecheck=True, store=True, outputdir='./', overwrite=False, resume=True, resume_mode='soft', parallel=True, max_attempt=10, store_parallel=True, overwrite_parallel=False, resume_parallel=True, verbose=True, indent=''):
 
+    print('indent:', repr(indent)) #debug
     # Parameters
 
     ## Global variables

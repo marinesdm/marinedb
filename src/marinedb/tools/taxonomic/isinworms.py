@@ -1584,7 +1584,7 @@ def apply_matchfilter(classification, matchfilter=None, interactive_mode=False, 
             params_dict['resume_mode'] = 'hard'
             params_store['overwrite'] = False
             params_store['overwrite_parallel'] = False
-            print(species2process) #debug
+#            print(species2process) #debug
             addmatchfilter = call_create_WoRMSrecognizedfilter(species2process, parallel=parallel, verbose=verbose, indent=indent+'   ', **params_store, **params_dict)
             matchfilter = pd.concat([matchfilter,addmatchfilter.loc[:,matchfilter.columns]], axis=0)
 
@@ -2102,8 +2102,8 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
         df, rankin, rankout = getcolumnname.apply(df, rank, 'isinworms', inplace)
         RANK_MAPPING_RENAMED[key] = rankin
         rankcolumns_mapping[rankin] = rankout
-    print('RANK_MAPPING_RENAMED')
-    print(RANK_MAPPING_RENAMED) #debug
+#    print('RANK_MAPPING_RENAMED')
+#    print(RANK_MAPPING_RENAMED) #debug
     rankcolumns = list(RANK_MAPPING_RENAMED.values())
     wormscolumns = list(set(WORMSCALL) - set(RANK_MAPPING_RENAMED.keys()))
     wormscolumns_mapping = {column : column + '_generatedby_isinworms' for column in wormscolumns}
@@ -2171,7 +2171,7 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
     dfByClassification = df.loc[~pd.isnull(df[tempspecies]), columns].fillna('_MISSING_').groupby(columns, dropna=False) #get_group() doesn't work with NaN
     columns[speidx] = RANK_MAPPING_RENAMED['scientificname']
     taxonomy = pd.DataFrame(list(dfByClassification.groups.keys()), columns=columns)
-    print('taxonomy columns:', list(taxonomy.columns)) #debug
+#    print('taxonomy columns:', list(taxonomy.columns)) #debug
 
     # Get WoRMS-accepted classifications associated with these classifications, if any
 
@@ -2184,7 +2184,7 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
         classification = pd.DataFrame([],columns=COLNAMES)
     else:
         classification = clean_taxonomy(taxonomy.replace('_MISSING_',pd.NA), **params, **params_store, **params_parallel)
-    print('taxonomy columns:', list(taxonomy.columns)) #debug
+#    print('taxonomy columns:', list(taxonomy.columns)) #debug
     # Convert WORMS-specific column dtypes
 
     for key, value in WORMS_DTYPES.items():
@@ -2266,12 +2266,12 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
         if len(os.path.dirname(outputfile)) == 0:
             outputfile = os.path.join(outputdir_isinworms, outputfile)
 
-        print('classif columns:', list(classification.columns))
+#        print('classif columns:', list(classification.columns))
         classification = classification.rename(columns=classification_mapping)
-        print('classif columns:', list(classification.columns))
+#        print('classif columns:', list(classification.columns))
         taxonomy_mapping = {v:k for k,v in RANK_MAPPING_RENAMED.items()}
         taxonomy = taxonomy.rename(columns=taxonomy_mapping)
-        print('taxonomy columns:', list(taxonomy.columns))
+#        print('taxonomy columns:', list(taxonomy.columns))
         assert len(taxonomy) == len(classification) #debug
         classification = pd.concat([taxonomy, classification], axis=1)
 
