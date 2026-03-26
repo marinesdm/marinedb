@@ -88,7 +88,8 @@ def filter_parquet(inputfile, filterfile, controlkey=None, filter_sep='\t', outp
 
     # Open the filter file
 
-    count = 0
+    nobs_before = 0
+    nobs_after = 0
     init = True
     init_storage = True
     isendfile = False
@@ -115,7 +116,7 @@ def filter_parquet(inputfile, filterfile, controlkey=None, filter_sep='\t', outp
             while resume:
                 controlkey_value = next(filter, '_END_')
                 if controlkey_value == '_END_':
-                    return count
+                    return nobs_after
                 else:
                     controlkey_value = controlkey_value.strip('\n').split(filter_sep)[filter_controlkey_idx]
                     try:
@@ -126,6 +127,7 @@ def filter_parquet(inputfile, filterfile, controlkey=None, filter_sep='\t', outp
                         resume = False
                     else:
                         nlines += 1
+                        nobs_after += 1
                 if (nlines % 100000) == 0:
                     printv(f'Processing | {nlines} lines', verbose=verbose, indent=indent+'    ')
             init_storage = False
@@ -143,13 +145,17 @@ def filter_parquet(inputfile, filterfile, controlkey=None, filter_sep='\t', outp
 
         for i,batch in enumerate(parquet_file.iter_batches(batch_size=10000)):
 
+            nobs_before += 1
+
             batch_df = batch.to_pandas().convert_dtypes()
+
             isindex = True
             if 'index' not in batch_df.columns:
                 isindex = False
                 batch_df = batch_df.reset_index()
                 batch_df['index'] += 10000*i
                 batch_df['index'] = batch_df['index'].astype('int')
+
             max_batch_index = batch_df.loc[batch_df.index[-1],'index']
 
             if max_batch_index >= index[0]:
@@ -186,7 +192,7 @@ def filter_parquet(inputfile, filterfile, controlkey=None, filter_sep='\t', outp
                 else:
                     data = pd.concat([data, batch_df[header_outputfile].copy(deep=True)], axis=0)
 
-                count += len(batch_df)
+                nobs_after += len(batch_df)
 
                 ## Save data every 1,000,000 lines
 
@@ -198,7 +204,7 @@ def filter_parquet(inputfile, filterfile, controlkey=None, filter_sep='\t', outp
                     del data
 
                 if (max_batch_index%1000000) == 0:
-                    printv(f'Processing | {count} lines done (input file: line {max_batch_index})', verbose=verbose, indent=indent)
+                    printv(f'Processing | {nobs_after} lines done (input file: line {max_batch_index})', verbose=verbose, indent=indent)
 
                 ## Next filter indices
 
@@ -221,7 +227,7 @@ def filter_parquet(inputfile, filterfile, controlkey=None, filter_sep='\t', outp
         printv(f'>>> save {len(data)} marine data to {outputfile}', verbose=verbose, indent=indent)
         writedataframe.to_txt(data, outputfile, init=init_storage, verbose=False)
 
-    return count
+    return nobs_before, nobs_after
 
 def filter_uncompressed_gzip(inputfile, filterfile, controlkey=None, inputfile_sep='\t', filter_sep='\t', outputfile='', verbose=True, indent='', keep_mask=False):
 
@@ -233,8 +239,9 @@ def filter_uncompressed_gzip(inputfile, filterfile, controlkey=None, inputfile_s
     doublecheck = (controlkey is not None) and (len(controlkey) != 0)
 
     data = []
-    count = 0
-    error = 0
+    nobs_before = 0
+    nobs_after = 0
+    nerror = 0
 
     # Open the filter file
 
@@ -280,7 +287,8 @@ def filter_uncompressed_gzip(inputfile, filterfile, controlkey=None, inputfile_s
                 header.insert(0,'marinedb_mask')
 
             with open(outputfile, 'w') as file:
-                file.write(inputfile_sep.join(header))
+#                file.write(inputfile_sep.join(header))
+                file.write('\t'.join(header))
 
             # Read the input file until all entries matching the indices from the filter file have been retrieved
 
@@ -291,13 +299,15 @@ def filter_uncompressed_gzip(inputfile, filterfile, controlkey=None, inputfile_s
 
             for idx, line in enumerate(inputdata):
 
+                nobs_before += 1
+
                 if idx == index:
 
                     obs = decode_line(line).split(inputfile_sep)
 
                     if len(obs) != Ncolumns:
 
-                        error += 1
+                        nerror += 1
                         printv('', verbose=verbose)
                         printv(f'SplittingError: splitting line n°{idx + 2} yields a different number of fields ({len(obs)}) than the header ({Ncolumns}).', verbose=verbose, indent=indent)
                         printv(f'line n°{idx + 2} is skipped : {line}', verbose=verbose, indent=indent)
@@ -322,18 +332,19 @@ def filter_uncompressed_gzip(inputfile, filterfile, controlkey=None, inputfile_s
                         if keep_mask:
                             obs.insert(0,str(int(float(lines[mask_idx]))))
 
-                        data.append(inputfile_sep.join(obs))
+#                        data.append(inputfile_sep.join(obs))
+                        data.append('\t'.join(obs))
 
-                        count += 1
+                        nobs_after += 1
 
                     ## Save data every 100,000 lines
 
-                    if (count%100000) == 0:
+                    if (nobs_after%100000) == 0:
                         store(data, outputfile, verbose=verbose, indent=indent)
                         data.clear()
 
-                    if (count%1000000) == 0:
-                        printv(f'Processing | {count} lines done (input file: line {idx})', verbose=verbose, indent=indent)
+                    if (nobs_after%1000000) == 0:
+                        printv(f'Processing | {nobs_after} lines done (input file: line {idx})', verbose=verbose, indent=indent)
 
                     ## Next filter index
 
@@ -347,7 +358,7 @@ def filter_uncompressed_gzip(inputfile, filterfile, controlkey=None, inputfile_s
     if len(data) != 0:
         store(data, outputfile, verbose=verbose, indent=indent)
 
-    return error, count
+    return nerror, nobs_before, nobs_after
 
 @export
 def apply(inputfile, filterfile, inputfile_format='uncompressed_gzip', controlkey=None, keep_mask=False, inputfile_sep='\t', filter_sep='\t', outputfile='', cleanup=True, verbose=True, indent=''):
@@ -365,24 +376,58 @@ def apply(inputfile, filterfile, inputfile_format='uncompressed_gzip', controlke
     start = time.time()
 
     if inputfile_format == 'parquet':
-        count = filter_parquet(inputfile, filterfile, controlkey=controlkey, filter_sep=filter_sep, outputfile=outputfile, verbose=verbose, indent=indent)
+
+        params = {
+                  'controlkey': controlkey,
+                  'filter_sep': filter_sep,
+                  'outputfile': outputfile,
+                  'verbose': verbose,
+                  'indent': indent
+                 }
+
+        nobs_before, nobs_after = filter_parquet(inputfile, filterfile, **params)
+
     elif (inputfile_format == 'uncompressed_gzip') or (inputfile_format == 'pandas'):
-        error, count = filter_uncompressed_gzip(inputfile, filterfile, controlkey=controlkey, inputfile_sep=inputfile_sep, filter_sep=filter_sep, keep_mask=keep_mask, outputfile=outputfile, verbose=verbose, indent=indent)
-        if error != 0:
+
+        params = {
+                  'controlkey': controlkey,
+                  'inputfile_sep': inputfile_sep,
+                  'filter_sep': filter_sep,
+                  'keep_mask': keep_mask,
+                  'outputfile': outputfile,
+                  'verbose': verbose,
+                  'indent': indent
+                 }
+
+        nerror, nobs_before, nobs_after = filter_uncompressed_gzip(inputfile, filterfile, **params)
+        if nerror != 0:
             printv(f'ERROR:', verbose=verbose, indent=indent)
-            printv(f'SplittingError: {error} observations produced a different number of fields upon splitting compared to the header, and were consequently ignored.', verbose=verbose, indent=indent)
+            printv(f'SplittingError: {nerror} observations produced a different number of fields upon splitting compared to the header, and were consequently ignored.', verbose=verbose, indent=indent)
+
     else:
+
         raise ValueError(f"`filtermarinelocations.py` | '{inputfile_format}' not supported for `inputfile_format`. Must be either 'parquet' or 'uncompressed_gzip'")
 
     end = time.time()
 
     if cleanup: # NEW NEW NEW
+
         printv('* Cleaning up intermediate files', verbose=verbose, indent=indent)
+        printv('', verbose=verbose, indent=indent)
+
         printv(f'  >>> {filterfile}', verbose=verbose, indent=indent)
         os.remove(filterfile)
 
-    printv(f'TIME : {round(end-start,0)}s', verbose=verbose, indent=indent)
-    printv(f'COUNT: {count} marine data', verbose=verbose, indent=indent)
+        filter_outputdir = os.path.dirname(filterfile)
+        if len(os.listdir(filter_outputdir)) == 0:
+            printv(f'  >>> {filter_outputdir}', verbose=verbose, indent=indent)
+            os.rmdir(filter_outputdir)
+
+    printv('', verbose=verbose, indent=indent)
+    printv(f'TIME | substep: {round(end-start,0)}s', verbose=verbose, indent=indent)
+
+    printv('', verbose=verbose, indent=indent)
+    printv(f'marineloc | before: {nobs_before}, after : {nobs_after} ({nobs_after - nobs_before})', verbose=verbose, indent=indent)
 
     return outputfile
 
