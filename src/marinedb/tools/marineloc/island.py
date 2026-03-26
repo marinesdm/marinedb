@@ -436,7 +436,7 @@ def apply(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=N
             land_sea_statistics(outputdir, outputdir=stats_outputdir, overwrite=overwrite, verbose=verbose, indent=indent)
         printv('', verbose=verbose, indent=indent)
 
-    printv(f'TIME : {round(end - start,0)}s', verbose=verbose, indent=indent)
+    printv(f'TIME | substep: {round(end - start,0)}s', verbose=verbose, indent=indent)
 
     return outputdir
 

@@ -87,11 +87,6 @@ def extract_marine_indices(inputdir, controlkey=None, outputfile='marine_filter'
 
     printv(f'* Deduplicate entries across the {Nfiles} files in {inputdir}', verbose=verbose, indent=indent + '  ')
 
-#    files2process = pd.DataFrame(files, columns=['filepath'])
-#    files2process['basename'] = ['_'.join(os.path.basename(file).split('_')[:-1]) for file in files2process['filepath']] # format: 'inputfilename_device'
-#    files2process = files2process.drop_duplicates(subset=['basename'], keep='first', ignore_index=True)
-#    files = files2process['filepath'].tolist()
-#    del files2process
     unique_files = {}
     for f in files:
         basename = os.path.basename(f).rsplit('_', 1)[0]
@@ -141,7 +136,8 @@ def extract_marine_indices(inputdir, controlkey=None, outputfile='marine_filter'
 
     end = time.time()
 
-    printv(f'TIME : {round(end - start,0)}s', verbose=verbose, indent=indent + '  ')
+    printv('', verbose=verbose, indent=indent + '  ')
+    printv(f'TIME | substep: {round(end - start,0)}s', verbose=verbose, indent=indent + '  ')
 
     return outputfile
 
@@ -183,9 +179,12 @@ def apply(inputdir, latkey, lonkey, idxkey, controlkey=None, sep='\t', fileslist
 
     outputfile = extract_marine_indices(**params_marineidx)
 
+    printv('', verbose=verbose)
+
     if cleanup: # NEW NEW NEW
 
         printv('* Cleaning up intermediate files', verbose=verbose, indent=indent)
+        printv('', verbose=verbose, indent=indent)
 
         files = glob.glob(os.path.join(inputdir, '*'))
         files += [os.path.join(outputdir,file)
