@@ -39,6 +39,9 @@ def generate_species_id_distributed(inputfile, is_species_id, columns, sep='\t',
         if missing_columns:
             raise KeyError(f"`taxasubset.py` | Columns {', '.join(missing_columns)} not found in {inputfile}.")
 
+        speciesidkey = 'taxon_id_generatedby_taxasubset'
+        specieskey = columns[0]
+
     else:
 
         _, columns[0], _ = getcolumnname.apply(columns_template, columns[0], '', inplace=True)
@@ -99,7 +102,7 @@ def generate_species_id_distributed(inputfile, is_species_id, columns, sep='\t',
         dfg = dfg.groupby(columns)[other_column]
         species_id_values = dfg.transform(lambda x: next(ngroup_iter), meta=(speciesidkey,'int64')).persist()
 
-        df = df.assign(taxon_id_taxasubset = species_id_values)
+        df = df.assign(taxon_id_generatedby_taxasubset = species_id_values)
         species_id_values = df[speciesidkey].compute().sort_index()
         ismissing1 = df[specieskey].isna().compute()
         ismissing2 = df[columns[1:]].isna().all(axis=1).compute()
@@ -108,7 +111,7 @@ def generate_species_id_distributed(inputfile, is_species_id, columns, sep='\t',
     printv(f"* Delete {tempfile}", verbose=verbose, indent=indent)
     os.remove(tempfile)
 
-    return species_id_values
+    return species_id_values, speciesidkey
 
 def generate_species_id_inmemory(df, is_species_id, columns, verbose=True, indent=''):
 
@@ -116,7 +119,8 @@ def generate_species_id_inmemory(df, is_species_id, columns, verbose=True, inden
 
         printv(f'* Generate species identifiers from taxonomic classification', verbose=verbose, indent=indent)
 
-        speciesidkey = 'taxon_id_taxasubset'
+        speciesidkey = 'taxon_id_generatedby_taxasubset'
+        specieskey = columns[0]
 
         for idx, key in enumerate(columns):
             _, columns[idx], _ = getcolumnname.apply(df, key, '', inplace=True)
@@ -128,7 +132,10 @@ def generate_species_id_inmemory(df, is_species_id, columns, verbose=True, inden
 
         df[speciesidkey] = 0
         df[columns] = df[columns].astype('string')
-        dfg = df.fillna('_MISSING_').groupby(columns)[speciesidkey]
+        dfg = df.copy()
+        dfg[columns] = dfg[columns].fillna('_MISSING_')
+        dfg = dfg.groupby(columns)[speciesidkey]
+#        dfg = df.fillna('_MISSING_').groupby(columns)[speciesidkey]
         ngroup = iter(range(0, dfg.ngroups))
         df[speciesidkey] = dfg.transform(lambda x: next(ngroup)).astype('Int64')
         df.loc[pd.isnull(df[specieskey]) | df[columns[1:]].isnull().all(axis=1), speciesidkey] = pd.NA
@@ -148,6 +155,8 @@ def generate_species_id_inmemory(df, is_species_id, columns, verbose=True, inden
 @export
 def apply(input, distributed, speciesidkey=None, specieskey=None, genuskey=None, familykey=None, orderkey=None, classkey=None, phylumkey=None, kingdomkey=None, sep='\t', outputdir='./', verbose=True, indent=''):
 
+    # Ensure either a species ID column or classification columns are specified
+
     is_partial_classification = (specieskey is None) or (genuskey is None) or (familykey is None) or (orderkey is None) or (classkey is None) or (phylumkey is None) or (kingdomkey is None)
     is_species_id = (speciesidkey is not None)
 
@@ -156,6 +165,8 @@ def apply(input, distributed, speciesidkey=None, specieskey=None, genuskey=None,
 
     if is_species_id and (not is_partial_classification):
         printv(f"INFO | Since `speciesidkey` is provided ('{speciesidkey}'), classification keys will be ignored", verbose=verbose, indent=indent)
+
+    # Generate species identifiers if needed
 
     if not is_species_id:
         columns = [specieskey, genuskey, familykey, orderkey, classkey, phylumkey, kingdomkey]
