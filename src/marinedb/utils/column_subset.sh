@@ -44,7 +44,7 @@ if [[ -z ${outputname+x} ]]; then
     DIR="$(dirname "${filename}")"
     outputname="$(basename "${filename}")"
     outputname="${DIR}/${outputname%.*}_split.txt"
-    echo "-o ${outputname}_split will be the output file name"
+    echo "-o ${outputname} will be the output file name"
 fi
 
 if [[ -z ${delimiter+x} ]] || [[ ${delimiter} == '\t' ]]; then

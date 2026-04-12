@@ -29,8 +29,8 @@ def apply(target):
 
     elif isinstance(target, list | tuple | pd.Series): # python >= 3.10
 
-        target = pd.Series(target).str.replace('^["\s]+|["\s]+$','',regex=True)
-        target = target.str.replace("^['\s]+|['\s]+$",'',regex=True).tolist()
+        target = pd.Series(target).str.replace(r'^["\s]+|["\s]+$','',regex=True)
+        target = target.str.replace(r"^['\s]+|['\s]+$",'',regex=True).tolist()
 
     else:
         raise ValueError(f'`preprocessquotationmark.py` | Type not recognized: {type(target).__name__}')

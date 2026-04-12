@@ -85,6 +85,9 @@ def stdnan(value, nan_values=None, additional_policy=''):
 @export
 def apply(df, key=None, nan_values=None, additional_policy=''):
 
+    if len(df) == 0:
+        return df
+
     visnan = np.vectorize(isnan)
 
     if (key is None) or (len(key) == 0):
