@@ -227,7 +227,7 @@ def overwrite_outputdir_stdnan_dropempty_cleanup(config, inputdir, outputdir, cl
 #                    print()
 
             if 'outputdir' in funcargs:
-                if funcname in ['marineloc', 'createwormsfilters']:
+                if funcname in ['format', 'marineloc', 'createwormsfilters']:
                     print(f"INFO | '{colname}': override the `outputdir` argument in `{funcname}` with the `inputdir_path` value from the configuration file")
                     config[proccat][i][colname][j][funcname]['outputdir'] = inputdir
                     isprint = True
@@ -347,6 +347,7 @@ def update_config_variables(df, config, addcolumns=None):
     for idx, coldict in enumerate(config['variables']):
 
         colname_old = get_key(coldict)
+
         default_dtype = 'string'
         try:
             default_dtype = str(df[colname_old].dtypes)
@@ -421,17 +422,67 @@ def update_config_variables(df, config, addcolumns=None):
         selected_columns = get_keys(config_variables)
         addcolumns = list(set(addcolumns) - set(selected_columns))
 
+        colnames_pattern = sorted(base_colmapping.items(), key=lambda x: len(x[0]), reverse=True)
+        colnames_pattern = "|".join(re.escape(colname_old) for colname_old, _ in colnames_pattern)
+
+#        pattern3 = re.compile(
+#            rf'^(?P<prefix>flag_)?(?P<col1>{colnames_pattern})_(?P<col2>{colnames_pattern})_(?P<col3>{colnames_pattern})(?=_|$)'
+#        )
+#        pattern2 = re.compile(
+#            rf'(?P<prefix>flag_)?(?P<col1>{colnames_pattern})_(?P<col2>{colnames_pattern})(?=_|$)'
+#        )
+#        pattern1 = re.compile(
+#            rf'(?P<prefix>flag_)?(?P<col1>{colnames_pattern})(?=_|$)?'
+#        )
+        pattern = re.compile(
+            rf'^(?P<prefix>flag_)?'
+            rf'(?P<col1>{colnames_pattern})'
+            rf'(?:_(?P<col2>{colnames_pattern}))?'
+            rf'(?:_(?P<col3>{colnames_pattern}))?'
+            rf'(?=_|$)'
+        )
+
         for col in addcolumns:
 
             dtype = str(df[col].dtype)
             dtype = (dtype if (dtype != 'object') else 'string')
             add = {col:{col:dtype}}
 
-            for colname_old, colname_new in base_colmapping.items():
-                if colname_old in col:
-                    col_new = re.sub(colname_old, colname_new, col)
-                    add = {col:{col_new:dtype}}
-                    break
+            m = pattern.match(col)
+            if m:
+                prefix = m.group("prefix") or ""
+                cols = [m.group("col1"), m.group("col2"), m.group("col3")]
+                cols = [base_colmapping[c] for c in cols if c is not None]
+                add = {col:{prefix + "_".join(cols) + col[m.end():]:dtype}}
+
+#            m = pattern3.fullmatch(col)
+#            if m:
+#                prefix = m.group("prefix") or ""
+#                col1 = base_colmapping[m.group("col1")]
+#                col2 = base_colmapping[m.group("col2")]
+#                col3 = base_colmapping[m.group("col3")]
+#                add = {col:{f"{prefix}{col1}_{col2}_{col3}" + col[m.end():]:dtype}}
+#
+#            else:
+#                m = pattern2.fullmatch(col)
+#                if m:
+#                    prefix = m.group("prefix") or ""
+#                    col1 = base_colmapping[m.group("col1")]
+#                    col2 = base_colmapping[m.group("col2")]
+#                    add = {col:{f"{prefix}{col1}_{col2}" + col[m.end():]:dtype}}
+#
+#                else:
+#                    m = pattern1.match(col)
+#                    if m:
+#                        prefix = m.group("prefix") or ""
+#                        col1 = base_colmapping[m.group("col1")]
+#                        add = {col:{f"{prefix}{col1}" + col[m.end():]:dtype}}
+
+#            for colname_old, colname_new in base_colmapping.items():
+#                if colname_old in col:
+#                    col_new = re.sub(colname_old, colname_new, col)
+#                    add = {col:{col_new:dtype}}
+#                    break
 
             config_variables.append(add)
 
@@ -500,7 +551,9 @@ def update_config_postprocessing(config, inputfile, isvariable, is_isinworms, is
 
                 if is_isinworms_verbatim:
 
-                    for idx, original_colname in enumerate(params['isinworms_params']['verbatimcolumn']):
+                    verbatim_columns = config['postprocessing'][idx_step][step_name][idx_proc][proc_name]['isinworms_params']['verbatimcolumn']
+
+                    for idx, original_colname in enumerate(verbatim_columns):
 
                         if isvariable:
                             if (original_colname not in mapping_keys) and (original_colname not in mapping_values):
@@ -575,58 +628,69 @@ def update_config_postprocessing(config, inputfile, isvariable, is_isinworms, is
 def dtypeconversion(df, config, verbose=True, indent=''):
 
     isprint = False
-
     config_variables = config['variables']
 
     for column in config_variables:
 
+        colnames = []
+
         colname_old = get_key(column)
+        colnames.append(colname_old)
+
         if isinstance(column, dict):
             if isinstance(column[colname_old], dict):
                 colname_new = get_key(column[colname_old])
+                colnames.append(colname_new)
                 coltype = column[colname_old][colname_new]
             else:
                 coltype = ''
         else:
             coltype = ''
 
+        colnames = list(set(colnames))
         known_key = (coltype in TYPE.keys())
         known_value = (coltype in TYPE.values())
 
-        if (coltype != ''):
+        for colname in colnames:
 
-            if (known_key or known_value):
+            if (coltype != ''):
 
-                try:
-                    if 'datetime' in coltype:
-                        printv(f"WARNING | When converting '{colname_old}' to datetime, missing days and months will default to the 1st and January", verbose=verbose, indent=indent)
+                if (known_key or known_value):
+
+                    try:
+                        if 'datetime' in coltype:
+                            printv(f"WARNING | When converting '{colname}' to datetime, missing days and months will default to the 1st and January", verbose=verbose, indent=indent)
+                            isprint = True
+                            df = convertdatetype.apply(df, datekey=colname, format='ISO8601')
+                        if known_key:
+                            coltype = TYPE[coltype]
+                            df[colname] = df[colname].astype(coltype)
+                        else:
+                            df[colname] = df[colname].astype(coltype)
+                    except (TypeError, ValueError, KeyError):
+                        printv(f"WARNING | Failed to convert '{colname}' to `{coltype}`", verbose=verbose, indent=indent)
+                        coltype = ''
                         isprint = True
-                        df = convertdatetype.apply(df, datekey=colname_old, format='ISO8601')
-                    if known_key:
-                        df[colname_old] = df[colname_old].astype(TYPE[coltype])
-                    else:
-                        df[colname_old] = df[colname_old].astype(coltype)
-                except (TypeError, ValueError):
-                    printv(f"WARNING | Failed to convert '{colname_old}' to `{coltype}`", verbose=verbose, indent=indent)
-                    coltype = ''
+
+                else:
+
+                    printv(f"INFO | '{colname}': `{coltype}` is not a recognized type", verbose=verbose, indent=indent)
                     isprint = True
+                    try:
+                        df[colname] = df[colname].astype(coltype)
+                    except (TypeError, ValueError):
+                        printv(f"WARNING | Failed to convert '{colname}' to `{coltype}`", verbose=verbose, indent=indent)
+                        isprint = True
+                        coltype = ''
 
-            else:
+            if (coltype == ''):
 
-                printv(f"INFO | '{colname_old}': `{coltype}` is not a recognized type", verbose=verbose, indent=indent)
+                printv(f"INFO | Convert '{colname}' to `str` by default", verbose=verbose, indent=indent)
                 isprint = True
                 try:
-                    df[colname_old] = df[colname_old].astype(coltype)
-                except (TypeError, ValueError):
-                    printv(f"WARNING | Failed to convert '{colname_old}' to `{coltype}`", verbose=verbose, indent=indent)
-                    isprint = True
-                    coltype = ''
-
-        if (coltype == ''):
-
-            printv(f"INFO | Convert '{colname_old}' to `str` by default", verbose=verbose, indent=indent)
-            isprint = True
-            df[colname_old] = df[colname_old].astype('string')
+                    df[colname] = df[colname].astype('string')
+                except KeyError:
+                    printv(f"WARNING | Failed to convert '{colname}' to `str`", verbose=verbose, indent=indent)
 
     if isprint:
         printv('', verbose=verbose)
@@ -636,7 +700,7 @@ def dtypeconversion(df, config, verbose=True, indent=''):
 def curate_data(df, config, config_variables_updated, isvariable, init=False, verbose=True, indent='', partition=None): #debug i
 
     # Standardize the missing values
-
+    print(f'standardize {partition}') #debug
     printv(f'* dataframe', verbose=verbose, indent=indent)
     printv(f'** standardizenan', verbose=verbose, indent=indent)
     printv('', verbose=verbose, indent=indent)
@@ -648,7 +712,7 @@ def curate_data(df, config, config_variables_updated, isvariable, init=False, ve
     # Convert dtypes, if possible
 
     if isvariable:
-
+        print(f'isvariable {partition}') #debug
         dtypes_mapping = get_dtypes(config, key_type='old')
 
         for key,value in dtypes_mapping.items():
@@ -661,7 +725,7 @@ def curate_data(df, config, config_variables_updated, isvariable, init=False, ve
                 pass
 
     # Perform multiple processing steps to curate the dataset
-
+    print(f'processing {partition}') #debug
     df = tools.apply(df, config['processing'], verbose=verbose, indent=indent, partition=partition, outputdir_marinedb=config['outputdir_path'])
 
     # Update `variables` section in `config`
@@ -675,7 +739,7 @@ def curate_data(df, config, config_variables_updated, isvariable, init=False, ve
     if isvariable:
 
         # Select the columns
-
+        print(f'column selection {partition}') #debug
         printv(f'* dataframe', verbose=verbose, indent=indent)
         printv(f'** columnselection', verbose=verbose, indent=indent)
         printv('', verbose=verbose, indent=indent)
@@ -684,7 +748,7 @@ def curate_data(df, config, config_variables_updated, isvariable, init=False, ve
         df = df[list(colnames_mapping.keys())]
 
         # Apply dtype conversion
-
+        print(f'dtype conversion {partition}') #debug
         printv(f'* dataframe', verbose=verbose, indent=indent)
         printv(f'** dtypeconversion', verbose=verbose, indent=indent)
         printv('', verbose=verbose, indent=indent)
@@ -692,7 +756,7 @@ def curate_data(df, config, config_variables_updated, isvariable, init=False, ve
         df = dtypeconversion(df, config_variables_updated, verbose=verbose, indent=indent + '   ')
 
         # Rename the columns
-
+        print(f'rename columns {partition}') #debug
         printv(f'* dataframe', verbose=verbose, indent=indent)
         printv(f'** columnrenaming', verbose=verbose, indent=indent)
         printv('', verbose=verbose, indent=indent)
@@ -747,6 +811,15 @@ def process_one_dataframe(df, config, config_variables_updated, isvariable, outp
         printv(f'>>>>>> {nlines} lines done | TIME : {round(end-start)}s', verbose=verbose)
         printv('', verbose=verbose)
 
+    if cpu_idx is not None: # NEW
+        span = round((end - start))
+        outputdir = os.path.join(outputdir, 'time')
+        if not os.path.isdir(outputdir):
+            os.makedirs(outputdir)
+        timefilepath = os.path.join(outputdir, f'time_' + 'temp%05d' % cpu_idx)
+        with open(timefilepath, 'w', encoding='utf-8') as f:
+            f.write('\t'.join([str(cpu_idx), str(span), str(len(df))]) + '\n')
+
     return config_variables_updated, columns
 
 def read_firstlastindex(inputfile):
@@ -783,7 +856,10 @@ def minmax_consecutive(numbers):
 
 def resume_parallel_processing(outputdir, configfile, config, verbose=True, indent=''):
 
-    fileslist = glob.glob(os.path.join(outputdir, '*'))
+#    fileslist = glob.glob(os.path.join(outputdir, '*'))
+#    fileslist = [file for file in fileslist if os.path.isfile(file)]
+    fileslist = [entry.path for entry in os.scandir(outputdir) if entry.is_file()]
+#    print(fileslist)
     filesnumber = pd.Series(fileslist).str.findall(r'(?<=_temp)[0-9]+')
     if any(filesnumber.str.len() > 1):
         bad_filenames = pd.Series(fileslist)[filesnumber.str.len() > 1].tolist()
@@ -849,7 +925,8 @@ def assemble_outputfile(outputdir, outputfile, columns, cleanup=True):
 
     # Concatenate
 
-    files = sorted(glob.glob(os.path.join(outputdir, '*')))
+#    files = sorted(glob.glob(os.path.join(outputdir, '*')))
+    files = [entry.path for entry in os.scandir(outputdir) if entry.is_file()]
     firstlast_pairs = [read_firstlastindex(f) for f in files]
     files_order = sorted(range(len(files)), key=lambda x: firstlast_pairs[x][0])
 
@@ -963,7 +1040,8 @@ if __name__ == '__main__':
 
     # Output file
 
-    if ('outputfile_path' not in config.keys()) or (len(config['outputfile_path']) == 0) or (config['inputfile_path'] == config['outputfile_path']):
+    outputfile_isequalto_inputfile = (os.path.basename(config['inputfile_path']) == os.path.basename(config['outputfile_path']))
+    if ('outputfile_path' not in config.keys()) or (len(config['outputfile_path']) == 0) or outputfile_isequalto_inputfile:
 
          filename = os.path.basename(config['inputfile_path'])
          name, ext = os.path.splitext(filename)
@@ -1072,10 +1150,10 @@ if __name__ == '__main__':
         format_idx = format_function[0][0]
         format_params = format_function[0][1]['tool'][0]['format']
         format_params['inputfile'] = config['inputfile_path']
-        if 'outputfile' not in format_params.keys():
-            temp = os.path.basename(format_params['inputfile']).split('.')[0]
-            format_params['outputfile'] = temp + '_processedby_format.txt'
-            format_params['outputfile'] = os.path.join(outputdir, format_params['outputfile'])
+#        if 'outputfile' not in format_params.keys():
+#            temp = os.path.basename(format_params['inputfile']).split('.')[0]
+#            format_params['outputfile'] = temp + '_processedby_format.txt'
+#            format_params['outputfile'] = os.path.join(outputdir, format_params['outputfile'])
 
         print('* dataframe')
         print('** format')
@@ -1266,7 +1344,7 @@ if __name__ == '__main__':
             if createwormsfilters_column != isinworms_column:
                 raise ValueError(f"`clean.py` | `createwormsfilters` and `isinworms` must operate on the same column containing scientific names, but received '{createwormsfilters_column}' and '{isinworms_column}' respectively.")
             intersection_args = set(isinworms_createwormsfilters_params.keys()).intersection(set(createwormsfilters_params.keys()))
-            exclude_args = set(['inputfile','identification_level','colname','verbose','indent']) #'store','store_parallel','max_attempt'
+            exclude_args = set(['inputfile','identification_level','colname','verbose','indent','keep_fossil']) #'store','store_parallel','max_attempt'
             intersection_args -= exclude_args
             conflicting_args = [f'`{arg}`' for arg in intersection_args if createwormsfilters_params[arg] != isinworms_createwormsfilters_params[arg]]
             if len(conflicting_args) != 0:
@@ -1391,9 +1469,6 @@ if __name__ == '__main__':
         for col in isinworms_params['verbatimcolumn']:
             if col not in variables:
                 config['variables'].append({col: {col: 'string'}})
-        for col in isinworms_params['verbatimauthorshiponly']:
-            if col not in variables:
-                config['variables'].append({col: {col: 'boolean'}})
 
     ## If `taxasubset` is used with `isinworms`, include 'valid_AphiaID' in the `variables` section
     if is_isinworms and ('taxasubset' in str(config['postprocessing'])):
@@ -1423,7 +1498,8 @@ if __name__ == '__main__':
         # Resume processing
 
         if parallel:
-            if len(os.listdir(outputdir)) != 0:
+            files = [entry.path for entry in os.scandir(outputdir) if entry.is_file() and ('time_' not in entry.name)]
+            if len(files) != 0:
                 print(f'* Restart processing from {outputdir}')
                 resume = True
                 indices2process, lastindex, nbatch, columns, config_variables_updated, config_variables_updated_outputfile = resume_parallel_processing(outputdir, args.config_file, config, verbose=True)
@@ -1591,6 +1667,8 @@ if __name__ == '__main__':
 
                     batch = 0
                     nbatch += cpu_main
+                    print(f'TIME | processing: {round(time.time() - start_processing)}s [total: {round(time.time() - start_cleaning)}s]')
+                    print()
 
         if batch != 0:
 
@@ -1698,6 +1776,11 @@ if __name__ == '__main__':
 
         ## Select and rename columns
 
+        # AJOUTER UN PRINT !
+
+        print(f'--- Selecting and renaming columns ---')
+        print()
+
         with open_file(config['inputfile_path'],'rt', encoding='utf-8') as src:
 
             header_old = src.readline().rstrip('\n').split('\t')
@@ -1722,6 +1805,9 @@ if __name__ == '__main__':
 
                     selected = [fields[idx] for idx in indices]
                     dst.write('\t'.join(selected) + '\n')
+
+                    if ((i+1)%1000000 == 0): # NEW
+                        print(f'Progress | {(i+1):,d} lines done')
 
         # Set up for post-processing
 
@@ -1812,7 +1898,8 @@ if __name__ == '__main__':
 
                     start = time.time()
 
-                    if is_isinworms:
+                    isspeciesidkey = ('speciesidkey' in proc_params.keys()) and proc_params['speciesidkey'] and (len(proc_params['speciesidkey']) != 0)
+                    if is_isinworms or isspeciesidkey:
                         columns = [proc_params['speciesidkey']]
                     else:
                         columns = [proc_params[key] for key in ['specieskey', 'genuskey', 'familykey', 'orderkey', 'classkey', 'phylumkey', 'kingdomkey']]
