@@ -52,24 +52,59 @@ def isyearmismatch(datestr, yearstr, datekey, yearkey):
 
     # STEP N°1: Does `datestr` contain 4-character substrings, i.e, year-like substrings?
 
-    yearmatchiter = re.finditer(r'(^|(?<=[^0-9]))([1-2][0-9]{3})(?=[^0-9]|$)', datestr)
-    cut = [0]
-    for match in yearmatchiter:
-        if len(cut) != 1:
-            # assumption: if one 4-character substring is a year,
-            # then all 4-character substrings are years
-            # remove them from the string to prevent false matches
-            # as only month and day remain to be checked
-            cut += [match.start(), match.end()]
-        if (yearstr in match.group()) and (int(match.group()) <= YEAR_NOW):
-            # year match
-            cut += [match.start(), match.end()]
-    cut.append(len(datestr))
+#    yearmatchiter = re.finditer(r'(^|(?<=[^0-9]))([1-2][0-9]{3})(?=[^0-9]|$)', datestr)
+#    cut = [0]
+#    for match in yearmatchiter:
+#        if len(cut) != 1:
+#            # assumption: if one 4-character substring is a year,
+#            # then all 4-character substrings are years
+#            # remove them from the string to prevent false matches
+#            # as only month and day remain to be checked
+#            cut += [match.start(), match.end()]
+#        if (yearstr in match.group()) and (int(match.group()) <= YEAR_NOW):
+#            # year match
+#            cut += [match.start(), match.end()]
+#    cut.append(len(datestr))
+#
+#    if len(cut) > 2:
+#        mismatch = ' '.join([datestr[i:j] for i,j in zip(cut[0::2],cut[1::2])])
+#    else:
+#        mismatch = datestr
 
-    if len(cut)>2:
-        mismatch = ' '.join([datestr[i:j] for i,j in zip(cut[0::2],cut[1::2])])
-    else:
-        mismatch = datestr
+    mismatch = datestr
+
+    yearmatch = list(re.finditer(r'(^|(?<=[^0-9]))([1-2][0-9]{3})(?=[^0-9]|$)', datestr))
+    if yearmatch:
+
+        # Heuristic:
+        # - If a 4-digit substring matches a 4-digit `yearstr`,
+        #   assume all 4-digit substrings are years and remove them.
+        #   Otherwise, part of years (e.g. "02" in "1902") may incorrectly
+        #   match month/day components during later validation steps.
+        # - If only a 2-digit match is found, this assumption is unsafe
+        #   (e.g. "0223-0323" for February 2023 to March 2023), so only
+        #   remove the matched substring.
+
+        years = [m.group(2) for m in yearmatch]
+
+        # year match
+        found = [
+                 (y.endswith(yearstr) if len(yearstr) == 2 else y == yearstr)
+                 and int(y) <= YEAR_NOW
+                 for y in years
+                ]
+
+        if any(found):
+            if (len(yearstr) == 4):
+                for m in reversed(yearmatch):
+                    mismatch = mismatch[:m.start(2)] + mismatch[m.end(2):]
+            else:
+                index = found.index(True)
+                mismatch = mismatch[:yearmatch[index].start(2)] + mismatch[yearmatch[index].end(2):]
+            mismatch = mismatch.strip()
+
+#        else:
+#            return datestr, f'{datekey.upper()}_{yearkey.upper()}_MISMATCH'
 
     if mismatch == datestr:
 
@@ -96,16 +131,19 @@ def isyearmismatch(datestr, yearstr, datekey, yearkey):
                 if yearmatch:
                     start, end = yearmatch.start(), yearmatch.end()
                     if start == 2:
-                        # the first 2 characters likely represent the thousand and
-                        # hundred digits of the year
-                        if len(yearstr)==2:
-                            mismatch = mismatch[end:]
-                        else:
-                            # as the 4-digit `yearstr` match failed,
-                            # the 2-digit match is likely a false positive
-                            # e.g. '03' from '2003' incorrectly matching '03' from '1903'
+                        if len(yearstr) == 4:
+                            # since no 4-digit `yearstr` match was found,
+                            # a 2-digit match is likely a false positive
+                            # e.g. '03' from '2003' matching '03' from '1903'
+                            # though it may still be valid in some cases
+                            # e.g. '0223-0323' with '2023'
                             return datestr, f'{datekey.upper()}_{yearkey.upper()}_MISMATCH'
+                        else:
+                            # the first 2 characters likely represent the thousand
+                            # and hundred digits of the year
+                            mismatch = mismatch[end:]
                     else:
+                        # insufficient evidence of mismatch
                         mismatch = mismatch[:start] + mismatch[end:]
                 else:
                     return datestr, f'{datekey.upper()}_{yearkey.upper()}_MISMATCH'
@@ -241,7 +279,7 @@ def issingledatemismatch(datestr, datekey, yearstr, yearkey, monthstr=None, mont
         # remove any alphabetic characters and commas
         datestr = re.sub(r'[a-zA-Z]+|,',' ',datestr)
 
-    datestr = re.sub('\s+',' ',datestr)
+    datestr = re.sub(r'\s+',' ',datestr)
 
     # A single date string should not exceed 10 characters
     # e.g. YYYYMMDD, YYMMDD, DD/MM/YYYY, YYYY-MM-DD, YYYY-Www, DD.MM.YYYY ...
@@ -261,7 +299,7 @@ def issingledatemismatch(datestr, datekey, yearstr, yearkey, monthstr=None, mont
     ## Year mismatch
     if (yearstr is not None) and (not pd.isnull(yearstr)):
         mismatch, doesmismatch = isyearmismatch(datestr, yearstr, basedatekey, baseyearkey)
-        mismatch = re.sub('\s+',' ',mismatch).strip()
+        mismatch = re.sub(r'\s+',' ',mismatch).strip()
         if (len(doesmismatch) != 0):
             return prefix + doesmismatch
         if isempty(mismatch):
@@ -270,7 +308,7 @@ def issingledatemismatch(datestr, datekey, yearstr, yearkey, monthstr=None, mont
     ## Month mismatch
     if (monthstr is not None) and (not pd.isnull(monthstr)):
         mismatch, doesmismatch = ismonthmismatch(mismatch, monthstr, basedatekey, basemonthkey)
-        mismatch = re.sub('\s+',' ',mismatch).strip()
+        mismatch = re.sub(r'\s+',' ',mismatch).strip()
         if (len(doesmismatch) != 0):
             return prefix + doesmismatch
         if isempty(mismatch):
@@ -279,7 +317,7 @@ def issingledatemismatch(datestr, datekey, yearstr, yearkey, monthstr=None, mont
     ## Day mismatch
     if (daystr is not None) and (not pd.isnull(daystr)):
         mismatch, doesmismatch = isdaymismatch(mismatch, daystr, basedatekey, basedaykey)
-        mismatch = re.sub('\s+',' ',mismatch).strip()
+        mismatch = re.sub(r'\s+',' ',mismatch).strip()
         if (len(doesmismatch) != 0):
             return prefix + doesmismatch
         if isempty(mismatch):
