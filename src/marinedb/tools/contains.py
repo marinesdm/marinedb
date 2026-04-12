@@ -36,8 +36,8 @@ def apply(df, key, values, flag=False, minimize_flagname=False, flagname_mapping
 
     try:
         df = doesnotcontain.apply(df, key, values, **params)
-    except ValueError as err:
-        raise ValueError(f"`contains.py` | {str(err).split('|')[-1]}")
+    except Exception as err:
+        raise type(err)(f"`contains.py` | {str(err).split('|')[-1]}") from err
 
     diff_columns = list(set(df.columns) - columns_before)
     doesnotcontain_flagcolumn = [col for col in diff_columns if (f'flag_{key}_doesnotcontain' in col)]
@@ -51,8 +51,8 @@ def apply(df, key, values, flag=False, minimize_flagname=False, flagname_mapping
     df.loc[ismissing, doesnotcontain_flagcolumn] = dropna
 
     doescontain = (~df[doesnotcontain_flagcolumn])
-    if any(doescontain): #debug
-        print(df.loc[doescontain,key])
+#    if any(doescontain): #debug
+#        print(df.loc[doescontain,key])
 
     # Clean
 
