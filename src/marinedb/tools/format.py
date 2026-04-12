@@ -48,11 +48,16 @@ def apply(inputfile, dataset_name, outputfile=None, outputdir=None, overwrite=Tr
         outputfile = temp[0] + '_processedby_format'
         if len(temp) == 2:
             outputfile += f'.{temp[1]}'
-        outputfile = resolvepath.apply(outputfile)
+
     if outputdir is None:
-        outputdir = os.path.dirname(resolvepath.apply(inputfile))
+        if len(os.path.dirname(outputfile)) != 0:
+            outputdir = os.path.dirname(resolvepath.apply(outputfile))
+        else:
+            outputdir = os.path.dirname(resolvepath.apply(inputfile))
+
     if len(os.path.dirname(outputfile)) == 0:
         outputfile = os.path.join(outputdir, outputfile)
+    outputfile = resolvepath.apply(outputfile)
 
     if os.path.isfile(outputfile):
         if overwrite:
