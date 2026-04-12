@@ -4,6 +4,7 @@
 # External import
 
 import os
+import glob
 import pandas as pd
 
 # Internal import
@@ -86,10 +87,11 @@ def apply(inputfile, latkey='', lonkey='', idxkey='', controlkey='', uncompresse
 
             if len(idxkey) == 0:
 
-                files = [os.path.isfile(f) for f in glob.glob(os.path.join(uncompressed_chunks_dir, '*_split*'))]
-#                print('files :', files)
+                files = [f for f in glob.glob(os.path.join(uncompressed_chunks_dir, '*_split*')) if os.path.isfile(f)]
+
                 with open(files[0],'r') as f:
                     header = f.readline().strip('\n').split(sep)
+
                 if 'index' in header:
                     idxkey = 'index'
                     printv(f"INFO | `idxkey` set to 'index'", verbose=verbose, indent=indent)
