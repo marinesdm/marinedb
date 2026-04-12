@@ -38,7 +38,7 @@ def execute_java(multiple_datestr, verbose=True, indent=''): #verbose indent deu
 
     # Execute the java command
 
-    cmd = ['java', '-jar', JAR_PATH, multiple_datestr]
+    cmd = ['java', '-XX:+PerfDisableSharedMem', '-jar', JAR_PATH, multiple_datestr]
 
     p = subprocess.Popen(
         cmd,
@@ -60,7 +60,7 @@ def execute_java(multiple_datestr, verbose=True, indent=''): #verbose indent deu
             elif ('ERROR' in line) or ('JAVAEXCEPTION' in line):
                 stderr.append(line)
             else:
-                raise Exception(f'`parsedate.py` | [DEV] Unexpected output for {keys[i]}: {line}')
+                raise Exception(f'`parsedate.py` | [DEV] Unexpected output : {line}')
         elif nsep == 2:
             single_datestr = re.search(r'DATE=(.*)\s',line).group(1)
             single_ordering = re.search(r'ORDERING=(.*)$',line).group(1)
@@ -69,7 +69,9 @@ def execute_java(multiple_datestr, verbose=True, indent=''): #verbose indent deu
         else:
             raise Exception(f'`parsedate.py` | Unexpected output: more than two equality signs in {line}')
 
-    p.terminate()
+    return_code = p.wait()
+    if return_code != 0:
+        raise Exception(f"`parsedate.py` | Java process failed with code {return_code}")
 
     assert len(stderr) == Ndates
     assert len(stdout) == Ndates
