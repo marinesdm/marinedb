@@ -496,6 +496,9 @@ def concat_times(inputdir, outputdir='', outputfile='time.txt', delete=False, ov
 
     files2process = [join(inputdir,file) for file in os.listdir(inputdir) if 'time_' in file]
 
+    if len(files2process) == 0:
+        return None
+
     if len(outputdir) == 0:
         outputdir = inputdir
 
@@ -556,6 +559,9 @@ def land_sea_statistics(inputdir, outputdir='', outputfile='statistics.txt', sep
     sep = sep.encode('utf-8').decode('unicode_escape')
 
     files = [join(inputdir,file) for file in os.listdir(inputdir) if ('split' in file) and ('time' not in file)]
+
+    if len(files) == 0:
+        return None
 
     # Compute statistics
 
