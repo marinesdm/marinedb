@@ -202,7 +202,7 @@ def clean_string(string):
     string = re.sub(pattern, ' ', string)
 
     # standardize whitespace
-    string = re.sub('\s+', ' ', string)
+    string = re.sub(r'\s+', ' ', string)
 
     # strip
     string = string.strip()
@@ -709,10 +709,15 @@ def match_TaxaByAuthorship(verbatim, candidates, verbatimauthorshiponly=False, d
             candidates_authorships['authorship1'] = candidates_sensusplit.str[0]
             candidates_authorships['authorship2'] = candidates_sensusplit.str[1] # pd.NA if len < 2
             index = candidates_authorships.index.to_list()
+#
+#            for i, authorship in enumerate(candidates_authorships[['authorship1','authorship2']].values):
+#                candidates_authorships.loc[index[i],['date1','author1','more1']] = split_authorship(authorship[0])
+#                candidates_authorships.loc[index[i],['date2','author2','more2']] = split_authorship(authorship[1])
 
-            for i, authorship in enumerate(candidates_authorships[['authorship1','authorship2']].values):
-                candidates_authorships.loc[index[i],['date1','author1','more1']] = split_authorship(authorship[0])
-                candidates_authorships.loc[index[i],['date2','author2','more2']] = split_authorship(authorship[1])
+            for row in candidates_authorships[['authorship1', 'authorship2']].itertuples():
+                idx = row.Index
+                candidates_authorships.loc[idx,['date1','author1','more1']] = split_authorship(row.authorship1)
+                candidates_authorships.loc[idx,['date2','author2','more2']] = split_authorship(row.authorship2)
 
             ## Match authorships, both before and after "sensu", by date and author
 
@@ -804,9 +809,9 @@ def match_TaxaByAuthorship(verbatim, candidates, verbatimauthorshiponly=False, d
                         raise Exception
 
                 if len(idx1) != 0:
-                    candidates.loc[idx1, columns] = candidates_authorships.loc[idx1, list(itemgetter(*columns)(colmap1))].values
+                    candidates.loc[idx1, columns] = candidates_authorships.loc[idx1, list(itemgetter(*columns)(colmap1))].to_numpy()
                 if len(idx2) != 0:
-                    candidates.loc[idx2, columns] = candidates_authorships.loc[idx2, list(itemgetter(*columns)(colmap2))].values
+                    candidates.loc[idx2, columns] = candidates_authorships.loc[idx2, list(itemgetter(*columns)(colmap2))].to_numpy()
 
             # else:
             #   both authorships must match when known
@@ -884,7 +889,7 @@ def match_TaxaByVerbatim(verbatim, candidates, wormscolumns, verbatimauthorshipo
         else:
 
             doesmatch = 'match'
-            classif = [doesmatch,'verbatim_singleMatch'] + candidates.loc[match_idx,wormscolumns].values.flatten().tolist()
+            classif = [doesmatch,'verbatim_singleMatch'] + candidates.loc[match_idx,wormscolumns].to_numpy().flatten().tolist()
             processed = True
 
     else:
@@ -905,7 +910,7 @@ def match_TaxaByVerbatim(verbatim, candidates, wormscolumns, verbatimauthorshipo
 
                 doesmatch = 'match'
                 match_idx = candidates.index[0]
-                classif = [doesmatch,'verbatim_bestAuthorMatch'] + candidates.loc[match_idx,wormscolumns].values.flatten().tolist()
+                classif = [doesmatch,'verbatim_bestAuthorMatch'] + candidates.loc[match_idx,wormscolumns].to_numpy().flatten().tolist()
                 processed = True
 
         if (not processed) and (not candidates['datematch_diff'].isna().all()):
@@ -925,7 +930,7 @@ def match_TaxaByVerbatim(verbatim, candidates, wormscolumns, verbatimauthorshipo
 
                 doesmatch = 'match'
                 match_idx = candidates.index[0]
-                classif = [doesmatch,'verbatim_bestDateMatch'] + candidates.loc[match_idx,wormscolumns].values.flatten().tolist()
+                classif = [doesmatch,'verbatim_bestDateMatch'] + candidates.loc[match_idx,wormscolumns].to_numpy().flatten().tolist()
                 processed = True
 
         if (not processed) and (not candidates['sensu_conflict'].all()):
@@ -947,7 +952,7 @@ def match_TaxaByVerbatim(verbatim, candidates, wormscolumns, verbatimauthorshipo
 
                 doesmatch = 'match'
                 match_idx = candidates.index[0]
-                classif = [doesmatch,'verbatim_noSensuConflict'] + candidates.loc[match_idx,wormscolumns].values.flatten().tolist()
+                classif = [doesmatch,'verbatim_noSensuConflict'] + candidates.loc[match_idx,wormscolumns].to_numpy().flatten().tolist()
                 processed = True
 
     return {'candidates': candidates, 'processed': processed, 'match_idx': match_idx, 'classif': classif}
@@ -1037,7 +1042,7 @@ def match_TaxaByHigherRanks(ranks1, ranks2, fuzzy=True, fixed_allowedMismatch=Fa
     # Full naive matching
     # naive, as it does not account for the level of non-matching ranks
 
-    match.loc[:,'match'] = (match.loc[:,'Nmismatch'].values <= allowedMismatchByNaN.loc[match.loc[:,'Nnan'],'max_mismatch'].values)
+    match.loc[:,'match'] = (match.loc[:,'Nmismatch'].to_numpy() <= allowedMismatchByNaN.loc[match.loc[:,'Nnan'],'max_mismatch'].to_numpy())
 
     return match
 
@@ -1176,7 +1181,7 @@ def match_TaxaByFullClassification(data_classif, worms_classif, check_ambiguity=
 
             doesmatch = 'match'
             match_idx = np.where(match['match'])[0][0]
-            classif = pd.DataFrame([[doesmatch,'classification_singleMatch'] + worms_classif.loc[match_idx,wormscolumns].values.flatten().tolist()], columns=colnames)
+            classif = pd.DataFrame([[doesmatch,'classification_singleMatch'] + worms_classif.loc[match_idx,wormscolumns].to_numpy().flatten().tolist()], columns=colnames)
             processed = True
             check_ambiguity = False
 
@@ -1203,7 +1208,7 @@ def match_TaxaByFullClassification(data_classif, worms_classif, check_ambiguity=
 
                 doesmatch = 'match'
                 match_idx = match_index[0]
-                classif = pd.DataFrame([[doesmatch,'classification_singleAphiaID'] + worms_classif.loc[match_idx,wormscolumns].values.flatten().tolist()], columns=colnames)
+                classif = pd.DataFrame([[doesmatch,'classification_singleAphiaID'] + worms_classif.loc[match_idx,wormscolumns].to_numpy().flatten().tolist()], columns=colnames)
                 processed = True
                 check_ambiguity = False
 
@@ -1289,7 +1294,7 @@ def match_TaxaByFullClassification(data_classif, worms_classif, check_ambiguity=
 
                     doesmatch = 'match'
                     match_idx = candidates.index[0]
-                    classif = pd.DataFrame([[doesmatch,'classification_bestMatch'] + worms_classif.loc[match_idx,wormscolumns].values.flatten().tolist()], columns=colnames)
+                    classif = pd.DataFrame([[doesmatch,'classification_bestMatch'] + worms_classif.loc[match_idx,wormscolumns].to_numpy().flatten().tolist()], columns=colnames)
                     processed = True
 
 
@@ -1324,7 +1329,7 @@ def match_TaxaByFullClassification(data_classif, worms_classif, check_ambiguity=
 
                         doesmatch = 'match'
                         match_idx = candidates.index[0]
-                        classif = pd.DataFrame([[doesmatch,'classification_bestSpeciesName'] + worms_classif.loc[match_idx,wormscolumns].values.flatten().tolist()], columns=colnames)
+                        classif = pd.DataFrame([[doesmatch,'classification_bestSpeciesName'] + worms_classif.loc[match_idx,wormscolumns].to_numpy().flatten().tolist()], columns=colnames)
                         processed = True
 
                 if check_ambiguity and isambiguity:
@@ -1348,7 +1353,7 @@ def match_TaxaByFullClassification(data_classif, worms_classif, check_ambiguity=
 
                     doesmatch = 'match'
                     match_idx = candidates.index[0]
-                    classif = pd.DataFrame([[doesmatch,'classification_allAccepted'] + worms_classif.loc[match_idx,wormscolumns].values.flatten().tolist()], columns=colnames)
+                    classif = pd.DataFrame([[doesmatch,'classification_allAccepted'] + worms_classif.loc[match_idx,wormscolumns].to_numpy().flatten().tolist()], columns=colnames)
                     processed = True
 
 
@@ -1442,7 +1447,7 @@ def match_TaxaByFullClassification(data_classif, worms_classif, check_ambiguity=
 
     if not keep_fossil:
 
-        worms_classif['isExtinct'] = worms_classif['isExtinct'].astype('Int64')
+        worms_classif['isExtinct'] = worms_classif['isExtinct'].astype('Float64').astype('Int64')
         indices = worms_classif[worms_classif['isExtinct'] == 1].index
 
         if match_idx in indices:
@@ -1672,7 +1677,7 @@ def apply_matchfilter(classification, matchfilter=None, interactive_mode=False, 
                 isvalid = False
                 while not isvalid:
                     printv('', verbose=True, indent=indent)
-                    replace = input(indent + f'Do you want to overwrite the data with WoRMS information? (y/n) ')
+                    replace = input(indent + f'[{idx+1}/{nclassification}] Do you want to overwrite the data with WoRMS information? (y/n) ')
                     if (replace != 'y') and (replace != 'n'):
                         printv("Invalid input. Please enter 'y' for yes or 'n' for no", verbose=True, indent=indent)
                     else:
@@ -1847,9 +1852,10 @@ def apply_acceptedfilter(classification, acceptedfilter=None, keep_fossil=False,
 
         acceptedfilter = acceptedfilter.rename(columns=RANK_MAPPING_RENAMED)
         filter = acceptedfilter.set_index(['group'])
-        filter = filter.loc[classification.loc[unaccepted_idx,'valid_AphiaID'].values,:].reset_index()
+        index = classification.loc[unaccepted_idx,'valid_AphiaID'].astype('int64') #NEW
+        filter = filter.loc[index,:].reset_index()
 
-        classification.loc[unaccepted_idx, COLNAMES] = filter[COLNAMES].values
+        classification.loc[unaccepted_idx, COLNAMES] = filter[COLNAMES].to_numpy()
 
         # Remove above species taxa
 
@@ -2041,6 +2047,11 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
     delkeys = list(set(WORMS_DTYPES.keys()) - set(WORMSCALL))
     for key in delkeys:
         del WORMS_DTYPES[key]
+
+    if matchfilter is not None:
+        matchfilter[list(matchfilter.keys())] = matchfilter[list(matchfilter.keys())].astype(WORMS_DTYPES)
+    if acceptedfilter is not None:
+        acceptedfilter[list(matchfilter.keys())] = acceptedfilter[list(matchfilter.keys())].astype(WORMS_DTYPES)
 
     ## Arguments
 
@@ -2241,9 +2252,9 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
         process = classification_indices
     for idx in process:
         # expand harmonized taxonomy to full dataset
-        group = tuple(taxonomy.loc[idx,columns].values)
+        group = tuple(taxonomy.loc[idx,columns].to_numpy())
         indices = dfByClassification.get_group(group).index
-        df.loc[indices, target_columns] = classification.loc[idx, classification_columns].values
+        df.loc[indices, target_columns] = classification.loc[idx, classification_columns].to_numpy()
 
     if check_ambiguity:
         df['issue_isinworms'] = df['issue_isinworms'].astype('string')
