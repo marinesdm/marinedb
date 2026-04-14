@@ -446,6 +446,8 @@ def update_config_variables(df, config, addcolumns=None):
 
             dtype = str(df[col].dtype)
             dtype = (dtype if (dtype != 'object') else 'string')
+            if col[:5] == 'flag_':
+                dtype = 'boolean'
             add = {col:{col:dtype}}
 
             m = pattern.match(col)
@@ -653,6 +655,9 @@ def dtypeconversion(df, config, verbose=True, indent=''):
 
         for colname in colnames:
 
+            if colname not in df.keys():
+                continue
+
             if (coltype != ''):
 
                 if (known_key or known_value):
@@ -671,6 +676,7 @@ def dtypeconversion(df, config, verbose=True, indent=''):
                         printv(f"WARNING | Failed to convert '{colname}' to `{coltype}`", verbose=verbose, indent=indent)
                         coltype = ''
                         isprint = True
+                        print('1',df[colname]) #debug
 
                 else:
 
@@ -682,15 +688,17 @@ def dtypeconversion(df, config, verbose=True, indent=''):
                         printv(f"WARNING | Failed to convert '{colname}' to `{coltype}`", verbose=verbose, indent=indent)
                         isprint = True
                         coltype = ''
+                        print('2',df[colname]) #debug
 
             if (coltype == ''):
 
-                printv(f"INFO | Convert '{colname}' to `str` by default", verbose=verbose, indent=indent)
+                printv(f"INFO | Convert '{colname}' to `string` by default", verbose=verbose, indent=indent)
                 isprint = True
                 try:
                     df[colname] = df[colname].astype('string')
                 except KeyError:
-                    printv(f"WARNING | Failed to convert '{colname}' to `str`", verbose=verbose, indent=indent)
+                    printv(f"WARNING | Failed to convert '{colname}' to `string`", verbose=verbose, indent=indent)
+                    print('3', df[colname]) #debug
 
     if isprint:
         printv('', verbose=verbose)
@@ -700,7 +708,7 @@ def dtypeconversion(df, config, verbose=True, indent=''):
 def curate_data(df, config, config_variables_updated, isvariable, init=False, verbose=True, indent='', partition=None): #debug i
 
     # Standardize the missing values
-    print(f'standardize {partition}') #debug
+
     printv(f'* dataframe', verbose=verbose, indent=indent)
     printv(f'** standardizenan', verbose=verbose, indent=indent)
     printv('', verbose=verbose, indent=indent)
@@ -712,7 +720,7 @@ def curate_data(df, config, config_variables_updated, isvariable, init=False, ve
     # Convert dtypes, if possible
 
     if isvariable:
-        print(f'isvariable {partition}') #debug
+
         dtypes_mapping = get_dtypes(config, key_type='old')
 
         for key,value in dtypes_mapping.items():
@@ -725,7 +733,7 @@ def curate_data(df, config, config_variables_updated, isvariable, init=False, ve
                 pass
 
     # Perform multiple processing steps to curate the dataset
-    print(f'processing {partition}') #debug
+
     df = tools.apply(df, config['processing'], verbose=verbose, indent=indent, partition=partition, outputdir_marinedb=config['outputdir_path'])
 
     # Update `variables` section in `config`
@@ -739,7 +747,7 @@ def curate_data(df, config, config_variables_updated, isvariable, init=False, ve
     if isvariable:
 
         # Select the columns
-        print(f'column selection {partition}') #debug
+
         printv(f'* dataframe', verbose=verbose, indent=indent)
         printv(f'** columnselection', verbose=verbose, indent=indent)
         printv('', verbose=verbose, indent=indent)
@@ -748,7 +756,7 @@ def curate_data(df, config, config_variables_updated, isvariable, init=False, ve
         df = df[list(colnames_mapping.keys())]
 
         # Apply dtype conversion
-        print(f'dtype conversion {partition}') #debug
+
         printv(f'* dataframe', verbose=verbose, indent=indent)
         printv(f'** dtypeconversion', verbose=verbose, indent=indent)
         printv('', verbose=verbose, indent=indent)
@@ -756,7 +764,7 @@ def curate_data(df, config, config_variables_updated, isvariable, init=False, ve
         df = dtypeconversion(df, config_variables_updated, verbose=verbose, indent=indent + '   ')
 
         # Rename the columns
-        print(f'rename columns {partition}') #debug
+
         printv(f'* dataframe', verbose=verbose, indent=indent)
         printv(f'** columnrenaming', verbose=verbose, indent=indent)
         printv('', verbose=verbose, indent=indent)
