@@ -113,7 +113,7 @@ def store_uniqueRawSciname(unique_rawsciname, outputfile, verbose=True, indent='
         f.writelines('\n'.join(['raw_sciname'] + list(unique_rawsciname)))
 
 @export
-def get_uniqueRawSciname(inputfile, colname, resume=True, store=False, overwrite=False, outputdir='./', outputfile='', verbose=True, indent=''):
+def get_uniqueRawSciname(inputfile, colname, resume=True, store=False, overwrite=False, outputdir='./', outputfile='', verbose=True, indent='', bypass=False):
 
     printv(f'* Retrieve unique raw scientific names from {inputfile}', verbose=verbose, indent=indent)
 
@@ -128,7 +128,10 @@ def get_uniqueRawSciname(inputfile, colname, resume=True, store=False, overwrite
 
         if resume:
             printv(f'INFO | {outputfile} already exists and will be used (`resume`={resume})', verbose=verbose, indent=indent)
-            unique_rawsciname = set(pd.read_csv(outputfile, sep='\t').values.flatten())
+            unique_rawsciname = set(pd.read_csv(outputfile, sep='\t').to_numpy().flatten())
+            bypass = True # debug
+            if bypass:
+                return list(unique_rawsciname)
 
         if store:
             if overwrite:
@@ -268,12 +271,12 @@ def format_scinamesForWoRMS_elementwise(raw_sciname, identification_level='speci
             next = True
             keep = False
 
-        elif (identification_level == 'best'): #i.e also len(sciname)>=min_length and min_words==1
+        elif (identification_level == 'best'): # i.e also len(sciname) >= min_length and min_words == 1
 
             next = True
             keep = True
 
-        else: #i.e identification_level=='first' and len(sciname)>=min_length and min_words==1
+        else: # i.e identification_level == 'first' and len(sciname) >= min_length and min_words == 1
 
             next = False
             keep = True
@@ -306,7 +309,7 @@ def format_scinamesForWoRMS_elementwise(raw_sciname, identification_level='speci
                     next = False
                     keep = True
 
-                else: #i.e identification_level=='best' and min_words==1:
+                else: # i.e identification_level=='best' and min_words==1
 
                     ## Keep only the first word
 
@@ -331,7 +334,7 @@ def format_scinamesForWoRMS(raw_scinames, identification_level='species', min_le
 
     if identification_level == 'species':
         min_words = 2
-        min_stringlength = min_words*min_length+1
+        min_stringlength = min_words*min_length + 1
     else:
         min_words = 1
         min_stringlength = min_words*min_length
@@ -349,11 +352,17 @@ def format_scinamesForWoRMS(raw_scinames, identification_level='species', min_le
         return wormsscinames
 
     scinames2process = raw_scinames
+    original_scinames = raw_scinames # NEW
 
     # Solve any encoding problems
 
     try:
         scinames2process = scinames2process.encode('latin-1').decode('utf-8')
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        pass
+
+    try: # NEW
+        original_scinames = original_scinames.encode('latin-1').decode('utf-8')
     except (UnicodeEncodeError, UnicodeDecodeError):
         pass
 
@@ -373,12 +382,12 @@ def format_scinamesForWoRMS(raw_scinames, identification_level='species', min_le
     for match in finditer:
         number = match['number']
         Ndigits = len(number)
-        if (Ndigits <= 3) or (Ndigits>4) or (int(number)>YEAR_NOW) or (int(number)<1600):
+        if (Ndigits <= 3) or (Ndigits > 4) or (int(number) > YEAR_NOW) or (int(number) < 1600):
             cut.append(match.start())
             cut.append(match.end())
     cut.append(len(scinames2process))
 
-    if len(cut)>2:
+    if len(cut) > 2:
         scinames2process = ' '.join([scinames2process[i:j] for i,j in zip(cut[0::2],cut[1::2])])
 
     # Detect two common format errors and process the string accordingly
@@ -419,6 +428,7 @@ def format_scinamesForWoRMS(raw_scinames, identification_level='species', min_le
     # Convert to ASCII format
 
     scinames2process = unidecode(scinames2process)
+    original_scinames = unidecode(original_scinames) # NEW
 
     # Delete numbers
 
@@ -456,7 +466,8 @@ def format_scinamesForWoRMS(raw_scinames, identification_level='species', min_le
 
     # Standardize whitespace
 
-    scinames2process = re.sub(r'\s+',' ',scinames2process)
+    scinames2process = re.sub(r'\s+', ' ', scinames2process)
+    original_scinames = re.sub(r'\s+', ' ', original_scinames) # NEW
 
     # Split by +, |, /, \, &, ;, comma and capital letters
     # e.g. "Tringa (Heteroscelus) brevipesEopsaltria (Eopsaltria) griseogularis" (capital, no more parentheses at this stage)
@@ -477,7 +488,7 @@ def format_scinamesForWoRMS(raw_scinames, identification_level='species', min_le
     preprocessed = []
     Nscinames = len(scinames2process)
 
-    while next and (idx<Nscinames):
+    while next and (idx < Nscinames):
 
         # Standardise the scientific name
 
@@ -496,7 +507,7 @@ def format_scinamesForWoRMS(raw_scinames, identification_level='species', min_le
 
                 sciname = sciname.split()
 
-                if (len(sciname)>2) and (len(sciname[2])<min_length):
+                if (len(sciname) > 2) and (len(sciname[2]) < min_length):
                     sciname = ' '.join(sciname[:2])
                 else:
                     sciname = ' '.join(sciname[:3])
@@ -544,7 +555,9 @@ def format_scinamesForWoRMS(raw_scinames, identification_level='species', min_le
         # When the pre-processed string contains more than two words,
         # try again with only the first two words
 
-        wormsscinames = [item for string in wormsscinames for item in ([string,' '.join(string.split()[:2])] if (string.count(' ')>1) else [string])]
+        wormsscinames = [item for string in wormsscinames for item in ([string,' '.join(string.split()[:2])] if (string.count(' ') > 1) else [string])]
+
+    wormsscinames.append(original_scinames) # NEW
 
     return wormsscinames
 
@@ -612,7 +625,17 @@ def remove_worms_escapecharacters(worms_results):
 
 def process_rank(worms_results, isrecognizedmatch):
 
-    rank = worms_results['rank']
+    try:
+        rank = worms_results['rank']
+    except KeyError as err:
+        print(worms_results) # debug
+        if (worms_results['status'] == 'quarantined') or (worms_results['status'] == 'deleted'):
+            worms_results['rank'] = None
+            rank = worms_results['rank']
+            if 'scientificname' not in worms_results.keys():
+                worms_results['scientificname'] = None
+        else:
+            raise err
 
     if pd.isnull(rank):
         return worms_results
@@ -665,14 +688,14 @@ def process_rank(worms_results, isrecognizedmatch):
 ### Match WoRMS by pre-processed scientific names ###
 
 
-def connect_matchAphiaRecordsByNames(wormsscinames, max_attempt=10, pause_duration=5):
+def connect_matchAphiaRecordsByNames(wormsscinames, extant_only=True, max_attempt=10, pause_duration=5):
 
     global cl
 
     attempt = 0
     while attempt < max_attempt:
         try:
-            return cl.service.matchAphiaRecordsByNames(wormsscinames)
+            return cl.service.matchAphiaRecordsByNames(wormsscinames, marine_only='true', extant_only=extant_only)
         except Exception as err:
             attempt += 1
             if attempt < max_attempt:
@@ -697,7 +720,7 @@ def parse_matchAphiaRecordsByNames(sciname, worms_results, wormscall, species_on
             taxon = remove_worms_escapecharacters(taxon)
             taxon = process_rank(taxon, isrecognizedmatch=True)
 
-            if pd.isnull(taxon['scientificname']) and species_only:
+            if pd.isnull(taxon['scientificname']) and (taxon['status'] not in ['quarantined','deleted']) and species_only: # NEW
 
                 # The taxon is identified at a rank higher than species
 
@@ -712,14 +735,28 @@ def parse_matchAphiaRecordsByNames(sciname, worms_results, wormscall, species_on
                     iswormsissue = get_close_matches(taxon['scientificname'],[sciname],cutoff=0.5)
                     iswormsissue = (len(iswormsissue) == 0)
                     if iswormsissue:
-
                         # Unexpected mismatch between the requested scientific name and the name returned by WoRMS
                         # This issue has been observed to occur intermittently
-                        print('mismatch worms:',taxon['scientificname'])
-                        print('mismatch sciname:',sciname)
+                        print('WARNING | `createwormsfilters`: mismatch worms:',taxon['scientificname'])
+                        print('WARNING | `createwormsfilters`: mismatch sciname:',sciname)
                         taxon[CONTROL_COLUMN] = pd.NA
 
-                classification.append([sciname] + list(itemgetter(*wormscall)(taxon)))
+                if (taxon['status'] in ['quarantined','deleted']): # debug
+                    if len(taxon) != len(wormscall): # debug
+                        print("il n'y a pas tous les champs")
+                        print(sciname)
+                    else:
+                        print('il y a tous les champs')
+                        print(taxon)
+                    classification.append([sciname] + [taxon.get(v, None) for v in wormscall])
+                else:
+                    try: # debug
+                        classification.append([sciname] + list(itemgetter(*wormscall)(taxon)))
+                    except KeyError as err:
+                        print('BIZARRE !!')
+                        print(sciname)
+                        print(taxon)
+                        raise err
 
     else:
         values = [sciname] + [pd.NA]*len(wormscall)
@@ -728,13 +765,16 @@ def parse_matchAphiaRecordsByNames(sciname, worms_results, wormscall, species_on
 
     return classification
 
-def match50_WoRMSBySciname(wormsscinames, wormscall, species_only=True, retry_mode=False):
+def match50_WoRMSBySciname(wormsscinames, wormscall, keep_fossil=True, species_only=True, retry_mode=False):
 
     if isinstance(wormsscinames,str):
         wormsscinames = [wormsscinames]
 
     scinames['scientificname'] = wormsscinames
-    worms_results = connect_matchAphiaRecordsByNames(scinames)
+    worms_results = connect_matchAphiaRecordsByNames(scinames, extant_only=(not keep_fossil))
+    if len(worms_results) != len(wormsscinames): # debug
+        print(wormsscinames)
+        raise Exception
 
     # Keep only the match information specified in `wormscall`
 
@@ -743,11 +783,11 @@ def match50_WoRMSBySciname(wormsscinames, wormscall, species_only=True, retry_mo
     for idx,res in enumerate(worms_results):
 
         classification += parse_matchAphiaRecordsByNames(wormsscinames[idx], res, wormscall, species_only=species_only, retry_mode=retry_mode)
-
+#    print(classification[0]) #debug
     return classification
 
 
-def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level='species', min_length=3, doublecheck=True, retry_mode=False, resume=True, resume_mode='soft', store=True, overwrite=False, return_filename=False, outputdir='./', outputfile='worms_matchfilter.txt', verbose=True, indent='', parallel=False, version=None):
+def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level='species', min_length=3, doublecheck=True, keep_fossil=True, retry_mode=False, resume=True, resume_mode='soft', store=True, overwrite=False, return_filename=False, outputdir='./', outputfile='worms_matchfilter.txt', verbose=True, indent='', parallel=False, version=None):
 
     time_start = time.time()
 
@@ -837,6 +877,8 @@ def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level
                 else:
                     printv(f'UPDATE | {len(raw_scinames)}/{Nscinames} ({round(len(raw_scinames)/Nscinames*100,2)}%) scientific names remaining to process', verbose=verbose, indent=indent)
                     concat = True
+#                    print('HERE 1')
+#                    print(raw_scinames) #debug
 
         if store:
 
@@ -908,7 +950,8 @@ def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level
                     keep = list(set(unique_wormsscinames).intersection(tempdf['wormssciname'].astype('string').tolist()))
                     tempdf = tempdf.set_index('wormssciname').loc[keep,:].reset_index()
 
-                    fullwormsmatch += tempdf[['wormssciname'] + wormscall].values.tolist()
+#                    fullwormsmatch += tempdf[['wormssciname'] + wormscall].to_numpy().tolist()
+                    fullwormsmatch.extend(tempdf[['wormssciname'] + wormscall].itertuples(index=False, name=None))
                     unique_wormsscinames = list(set(unique_wormsscinames) - set(keep))
 
                     if (previous_Nwormsscinames-len(unique_wormsscinames) != 0):
@@ -925,6 +968,8 @@ def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level
                     string_files = ', '.join(resume_files[:-1]) + f' and {resume_files[-1]}'
                 printv(f'INFO | {string_files} will be used (`resume`={resume})', verbose=verbose, indent=indent + '  ')
                 printv(f'UPDATE | {len(unique_wormsscinames)}/{Nwormsscinames} ({round(len(unique_wormsscinames)/Nwormsscinames*100,2)}%) scientific names remaining to process (`resume`={resume})', verbose=verbose, indent=indent + '  ')
+#                print('HERE 2')
+#                print(unique_wormsscinames) # debug
 
         Nwormsscinames = len(unique_wormsscinames)
 
@@ -939,6 +984,13 @@ def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level
         else:
             process = range(nbatch)
 
+        params = {
+                  'wormscall': wormscall,
+                  'keep_fossil': keep_fossil,
+                  'species_only': species_only,
+                  'retry_mode': retry_mode
+                 }
+
         for batch in process:
 
             start = batch*50
@@ -949,11 +1001,11 @@ def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level
 
             ## WoRMS API call
 
-            fullwormsmatch += match50_WoRMSBySciname(unique_wormsscinames[start:end], wormscall=wormscall, species_only=species_only, retry_mode=retry_mode)
+            fullwormsmatch.extend(match50_WoRMSBySciname(unique_wormsscinames[start:end], **params))
 
             ## Save progress
 
-            if (((batch+1)%200) == 0) or (end == Nwormsscinames):
+            if (((batch+1)%100) == 0) or (end == Nwormsscinames): # 200
                 store_fullwormsmatch = pd.DataFrame(fullwormsmatch, columns=['wormssciname']+wormscall)
                 store_fullwormsmatch = astype_Int64(store_fullwormsmatch, wormscall, isrecognizedmatch=True)
                 writedataframe.to_txt(store_fullwormsmatch, tempfile, init=True, verbose=False)
@@ -980,7 +1032,7 @@ def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level
         isduplicated_match = (~pd.isnull(duplicated_wormsmatch[CONTROL_COLUMN])) # duplicated match
         isduplicated_NaN = duplicated_wormsmatch[(~isduplicated_match)].duplicated(subset=['rawsciname'],keep=False) # duplicated NaN
 
-        if sum(isduplicated_NaN)>0:
+        if sum(isduplicated_NaN) > 0:
 
             ## For a given scientific name, several associated pre-processed strings do not match
             ## Keep only one (by default, the first one)
@@ -991,11 +1043,11 @@ def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level
             duplicated_wormsmatch = duplicated_wormsmatch.loc[deduplicate_NaN,:]
 
             isduplicated = duplicated_wormsmatch.duplicated(subset=['rawsciname'],keep=False)
-            if sum(~isduplicated)>0:
+            if sum(~isduplicated) > 0:
 
                 ## Unduplicated raw scientific name
 
-                wormsmatch = pd.concat([wormsmatch,duplicated_wormsmatch.loc[~isduplicated,wormsmatch.columns]],axis=0)
+                wormsmatch = pd.concat([wormsmatch,duplicated_wormsmatch.loc[~isduplicated, wormsmatch.columns]],axis=0)
 
             ## Duplicated raw scientific name
 
@@ -1003,7 +1055,7 @@ def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level
 
             isduplicated_match = (~pd.isnull(duplicated_wormsmatch[CONTROL_COLUMN]))
 
-        if sum(isduplicated_match)>0:
+        if sum(isduplicated_match) > 0:
 
             ## For a given scientific name, several associated pre-processed strings match
             ## Keep only the first one (i.e the one with the best identification level, by construction)
@@ -1011,8 +1063,13 @@ def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level
             duplicated_wormsmatch = duplicated_wormsmatch[isduplicated_match]
             isabovespecies = (duplicated_wormsmatch['match_type'] == 'match_abovespecies')
             duplicated_wormsmatch = pd.concat([duplicated_wormsmatch[~isabovespecies], duplicated_wormsmatch[isabovespecies]],axis=0).reset_index(drop=True) #NEW VÉRIFIER
-            deduplicate_wormsmatch = duplicated_wormsmatch[['rawsciname','wormssciname']].set_index(['rawsciname','wormssciname']).index.unique().to_frame().drop_duplicates(subset=['rawsciname'],keep='first').values
-            deduplicate_wormsmatch = pd.DataFrame(deduplicate_wormsmatch,columns=['rawsciname','wormssciname'])
+#            deduplicate_wormsmatch = duplicated_wormsmatch[['rawsciname','wormssciname']]\
+#                                        .set_index(['rawsciname','wormssciname'])\
+#                                        .index.unique()\
+#                                        .to_frame()\
+#                                        .drop_duplicates(subset=['rawsciname'],keep='first').values
+#            deduplicate_wormsmatch = pd.DataFrame(deduplicate_wormsmatch,columns=['rawsciname','wormssciname']) # pourquoi tant de complexité ???
+            deduplicate_wormsmatch = duplicated_wormsmatch[['rawsciname','wormssciname']].drop_duplicates(subset=['rawsciname'], keep='first')
             deduplicated_wormsmatch = pd.merge(duplicated_wormsmatch, deduplicate_wormsmatch, on=['rawsciname','wormssciname'], how='inner')
 
             wormsmatch = pd.concat([wormsmatch,deduplicated_wormsmatch[wormsmatch.columns]],axis=0)
@@ -1235,7 +1292,7 @@ def match_WoRMSByAcceptedSciname(valid_aphiaID, wormscall=WORMSCALL, species_onl
                 keep = list(set(valid_aphiaID).intersection(tempdf['group'].tolist()))
                 tempdf = tempdf.set_index('group').loc[keep,:].reset_index()
 
-                wormsaccepted += tempdf[colnames].values.tolist()
+                wormsaccepted += tempdf[colnames].to_numpy().tolist()
                 valid_aphiaID = list(set(valid_aphiaID) - set(keep))
 
                 if (previous_NaphiaID-len(valid_aphiaID) != 0):
@@ -1369,6 +1426,8 @@ def parallel_WoRMSmatch(wormsfunc, data, wormscall, cpu, max_attempt=3, verbose=
                     concat = True
                     Ndata = len(data)
                     previous_wormsmatch = astype_Int64(previous_wormsmatch, wormscall, isrecognizedmatch=isrecognizedmatch)
+#                    print('HERE 3')
+#                    print(data) #debug
 
             else:
                 printv(f"INFO | {outputfile} already exists but won't be used (`resume_parallel`={resume_parallel})", verbose=verbose, indent=indent)
@@ -1427,7 +1486,7 @@ def parallel_WoRMSmatch(wormsfunc, data, wormscall, cpu, max_attempt=3, verbose=
                for future in as_completed(tasks):
 
                    if future.exception():
-                       #future.result() #DEBUG
+                       future.result() #DEBUG
                        id, count = retry_WoRMSmatch(wormsfunc, future, tasks, executor, **params)
 
                        if count > max_attempt:
@@ -1491,13 +1550,14 @@ def parallel_WoRMSmatch(wormsfunc, data, wormscall, cpu, max_attempt=3, verbose=
     return outputfile, wormsmatch
 
 
-def parallel_match_WoRMSBySciname(raw_scinames, cpu, wormscall=WORMSCALL, identification_level='species', min_length=3, doublecheck=True, retry_mode=False, max_attempt=3, verbose=True, indent='', outputdir='./', outputfile='worms_matchfilter.txt', resume=True, resume_mode='soft', overwrite=False, store_parallel=True, overwrite_parallel=False, resume_parallel=True, **ignored):
+def parallel_match_WoRMSBySciname(raw_scinames, cpu, wormscall=WORMSCALL, identification_level='species', min_length=3, doublecheck=True, keep_fossil=True, retry_mode=False, max_attempt=3, verbose=True, indent='', outputdir='./', outputfile='worms_matchfilter.txt', resume=True, resume_mode='soft', overwrite=False, store_parallel=True, overwrite_parallel=False, resume_parallel=True, **ignored):
 
     params_match_WoRMSBySciname = {
                                    'wormscall': wormscall,
                                    'identification_level': identification_level,
                                    'min_length': min_length,
                                    'doublecheck': doublecheck,
+                                   'keep_fossil': keep_fossil,
                                    'retry_mode': retry_mode,
                                    'resume': resume,
                                    'resume_mode': resume_mode,
@@ -1600,7 +1660,9 @@ def process_partialmatch(wormsfilter, wormsfuncname, parallel, wormscall=WORMSCA
     # attempt WoRMS matching again (WoRMS API bug)
 
     doesmatch = (~pd.isnull(wormsfilter['status']))
-    isquarantineddeleted = wormsfilter['status'].isin(['match_quarantine','match_deleted'])
+#    doesmatch = (wormsfilter['match_type'] !+ 'nomatch')
+#    isquarantineddeleted = wormsfilter['status'].isin(['match_quarantine','match_deleted'])
+    isquarantineddeleted = wormsfilter['match_type'].isin(['match_quarantine','match_deleted'])
     doeswormsmatchfailed = doesmatch & (~isquarantineddeleted) & pd.isnull(wormsfilter[CONTROL_COLUMN])
     doeswormsmatchfailed = doeswormsmatchfailed[doeswormsmatchfailed].index
 
@@ -1706,8 +1768,8 @@ def process_subspecies(worms_acceptedfilter, parallel, wormscall=WORMSCALL, verb
         index = subspecies.index
         iscircularity = (subspecies['valid_AphiaID'] == worms_acceptedfilter.loc[index,'cyclic_valid_AphiaID'])
 
-        cyclic_status = subspecies['status'].values
-        cyclic_valid_AphiaID = subspecies['group'].values
+        cyclic_status = subspecies['status'].to_numpy()
+        cyclic_valid_AphiaID = subspecies['group'].to_numpy()
 
         # Perform additional processing for unaccepted taxa
 
@@ -1722,12 +1784,12 @@ def process_subspecies(worms_acceptedfilter, parallel, wormscall=WORMSCALL, verb
         donotchange = (condition & islowerthanspecies)
         index = subspecies[donotchange].index
         columns = list(set(subspecies.columns) - set(['group','valid_AphiaID']))
-        subspecies.loc[index,columns] = worms_acceptedfilter.loc[index,columns].values
+        subspecies.loc[index,columns] = worms_acceptedfilter.loc[index,columns].to_numpy()
         subspecies.loc[index,'status'] = worms_acceptedfilter.loc[index,'cyclic_status']
         subspecies.loc[donotchange & (subspecies['status'] == 'subspecies'), 'status'] = 'cycle'
 
         finalchange = (condition & (~islowerthanspecies))
-        subspecies.loc[finalchange,'valid_AphiaID'] = subspecies.loc[finalchange,'group'].values
+        subspecies.loc[finalchange,'valid_AphiaID'] = subspecies.loc[finalchange,'group']
 
         return subspecies, cyclic_status, cyclic_valid_AphiaID
 
@@ -1742,7 +1804,7 @@ def process_subspecies(worms_acceptedfilter, parallel, wormscall=WORMSCALL, verb
 
 
 @export
-def create_WoRMSrecognizedfilter(unique_rawscinames, wormscall=WORMSCALL, identification_level='species', min_length=3, doublecheck=True, store=True, outputdir='./', outputfile='worms_matchfilter.txt', overwrite=False, resume=True, resume_mode='soft', parallel=True, cpu=2, max_attempt=3, store_parallel=True, overwrite_parallel=False, resume_parallel=True, verbose=True, indent=''):
+def create_WoRMSrecognizedfilter(unique_rawscinames, wormscall=WORMSCALL, identification_level='species', min_length=3, doublecheck=True, keep_fossil=True, store=True, outputdir='./', outputfile='worms_matchfilter.txt', overwrite=False, resume=True, resume_mode='soft', parallel=True, cpu=2, max_attempt=3, store_parallel=True, overwrite_parallel=False, resume_parallel=True, verbose=True, indent=''):
 
     if 'cl' not in globals():
         setup(wormscall=wormscall)
@@ -1760,6 +1822,7 @@ def create_WoRMSrecognizedfilter(unique_rawscinames, wormscall=WORMSCALL, identi
                    'identification_level': identification_level,
                    'min_length': min_length,
                    'doublecheck': doublecheck,
+                   'keep_fossil': keep_fossil,
                    'return_filename': True,
                    'retry_mode': False,
                    'resume': resume,
@@ -1834,12 +1897,12 @@ def create_WoRMSacceptedfilter(unaccepted_aphiaID, wormscall=WORMSCALL, species_
             raise ValueError(f'`createwormsfilters.py` | parallel={parallel} and overwrite={overwrite} but overwrite_parallel={overwrite_parallel}')
 
     params_func = {
-                   'wormscall':wormscall,
-                   'species_only':species_only,
-                   'return_filename':True,
-                   'resume':resume,
-                   'resume_mode':resume_mode,
-                   'indent':indent,
+                   'wormscall': wormscall,
+                   'species_only': species_only,
+                   'return_filename': True,
+                   'resume': resume,
+                   'resume_mode': resume_mode,
+                   'indent': indent,
                    'verbose': verbose
                   }
 
@@ -1896,8 +1959,8 @@ def create_WoRMSacceptedfilter(unaccepted_aphiaID, wormscall=WORMSCALL, species_
     ## Resolve cyclic dependencies between identifiers
     ## when retrieving species classification for taxa below species rank
 
-    worms_acceptedfilter['cyclic_valid_AphiaID'] = worms_acceptedfilter['valid_AphiaID'].values
-    worms_acceptedfilter['cyclic_status'] = worms_acceptedfilter['status'].values
+    worms_acceptedfilter['cyclic_valid_AphiaID'] = worms_acceptedfilter['valid_AphiaID']
+    worms_acceptedfilter['cyclic_status'] = worms_acceptedfilter['status']
 
     subspecies, cyclic_status, cyclic_valid_AphiaID = process_subspecies(worms_acceptedfilter, parallel, **params_dict)
 
@@ -1907,7 +1970,7 @@ def create_WoRMSacceptedfilter(unaccepted_aphiaID, wormscall=WORMSCALL, species_
         ## with their accepted parent classification in the WoRMS-accepted filter
 
         index, columns = subspecies.index.tolist(), list(set(subspecies.columns) - set(['group']))
-        worms_acceptedfilter.loc[index, columns] = subspecies.loc[index, columns]
+        worms_acceptedfilter.loc[index, columns] = subspecies.loc[index, columns].to_numpy()
         worms_acceptedfilter.loc[index,'cyclic_status'], worms_acceptedfilter.loc[index,'cyclic_valid_AphiaID'] = cyclic_status, cyclic_valid_AphiaID
 
         subspecies, cyclic_status, cyclic_valid_AphiaID = process_subspecies(worms_acceptedfilter, parallel, **params_dict)
@@ -1942,7 +2005,6 @@ def create_WoRMSacceptedfilter(unaccepted_aphiaID, wormscall=WORMSCALL, species_
 @export
 def apply(inputfile, colname, wormscall=WORMSCALL, identification_level='species', min_length=3, doublecheck=True, store=True, outputdir='./', overwrite=False, resume=True, resume_mode='soft', parallel=True, max_attempt=10, store_parallel=True, overwrite_parallel=False, resume_parallel=True, verbose=True, indent=''):
 
-    print('indent:', repr(indent)) #debug
     # Parameters
 
     ## Global variables
