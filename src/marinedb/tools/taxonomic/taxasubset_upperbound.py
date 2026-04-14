@@ -117,8 +117,14 @@ def select_locations(df, latkey, lonkey, speciesidkey, nloc_per_species, species
             else:
                 printv(f"INFO | '{species}' species has exactly {nloc_per_species} distinct locations at the maximum specified resolution (i.e., {max_resolution})", verbose=verbose, indent=indent)
             # Update the location subset
-            species_location_subset = subset_maxresolution.reset_index()[['index',speciesidkey,'cell']].values.tolist()
-            full_location_subset += species_location_subset
+#            species_location_subset = subset_maxresolution.reset_index()[['index',speciesidkey,'cell']].values.tolist()
+            species_location_subset = list(
+                subset_maxresolution
+                .reset_index()[['index',speciesidkey,'cell']]
+                .itertuples(index=False, name=None)
+            )
+#            full_location_subset += species_location_subset
+            full_location_subset.extend(species_location_subset)
             continue
 
         # Discretize locations using H3 grid at the coarsest resolution
@@ -168,7 +174,12 @@ def select_locations(df, latkey, lonkey, speciesidkey, nloc_per_species, species
                 ## sampled grid cell identifiers
                 sampled_grid_locations = set(subset.loc[sampled_location_indices, 'cell'])
                 ## neighboring grid cell identifiers
-                adjacent_grid_locations = set(np.concatenate(h3params.loc[list(sampled_grid_locations), 'ring_1'].values))
+#                adjacent_grid_locations = set(np.concatenate(h3params.loc[list(sampled_grid_locations), 'ring_1'].values))
+                adjacent_grid_locations = {
+                    cell
+                    for neighbors in h3params.loc[list(sampled_grid_locations), 'ring_1']
+                    for cell in neighbors
+                }
                 # Exclude sampled grid cells and their neighbors from candidate cells to maximize spatial coverage
                 remaining_grid_locations = grid_locations - adjacent_grid_locations
 
@@ -184,7 +195,12 @@ def select_locations(df, latkey, lonkey, speciesidkey, nloc_per_species, species
                     previous_sampled_cells = set(sampled_grid_locations)
                     previous_adjacent_cells = set(adjacent_grid_locations)
                     sampled_grid_locations = remaining_grid_locations
-                    adjacent_grid_locations = set(np.concatenate(h3params.loc[list(sampled_grid_locations), 'ring_1'].values))
+#                    adjacent_grid_locations = set(np.concatenate(h3params.loc[list(sampled_grid_locations), 'ring_1'].values))
+                    adjacent_grid_locations = {
+                        cell
+                        for neighbors in h3params.loc[list(sampled_grid_locations), 'ring_1']
+                        for cell in neighbors
+                    }
 
                 # Update set after sampling
                 remaining_grid_locations = set()
@@ -250,8 +266,14 @@ def select_locations(df, latkey, lonkey, speciesidkey, nloc_per_species, species
             printv(f'INFO | Due to H3 grid edge effects, species {species} will be represented by only {len(sampled_grid_locations)} distinct locations', verbose=verbose, indent=indent)
 
         condition = subset_maxresolution['cell'].isin(sampled_grid_locations)
-        species_location_subset = subset_maxresolution[condition].reset_index()[['index',speciesidkey,'cell']].values.tolist()
-        full_location_subset += species_location_subset
+#        species_location_subset = subset_maxresolution[condition].reset_index()[['index',speciesidkey,'cell']].values.tolist()
+        species_location_subset = list(
+            subset_maxresolution[condition]
+            .reset_index()[['index', speciesidkey, 'cell']]
+            .itertuples(index=False, name=None)
+        )
+#        full_location_subset += species_location_subset
+        full_location_subset.extend(species_location_subset)
 
         if export_process:
             if (export_type == 'both') or (export_type == 'gif'):
@@ -387,9 +409,9 @@ def downsample_observations(df, latkey, lonkey, speciesidkey, maxobs_per_taxon, 
                 species_cell_above = nobs_per_species_per_cell_subset.loc[species_nsamples_above_ncell].index
                 species_above = species_cell_above.get_level_values(speciesidkey)
 
-                increment_nsamples = (nsamples_remaining_per_species.loc[species_above] // ncell_per_species.loc[species_above]).values
+                increment_nsamples = (nsamples_remaining_per_species.loc[species_above] // ncell_per_species.loc[species_above]).to_numpy()
                 nsamples_per_species_per_cell.loc[species_cell_above] += increment_nsamples
-                nsamples_per_species_per_cell.loc[species_cell_above] = (nsamples_per_species_per_cell.loc[species_cell_above].clip(upper=nobs_per_species_per_cell.loc[species_cell_above])).values
+                nsamples_per_species_per_cell.loc[species_cell_above] = nsamples_per_species_per_cell.loc[species_cell_above].clip(upper=nobs_per_species_per_cell.loc[species_cell_above])
 
                 ## species with more discrete locations than the target sample size
 
@@ -412,8 +434,13 @@ def downsample_observations(df, latkey, lonkey, speciesidkey, maxobs_per_taxon, 
             nsamples_per_species_per_cell = nsamples_per_species_per_cell.reset_index()
 
             location_sample = location_sample.set_index([speciesidkey,'cell']).sort_index()
-            for taxon_id, cell, nsamples in nsamples_per_species_per_cell.values:
-                downsample_indices += location_sample.loc[(taxon_id, cell), 'index'].sample(n=nsamples, random_state=downsample_seed).tolist()
+            for taxon_id, cell, nsamples in nsamples_per_species_per_cell.itertuples(index=False, name=None):
+#                downsample_indices += location_sample.loc[(taxon_id, cell), 'index'].sample(n=nsamples, random_state=downsample_seed).tolist()
+                downsample_indices.extend(
+                    location_sample.loc[(taxon_id, cell), 'index']
+                    .sample(n=nsamples, random_state=downsample_seed)
+                    .tolist()
+                )
 
     # Downsample observations
 
