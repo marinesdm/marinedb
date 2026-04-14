@@ -62,17 +62,17 @@ def apply_strategy(df, key, index, strategy):
         ## Year overlap
         isyearmatch = (~pd.isnull(year_start)) & (~pd.isnull(year_end)) & (year_start == year_end)
         match_index = isyearmatch[isyearmatch].index
-        df.loc[match_index, key] = year_start[match_index].astype('str')
+        df.loc[match_index, key] = year_start[match_index].astype(str)
 
         ## Month overlap
         ismonthmatch = isyearmatch & (~pd.isnull(month_start)) & (~pd.isnull(month_end)) & (month_start == month_end)
         match_index = ismonthmatch[ismonthmatch].index
-        df.loc[match_index, key] = df.loc[match_index, key] + '-' + month_start[match_index]
+        df.loc[match_index, key] = df.loc[match_index, key].astype(str) + '-' + month_start[match_index].astype(str)
 
         ## Day overlap
         isdaymatch = isyearmatch & ismonthmatch & (~pd.isnull(day_start)) & (~pd.isnull(day_end)) & (day_start == day_end)
         match_index = isdaymatch[isdaymatch].index
-        df.loc[match_index, key] = df.loc[match_index, key] + '-' + day_start[match_index]
+        df.loc[match_index, key] = df.loc[match_index, key].astype(str) + '-' + day_start[match_index].astype(str)
 
         df[key] = df[key].astype('string')
 
@@ -184,7 +184,7 @@ def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_numb
 
         tempcol = ['start_str','end_str','start','end']
         df.loc[df[flagname],['start_str','end_str']] = df.loc[df[flagname],datekey].astype('string').str.split('/').tolist()
-        df[['start','end']] = df[['start_str','end_str']].astype('string').values
+        df[['start','end']] = df[['start_str','end_str']].astype('string')
         df = convertdatetype.apply(df, datekey='start', format='ISO8601', verbose=verbose, indent=indent)
         df = convertdatetype.apply(df, datekey='end', format='ISO8601', verbose=verbose, indent=indent)
         # Note: unknown month and day are replaced with '01'
@@ -232,8 +232,9 @@ def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_numb
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore', FutureWarning)
                 df[f'{basedatekey}_intervalwidth_generatedby_processdateinterval'] = pd.NA
-                df.loc[df[flagname],f'{basedatekey}_intervalwidth_generatedby_processdateinterval'] = df.loc[df[flagname],'end'].dt.to_pydatetime() - df.loc[df[flagname],'start'].dt.to_pydatetime()
-                df.loc[df[flagname],f'{basedatekey}_intervalwidth_generatedby_processdateinterval'] = df.loc[df[flagname],f'{basedatekey}_intervalwidth_generatedby_processdateinterval'].apply(lambda width: width.days)
+#                df.loc[df[flagname],f'{basedatekey}_intervalwidth_generatedby_processdateinterval'] = df.loc[df[flagname],'end'].dt.to_pydatetime() - df.loc[df[flagname],'start'].dt.to_pydatetime()
+#                df.loc[df[flagname],f'{basedatekey}_intervalwidth_generatedby_processdateinterval'] = df.loc[df[flagname],f'{basedatekey}_intervalwidth_generatedby_processdateinterval'].apply(lambda width: width.days)
+                df.loc[df[flagname],f'{basedatekey}_intervalwidth_generatedby_processdateinterval'] = (df.loc[df[flagname],'end'] - df.loc[df[flagname],'start']).dt.days
                 df[f'{basedatekey}_intervalwidth_generatedby_processdateinterval'] = df[f'{basedatekey}_intervalwidth_generatedby_processdateinterval'].astype('Int64')
 
             if drop_empty and pd.isnull(df[f'{basedatekey}_intervalwidth_generatedby_processdateinterval']).all():
