@@ -299,7 +299,7 @@ def process_one_file(filepath, latkey, lonkey, idxkey, controlkey=None, sep='\t'
 
     data = pd.read_csv(filepath, sep=sep, engine='python')
     data_processed = island(data[latkey], data[lonkey], verbose=verbose_func, indent=indent)
-    data_processed['index'] = data[idxkey].values
+    data_processed['index'] = data[idxkey]
     if (controlkey is not None) and (len(controlkey) != 0):
         data_processed[controlkey] = data[controlkey]
 

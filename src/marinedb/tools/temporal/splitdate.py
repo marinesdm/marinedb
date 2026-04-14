@@ -337,9 +337,9 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', dr
 
     date_split = df.loc[process,datekey].str.split('-')
 
-    df.loc[process,yearkeyout] = date_split.str[0][process].astype('string').values
-    df.loc[process,monthkeyout] = date_split.str[1][process].astype('string').values
-    df.loc[process,daykeyout] = date_split.str[2][process].astype('string').values
+    df.loc[process,yearkeyout] = date_split.str[0][process].astype('string')
+    df.loc[process,monthkeyout] = date_split.str[1][process].astype('string')
+    df.loc[process,daykeyout] = date_split.str[2][process].astype('string')
 
     # Handle date intervals
 

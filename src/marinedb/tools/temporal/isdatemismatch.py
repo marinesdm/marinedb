@@ -350,7 +350,7 @@ def get_mismatchissue(df, batch, paramsK, paramsV, verbose=False, indent=''):
         process = batch
 
     for idx in process:
-        params = dict(zip(paramsK, df.loc[idx,paramsV].astype('string').values.tolist()))
+        params = dict(zip(paramsK, df.loc[idx,paramsV].astype('string').to_numpy().tolist()))
         doesmismatch = issingledatemismatch(**params, **paramskey)
         if len(doesmismatch) == 0:
             doesmismatch = pd.NA

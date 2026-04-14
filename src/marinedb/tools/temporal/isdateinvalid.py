@@ -159,9 +159,9 @@ def apply(df, datekey=None, yearkey=None, monthkey=None, daykey=None, flag=False
 
     if isdate:
         date_split = df.loc[subset, datekey].str.split('-')
-        df.loc[subset, yearkeytemp] = date_split.str[0][subset].astype('Float64').astype('Int64').values
-        df.loc[subset, monthkeytemp] = date_split.str[1][subset].astype('Float64').astype('Int64').values
-        df.loc[subset, daykeytemp] = date_split.str[2][subset].astype('Float64').astype('Int64').values
+        df.loc[subset, yearkeytemp] = date_split.str[0][subset].astype('Float64').astype('Int64')
+        df.loc[subset, monthkeytemp] = date_split.str[1][subset].astype('Float64').astype('Int64')
+        df.loc[subset, daykeytemp] = date_split.str[2][subset].astype('Float64').astype('Int64')
 
         isdatecomplete = subset & (date_split.str.len() >= 2)
 

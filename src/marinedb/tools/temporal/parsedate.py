@@ -98,7 +98,7 @@ def parse_javastdout(single_stdout, single_request):
     return datestr_processed
 
 def parse_java(multiple_datestr, datekey, raise_javaexception=False, verbose=True, indent=''):
-
+#    print('verbose', verbose) # debug
     basedatekey = datekey.split('_processedby_')[0].upper()
 
     # Execute the java command
@@ -208,7 +208,7 @@ def create_javaarg(datesstr_list, format=None):
     return multiple_datestr
 
 def gbif_dateparser(df, datekey, index, format=None, raise_javaexception=False, verbose=True, indent=''):
-
+#    print('verbose', verbose) # debug
     multiple_datesstr = df.loc[index,datekey].tolist()
     multiple_datestr = create_javaarg(multiple_datesstr, format=format)
     result = parse_java(multiple_datestr, datekey, raise_javaexception=raise_javaexception, verbose=verbose, indent=indent)
@@ -241,6 +241,7 @@ def parallel_dateparser(df, datekey, datestr_index, cpu, format=None, raise_java
         # Note: the outputs are returned in the same order as the submissions
         if verbose:
             with tqdmjoblib.apply(tqdm(desc=indent + 'Progress', total=nbatch)) as progress_bar:
+                params['verbose'] = False
                 results = parallel(delayed(gbif_dateparser)(df, datekey, copy.deepcopy(datestr_index[start:end]), **params) for start,end in index_slides)
         else:
             results = parallel(delayed(gbif_dateparser)(df, datekey, copy.deepcopy(datestr_index[start:end]), **params) for start,end in index_slides)
@@ -281,19 +282,19 @@ def assemble_date(df, datekey, datekeyout, yearkey=None, monthkey=None, daykey=N
 #    print(df.loc[date2process,datekey]) #debug
 
     baseyearkey = yearkey.split('_processedby_')[0].upper()
-    df[f'TEMPORARYPARSEDATE_{yearkey}'] = df[yearkey].values
+    df[f'TEMPORARYPARSEDATE_{yearkey}'] = df[yearkey]
     yearkey = f'TEMPORARYPARSEDATE_{yearkey}'
     tempcol = [yearkey]
     joincol = []
     if (monthkey is not None):
         basemonthkey = monthkey.split('_processedby_')[0].upper()
-        df[f'TEMPORARYPARSEDATE_{monthkey}'] = df[monthkey].values
+        df[f'TEMPORARYPARSEDATE_{monthkey}'] = df[monthkey]
         monthkey = f'TEMPORARYPARSEDATE_{monthkey}'
         tempcol.append(monthkey)
         joincol.append(monthkey)
     if (daykey is not None):
         basedaykey = daykey.split('_processedby_')[0].upper()
-        df[f'TEMPORARYPARSEDATE_{daykey}'] = df[daykey].values
+        df[f'TEMPORARYPARSEDATE_{daykey}'] = df[daykey]
         daykey = f'TEMPORARYPARSEDATE_{daykey}'
         tempcol.append(daykey)
         joincol.append(daykey)

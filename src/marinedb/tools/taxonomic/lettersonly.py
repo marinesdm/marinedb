@@ -30,7 +30,7 @@ def apply(df, key, flag=False, dropna=False, verbose=True, indent=''):
 
     pattern=r'[^a-zA-Z\s\-]'
     tempkey = 'TEMPORARYLETTERSONLY_{key}'
-    df[tempkey] = df[key].values
+    df[tempkey] = df[key]
     ismissing = pd.isnull(df[key])
     df.loc[~ismissing, tempkey] = df.loc[~ismissing, tempkey].apply(unidecode) # e.g., "Terpsinoë" and "Naïs" genera
     islettersonly = (~df[tempkey].str.contains(pattern, na=False))
