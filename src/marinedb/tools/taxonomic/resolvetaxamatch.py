@@ -150,6 +150,8 @@ def apply(inputfile, isinworms_params, matchtype_key='classif_matchtype_generate
             # Select records flagged as uncertain mismatches (potential taxonomic changes)
 
             chunk = chunk.loc[chunk[matchtype_key] == 'noclassification_suspicious', columns_data]
+            chunk = chunk.astype('string')
+#            chunk = chunk.fillna('_MISSING_')
 
             if len(chunk) != 0:
 
@@ -187,7 +189,9 @@ def apply(inputfile, isinworms_params, matchtype_key='classif_matchtype_generate
     if len(unique_classification) != 0:
 
         classification = pd.DataFrame(list(unique_classification), columns=columns_input)
+        classification = classification.astype('string')
         classificationByClassification = classification.fillna('_MISSING_').groupby(columns_input)
+
         assert classificationByClassification.ngroups == len(classification)
 
         # Set parameters
@@ -280,14 +284,14 @@ def apply(inputfile, isinworms_params, matchtype_key='classif_matchtype_generate
                         # Use previous manual filter
 
                         idx_classification = manual_filter_by_classification.get_group(clsf).index[0]
-                        chunk.loc[indices_chunk, columns_overwrite] = manual_filter.loc[idx_classification, columns_overwrite].values
+                        chunk.loc[indices_chunk, columns_overwrite] = manual_filter.loc[idx_classification, columns_overwrite].to_numpy()
 
                     else:
 
                         # Use newly created filter
 
                         idx_classification = classificationByClassification.get_group(clsf).index[0]
-                        chunk.loc[indices_chunk, columns_overwrite] = classification.loc[idx_classification, columns_overwrite].values
+                        chunk.loc[indices_chunk, columns_overwrite] = classification.loc[idx_classification, columns_overwrite].to_numpy()
 
                 if isflag:
                     chunk.loc[chunk['taxamatch_generatedby_isinworms'] == 'nomatch', nomatch_flag] = True
