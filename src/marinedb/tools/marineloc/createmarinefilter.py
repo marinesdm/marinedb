@@ -78,6 +78,7 @@ def extract_marine_indices(inputdir, controlkey=None, outputfile='marine_filter'
 
     if len(os.path.dirname(outputfile)) == 0:
         outputfile = os.path.join(inputdir,outputfile)
+    print('outputfile:', outputfile)
 
     # If a file has been processed multiple times,
     # consider only one corresponding `island.py` output file
@@ -97,7 +98,9 @@ def extract_marine_indices(inputdir, controlkey=None, outputfile='marine_filter'
 
     printv(f'* Extract indices from {len(files)} files', verbose=verbose, indent=indent + '  ')
 
-    init_array = True
+#    init_array = True
+    chunks = []
+    nrows = 0
     init_storage = True
     columns = ['index','mask','latitude','longitude']
     if (controlkey is not None) and (len(controlkey) != 0):
@@ -111,26 +114,38 @@ def extract_marine_indices(inputdir, controlkey=None, outputfile='marine_filter'
     for file in process:
 
         df_file = pd.read_csv(file, sep=sep, engine='python')
-        df_file = df_file[~df_file['island']]
+        df_file = df_file.loc[~df_file['island'], columns]
 
-        if init_array and (len(df_file) != 0):
+        if len(df_file) == 0:
+            continue
 
-            marinedata = df_file[columns].values
-            init_array = False
+        chunks.append(df_file)
+        nrows += len(df_file)
 
-        elif len(df_file) != 0:
-            marinedata = np.append(marinedata, df_file[columns].values, axis=0)
+#        if init_array and (len(df_file) != 0):
+#
+#            marinedata = df_file[columns].values
+#            init_array = False
+#
+#        elif len(df_file) != 0:
+#            marinedata = np.append(marinedata, df_file[columns].values, axis=0)
 
-        if (not init_array) and (len(marinedata) >= 1000000):
-
-            marinedata = pd.DataFrame(marinedata, columns=columns)
+#        if (not init_array) and (len(marinedata) >= 1000000):
+        if nrows >= 1_000_000:
+            marinedata = pd.concat(chunks, ignore_index=True)
+#            marinedata = pd.DataFrame(marinedata, columns=columns)
             marinedata['index'] = marinedata['index'].astype(int)
             write(marinedata, outputfile, init=init_storage, sep=sep)
-            init_array = True
+
+#            init_array = True
+            chunks = []
+            nrows = 0
             init_storage = False
 
-    if len(marinedata) != 0:
-        marinedata = pd.DataFrame(marinedata, columns=columns)
+#    if len(marinedata) != 0:
+    if chunks:
+#        marinedata = pd.DataFrame(marinedata, columns=columns)
+        marinedata = pd.concat(chunks, ignore_index=True)
         marinedata['index'] = marinedata['index'].astype(int)
         write(marinedata, outputfile, init=init_storage, sep=sep)
 
