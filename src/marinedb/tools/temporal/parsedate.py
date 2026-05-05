@@ -98,7 +98,7 @@ def parse_javastdout(single_stdout, single_request):
     return datestr_processed
 
 def parse_java(multiple_datestr, datekey, raise_javaexception=False, verbose=True, indent=''):
-#    print('verbose', verbose) # debug
+
     basedatekey = datekey.split('_processedby_')[0].upper()
 
     # Execute the java command
@@ -208,7 +208,7 @@ def create_javaarg(datesstr_list, format=None):
     return multiple_datestr
 
 def gbif_dateparser(df, datekey, index, format=None, raise_javaexception=False, verbose=True, indent=''):
-#    print('verbose', verbose) # debug
+
     multiple_datesstr = df.loc[index,datekey].tolist()
     multiple_datestr = create_javaarg(multiple_datesstr, format=format)
     result = parse_java(multiple_datestr, datekey, raise_javaexception=raise_javaexception, verbose=verbose, indent=indent)
@@ -278,8 +278,7 @@ def assemble_date(df, datekey, datekeyout, yearkey=None, monthkey=None, daykey=N
 
     # Exclude lines with a missing or unlikely year value
 
-    date2process = (pd.isnull(df[datekeyout])) & (df['issue_parsedate'] != f'{basedatekey}_UNLIKELY')
-#    print(df.loc[date2process,datekey]) #debug
+    date2process = pd.isnull(df[datekeyout]) & (df['issue_parsedate'] != f'{basedatekey}_UNLIKELY')
 
     baseyearkey = yearkey.split('_processedby_')[0].upper()
     df[f'TEMPORARYPARSEDATE_{yearkey}'] = df[yearkey]
@@ -302,10 +301,10 @@ def assemble_date(df, datekey, datekeyout, yearkey=None, monthkey=None, daykey=N
     df = convertdatetype.apply(df, yearkey=yearkey, monthkey=monthkey, daykey=daykey, drop_inconsistent=False, drop_ambiguous=False, drop_empty=False, verbose=verbose, indent=indent)
     df[tempcol] = df[tempcol].astype('string')
     if (monthkey is not None):
-        isonedigit = (df[monthkey].fillna('_MISSING_').str.len()==1)
+        isonedigit = (df[monthkey].fillna('_MISSING_').str.len() == 1)
         df.loc[isonedigit,monthkey] = '0' + df.loc[isonedigit,monthkey]
     if (daykey is not None):
-        isonedigit = (df[daykey].fillna('_MISSING_').str.len()==1)
+        isonedigit = (df[daykey].fillna('_MISSING_').str.len() == 1)
         df.loc[isonedigit,daykey] = '0' + df.loc[isonedigit,daykey]
 
     # Exclude lines where date and year/month/day values mismatch
@@ -319,7 +318,7 @@ def assemble_date(df, datekey, datekeyout, yearkey=None, monthkey=None, daykey=N
 
     date2process = date2process & (pd.isnull(df['issue_isdatemismatch']) | (~df['issue_isdatemismatch'].str.contains('MISMATCH', regex=True)))
 
-    # Exclude lines with a missing or incomplete year value
+    # Exclude lines with a missing or ambiguous year value
 
     isincomplete = (~pd.isnull(df[yearkey])) & (df[yearkey].str.len() < 4) # ambiguous year strings
     date2process = date2process & (~pd.isnull(df[yearkey])) & (~isincomplete)

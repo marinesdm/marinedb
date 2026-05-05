@@ -49,9 +49,6 @@ def astype_Int64(df, key, drop_empty=True, verbose=True, indent=''):
     # (excluding floating point)
 
     notonlynumbers = df[key].str.contains(r'[^.0-9]|\.0*[^0]', regex=True)
-    if notonlynumbers.any():
-        print('convertdatetype.py') # debug
-        print(df.loc[notonlynumbers, key]) #debug
     df.loc[notonlynumbers, key] = pd.NA
     df = modifyissuecolumn.apply(df, issuekey='issue_convertdatetype', issuemsg=f'{basekey}_INVALID', subset=notonlynumbers)
 

@@ -112,7 +112,7 @@ def isyearmismatch(datestr, yearstr, datekey, yearkey):
 
             # STEP N°2: Does `datestr` contain the 4-digit `yearstr`?
 
-            mismatch = re.sub(yearstr, ' ', mismatch)
+            mismatch = re.sub(yearstr, ' ', mismatch, count=1)
 
         if mismatch == datestr:
 
@@ -160,7 +160,7 @@ def ismonthmismatch(datestr, monthstr, datekey, monthkey):
     if (len(monthstr) == 1):
         monthstr = '0' + monthstr
 
-    mismatch = re.sub(monthstr, ' ', datestr)
+    mismatch = re.sub(monthstr, ' ', datestr, count=1)
     if (mismatch == datestr):
 
         if (monthstr[0] == '0'):
@@ -195,7 +195,7 @@ def isdaymismatch(datestr, daystr, datekey, daykey):
     if (len(daystr) == 1):
         daystr = '0' + daystr
 
-    mismatch = re.sub(daystr, ' ', datestr)
+    mismatch = re.sub(daystr, ' ', datestr, count=1)
 
     if (mismatch == datestr):
 

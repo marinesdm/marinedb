@@ -84,12 +84,12 @@ def apply_strategy(df, key, index, strategy):
 @export
 def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_number=1, maxinterval_level='years', inplace=False, flag=True, drop_empty=False, verbose=True, indent=''):
 
-    # maxinterval_number=-1 : process all date intervals regardless of width
+    # maxinterval_number = -1 : process all date intervals regardless of width
     # strategy in ['start', 'end', 'overlap'] : a different strategy could be implemented (e.g. take the median date)
-    # drop_interval=True : drop date intervals
-    # drop_interval=False : process date intervals
-    # inplace=True/False: in place or not
-    # flag=True/False: whether or not to keep the date interval flag column
+    # drop_interval = True : drop date intervals
+    # drop_interval = False : process date intervals
+    # inplace = True/False: in place or not
+    # flag = True/False: whether or not to keep the date interval flag column
 
     # Verifications
 

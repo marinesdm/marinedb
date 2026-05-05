@@ -65,7 +65,7 @@ def isdatevalid(df, yearkey, monthkey, daykey, flag=False):
     # Leap years with 29 days in February
     isleapyear = (df[yearkey]%4 == 0) & ((df[yearkey]%100 != 0) | (df[yearkey]%400 == 0))
     condition = (~ismissing) & isleapyear & (df[monthkey] == 2)
-    isdayvalid = (df.loc[condition, daykey] <= 29)
+    isdayvalid = (df.loc[condition,daykey] <= 29)
     isdatevalid[condition] = isdayvalid
     if flag:
         flags[isdayvalid[~isdayvalid].index] = f'{baseyearkey}_{basemonthkey}_{basedaykey}_COMBINATION_INVALID'
