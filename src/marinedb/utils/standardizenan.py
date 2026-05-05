@@ -61,7 +61,7 @@ def isnan(value, nan_values=None, additional_policy=''):
     if str(value).lower() in nan_values:
         return True
 
-    if len(additional_policy) != 0:
+    if additional_policy:
 
         if additional_policy == 'contains_letters':
             pattern = r'[a-zA-Z]'

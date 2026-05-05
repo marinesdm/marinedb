@@ -8,6 +8,7 @@ import pandas as pd
 # Internal import
 
 from marinedb.tools import getcolumnname
+from marinedb.utils import standardizenan
 from marinedb.utils.allexport import export
 
 # Global variable
@@ -15,14 +16,18 @@ from marinedb.utils.allexport import export
 __all__ = [] # populated using the @export decorator
 
 @export
-def apply(df, key, flag=False, verbose=True, indent=''):
+def apply(df, key, stdnan=True, stdnan_additional_policy='', flag=False, verbose=True, indent=''):
 
     df, key, _ = getcolumnname.apply(df, key, '', inplace=True)
+
+    if stdnan:
+        df = standardizenan.apply(df, key=key, additional_policy=stdnan_additional_policy)
 
     ismissing = pd.isnull(df[key])
 
     if ('species' in key.lower()) or ('scientificname' in key.lower()): #debug
         if any(ismissing):
+            print('missing species (isna.py) :')
             print(df.loc[ismissing, [key, 'match_type_generatedby_isinworms', 'taxamatch_generatedby_isinworms']])
 
     if flag:
