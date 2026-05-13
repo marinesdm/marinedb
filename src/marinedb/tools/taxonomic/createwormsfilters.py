@@ -56,24 +56,23 @@ LOWER_THAN_SPECIES = subsetranks.apply('species', lower=True, strict=True)
 
 ## Map custom vocabulary to WoRMS vocabulary
 
- ###########################################
- #  Do not remove starred dictionary keys  #
- ###########################################
+# Mandatory starred dictionary keys are always retrieved from WoRMS
+# They are removed afterward in `isinworms.py` if not requested by the user
 
 WORMSCALL = [
              'scientificname', #*
-             'genus',
-             'family',
-             'order',
-             'cls',
-             'phylum',
-             'kingdom',
+             'genus', #*
+             'family', #*
+             'order', #*
+             'cls', #*
+             'phylum', #*
+             'kingdom', #*
              'match_type', #*
              'status', #*
              'valid_AphiaID', #*
              'isExtinct',
-             'isMarine',
-             'isBrackish',
+             'isMarine', #*
+             'isBrackish', #*
              'rank', #*
              'authority'
             ]
@@ -114,7 +113,7 @@ def store_uniqueRawSciname(unique_rawsciname, outputfile, verbose=True, indent='
         f.writelines('\n'.join(['raw_sciname'] + list(unique_rawsciname)))
 
 @export
-def get_uniqueRawSciname(inputfile, colname, resume=True, store=False, overwrite=False, outputdir='./', outputfile='', verbose=True, indent='', bypass=False):
+def get_uniqueRawSciname(inputfile, colname, resume=True, store=False, overwrite=False, outputdir='./', outputfile='', verbose=True, indent='', trust_cache=False):
 
     printv(f'* Retrieve unique raw scientific names from {inputfile}', verbose=verbose, indent=indent)
 
@@ -130,8 +129,7 @@ def get_uniqueRawSciname(inputfile, colname, resume=True, store=False, overwrite
         if resume:
             printv(f'INFO | {outputfile} already exists and will be used (`resume`={resume})', verbose=verbose, indent=indent)
             unique_rawsciname = set(pd.read_csv(outputfile, sep='\t').to_numpy().flatten())
-            bypass = True # debug
-            if bypass:
+            if trust_cache:
                 return list(unique_rawsciname)
 
         if store:
@@ -2040,17 +2038,32 @@ def create_WoRMSacceptedfilter(unaccepted_aphiaID, wormscall=WORMSCALL, species_
     return worms_acceptedfilter
 
 @export
-def apply(inputfile, colname, wormscall=WORMSCALL, min_length=3, doublecheck=True, store=True, outputdir='./', overwrite=False, resume=True, resume_mode='soft', parallel=True, max_attempt=10, store_parallel=True, overwrite_parallel=False, resume_parallel=True, verbose=True, indent=''):
+def apply(inputfile, colname,  skip_uniques_rebuild=False, wormscall=WORMSCALL, min_length=3, doublecheck=True, store=True, outputdir='./', overwrite=False, resume=True, resume_mode='soft', parallel=True, max_attempt=10, store_parallel=True, overwrite_parallel=False, resume_parallel=True, verbose=True, indent=''):
 
     # Parameters
 
     ## Global variables
 
-    mandatory_wormskeys = ['scientificname','match_type','status','valid_AphiaID','rank']
+#    wormscall_required_keys = ['scientificname','match_type','status','valid_AphiaID','rank']
+    wormscall_required_keys = [
+                               'scientificname',
+                               'genus',
+                               'family',
+                               'order',
+                               'cls',
+                               'phylum',
+                               'kingdom',
+                               'match_type',
+                               'status',
+                               'valid_AphiaID',
+                               'rank',
+                               'isMarine',
+                               'isBrackish'
+                              ]
 
-    missing_keys = set(mandatory_wormskeys) - set(wormscall)
-    if len(missing_keys) != 0:
-        raise Exception(f'`createwormsfilters.py` | {missing_keys} WoRMS keys are missing in `wormscall`')
+    wormscall_missing_keys = set(wormscall_required_keys) - set(wormscall)
+    wormscall += wormscall_missing_keys
+#        raise Exception(f'`createwormsfilters.py` | {wormscall_missing_keys} WoRMS keys are missing in `wormscall`')
 
     setup(wormscall=wormscall)
 
@@ -2099,7 +2112,7 @@ def apply(inputfile, colname, wormscall=WORMSCALL, min_length=3, doublecheck=Tru
 
     # Get unique species
 
-    unique_rawscinames = get_uniqueRawSciname(inputfile, colname=colname, resume=resume, **params_store, verbose=verbose, indent=indent)
+    unique_rawscinames = get_uniqueRawSciname(inputfile, colname=colname, resume=resume, trust_cache=skip_uniques_rebuild, **params_store, verbose=verbose, indent=indent)
 
     if len(unique_rawscinames) == 0: #tester avec gbifID !!
         raise Exception(f"`createwormsfilters.py` | no scientific name found, {inputfile} may be empty or '{colname}' column may not contain scientific names")
