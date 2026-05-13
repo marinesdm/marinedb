@@ -35,7 +35,8 @@ STR_NAN_VALUES = ['-1.#IND',
                   '-nan',
                   '',
                   'nd',
-                  'None']
+                  'None',
+                  'Unknown']
 
 def isnan(value, nan_values=None, additional_policy=''):
 
@@ -88,7 +89,7 @@ def apply(df, key=None, nan_values=None, additional_policy=''):
     if len(df) == 0:
         return df
 
-    visnan = np.vectorize(isnan)
+    visnan = np.vectorize(isnan, excluded={1, 'nan_values'})
 
     if (key is None) or (len(key) == 0):
 
