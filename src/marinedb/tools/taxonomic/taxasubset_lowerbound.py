@@ -109,9 +109,12 @@ def lowerbound_subset_inmemory(inputfile, sep='\t', dtypes=None, speciesidkey=No
     df.to_csv(outputfile, sep=sep, index=False)
 
     nobs_after = len(df)
+
+    printv('', verbose=verbose, indent=indent)
     printv(f'taxasubset (lowerbound) | before: {nobs_before:,d}, after : {nobs_after:,d} ({nobs_after - nobs_before:,d})', verbose=verbose, indent=indent)
     printv('', verbose=verbose, indent=indent)
     printv(f'TIME | substep: {round(time.time() - start)}s', verbose=verbose, indent=indent)
+    printv('', verbose=verbose, indent=indent)
 
     return outputfile, speciesidkey
 
@@ -289,9 +292,10 @@ def lowerbound_subset_distributed(inputfile, sep='\t', limit=50, speciesidkey=No
     printv(f'* Renaming {os.path.basename(tempfile)} to {os.path.basename(outputfile)}', verbose=verbose, indent=indent)
     os.rename(tempfile, outputfile)
 
-    printv(f'taxasubset (lowerbound) | before: {nobs_before:,d}, after : {nobs_after:,d} ({nobs_after - nobs_before:,d})', verbose=verbose, indent=indent)
+    printv(f'  taxasubset (lowerbound) | before: {nobs_before:,d}, after : {nobs_after:,d} ({nobs_after - nobs_before:,d})', verbose=verbose, indent=indent)
     printv('', verbose=verbose, indent=indent)
     printv(f'TIME | substep: {round(time.time() - start)}s', verbose=verbose, indent=indent)
+    printv('', verbose=verbose, indent=indent)
 
     return outputfile, speciesidkey
 
@@ -332,6 +336,7 @@ def apply(inputfile, sep='\t', limit=50, flag=False, dropna=False, force_distrib
         # In memory
 
         printv(f'INFO | `taxasubset` will be executed in memory', verbose=verbose, indent=indent)
+        printv('', verbose=verbose, indent=indent)
 
         if dtypesfile is not None:
             params['dtypes'] = dtypes
@@ -344,6 +349,7 @@ def apply(inputfile, sep='\t', limit=50, flag=False, dropna=False, force_distrib
         # Distributed
 
         printv(f'INFO | `taxasubset` will be executed using distributed computation', verbose=verbose, indent=indent)
+        printv('', verbose=verbose, indent=indent)
 
         outputfile, speciesidkey = lowerbound_subset_distributed(inputfile, **params)
 #        printv('', verbose=verbose, indent=indent)

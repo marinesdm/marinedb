@@ -209,7 +209,7 @@ def select_locations(df, latkey, lonkey, speciesidkey, nloc_per_species, species
 
                 # More discrete locations than locations to sample
 
-                # Sample one discrete location
+                # Sample one discrete location based on cell area
                 candidate_grid_locations = list(remaining_grid_locations)
                 probabilities = h3params.loc[candidate_grid_locations, 'area_km2'] / h3params.loc[candidate_grid_locations, 'area_km2'].sum()
                 probabilities = probabilities.tolist()
@@ -286,6 +286,7 @@ def select_locations(df, latkey, lonkey, speciesidkey, nloc_per_species, species
     if verbose_level == 1:
         verbose = True
     printv(f'TIME | substep: {round(time.time() - start)}s', verbose=verbose, indent=indent)
+    printv('', verbose=verbose, indent=indent)
 
     full_location_subset = pd.DataFrame(full_location_subset, columns=['index',speciesidkey,'cell'])
 
@@ -297,6 +298,7 @@ def downsample_observations(df, latkey, lonkey, speciesidkey, maxobs_per_taxon, 
         outputfile = getdefaultoutputfile.apply(inputfile, 'taxasubset', outputdir=outputdir)
 
     printv(f'* Cap data at {maxobs_per_taxon} observations per species', verbose=verbose, indent=indent)
+    printv('', verbose=verbose, indent=indent)
     indent = indent + '  '
 
     start = time.time()
@@ -313,6 +315,8 @@ def downsample_observations(df, latkey, lonkey, speciesidkey, maxobs_per_taxon, 
     pct = round((len(species_nobs_below_upperbound) / len(nobs_per_species)) * 100, 2)
     printv(f'** Keep all observations for species with fewer than {maxobs_per_taxon} observations', verbose=verbose, indent=indent)
     printv(f'INFO | {len(species_nobs_below_upperbound)} species below threshold ({pct}%)', verbose=verbose, indent=indent + '   ')
+    printv('', verbose=verbose, indent=indent)
+
     if len(species_nobs_below_upperbound) > 0:
         downsample_indices += list(df[df[speciesidkey].isin(species_nobs_below_upperbound)].index)
 
@@ -325,6 +329,7 @@ def downsample_observations(df, latkey, lonkey, speciesidkey, maxobs_per_taxon, 
 
         printv(f'** Sample up to {maxobs_per_taxon} distinct locations for species with at least {maxobs_per_taxon} observations', verbose=verbose, indent=indent)
         printv(f'INFO | {len(species_nobs_above_upperbound)} species above threshold ({pct}%)', verbose=verbose, indent=indent + '   ')
+        printv('', verbose=verbose, indent=indent)
 
         params = {
                   'latkey': latkey,
@@ -363,6 +368,7 @@ def downsample_observations(df, latkey, lonkey, speciesidkey, maxobs_per_taxon, 
 
         printv(f'** Sample one observation per sampled location for species with at least {maxobs_per_taxon} distinct locations', verbose=verbose, indent=indent)
         printv(f'INFO | {len(species_ncell_equal_upperbound)} species', verbose=verbose, indent=indent + '   ')
+        printv('', verbose=verbose, indent=indent)
 
         if len(species_ncell_equal_upperbound) > 0:
             condition = location_sample[speciesidkey].isin(species_ncell_equal_upperbound)
@@ -374,6 +380,7 @@ def downsample_observations(df, latkey, lonkey, speciesidkey, maxobs_per_taxon, 
 
         printv(f'** Sample {maxobs_per_taxon} observations evenly accross locations for species with fewer than {maxobs_per_taxon} distinct locations', verbose=verbose, indent=indent)
         printv(f'INFO | {len(species_ncell_below_upperbound)} species', verbose=verbose, indent=indent + '   ')
+        printv('', verbose=verbose, indent=indent)
 
         if len(species_ncell_below_upperbound) > 0:
 
@@ -452,9 +459,12 @@ def downsample_observations(df, latkey, lonkey, speciesidkey, maxobs_per_taxon, 
     printv(f'* Save to {outputfile}', verbose=verbose, indent=indent)
     df.to_csv(outputfile, sep='\t', index=False)
 
+    printv('', verbose=verbose, indent=indent)
     printv(f'taxasubset (upperbound) | before: {nobs_before:,d}, after : {nobs_after:,d} ({nobs_after - nobs_before:,d})', verbose=verbose, indent=indent)
     printv('', verbose=verbose, indent=indent)
+
     printv(f'TIME | substep: {round(time.time() - start)}s', verbose=verbose, indent=indent)
+    printv('', verbose=verbose, indent=indent)
 
     return outputfile
 
@@ -480,7 +490,6 @@ def plot_h3grid_sampling(df, latkey, lonkey, speciesidkey, sampled_cells, adjace
     if export_type == 'gif':
 #        dpi = 300
         dpi = 80
-        figsize = (10, 8)
     else:
 #        dpi = 100 * (resolution + 1)
         dpi = 150

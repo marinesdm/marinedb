@@ -73,7 +73,7 @@ def apply(inputfile, sep='\t', lowerbound=-1, upperbound=-1, flag=False, dropna=
                   'outputdir': outputdir,
                   'outputfile': outputfile,
                   'verbose': verbose,
-                  'indent': indent + '   '
+                  'indent': indent + '  '
                  }
 
         outputfile, speciesidkey = taxasubset_lowerbound.apply(**params)
@@ -84,6 +84,7 @@ def apply(inputfile, sep='\t', lowerbound=-1, upperbound=-1, flag=False, dropna=
         # Limit the number of observations per taxon to `upperbound`
 
         printv('* upperbound', verbose=verbose, indent=indent)
+        printv('', verbose=verbose, indent=indent)
 
         if latkey is None:
             raise ValueError(f'`taxasubset.py` | `latkey` must be provided')
@@ -112,7 +113,7 @@ def apply(inputfile, sep='\t', lowerbound=-1, upperbound=-1, flag=False, dropna=
                    'export_type': export_type,
                    'verbose': verbose,
                    'verbose_level': verbose_level,
-                   'indent': indent + '   '
+                   'indent': indent + '  '
                  }
 
         outputfile = taxasubset_upperbound.apply(inputfile, **params)
