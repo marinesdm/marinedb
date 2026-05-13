@@ -16,12 +16,12 @@ from marinedb.utils.allexport import export
 __all__ = [] # populated using the @export decorator
 
 @export
-def apply(df, key, stdnan=True, stdnan_additional_policy='', flag=False, verbose=True, indent=''):
+def apply(df, key, stdnan=True, nan_values=None, stdnan_additional_policy='', flag=False, verbose=True, indent=''):
 
     df, key, _ = getcolumnname.apply(df, key, '', inplace=True)
 
     if stdnan:
-        df = standardizenan.apply(df, key=key, additional_policy=stdnan_additional_policy)
+        df = standardizenan.apply(df, key=key, nan_values=nan_values, additional_policy=stdnan_additional_policy)
 
     ismissing = pd.isnull(df[key])
 
