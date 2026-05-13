@@ -98,6 +98,8 @@ def apply(inputfile, latkey='', lonkey='', idxkey='', controlkey='', uncompresse
                 else:
                     raise ValueError('`marineloc.py` | `idxkey` must be specified when `inputfile` has already been split into multiple files')
 
+            printv('', verbose=verbose, indent=indent)
+
 #        if len(outputdir) == 0:
 #            uncompressed_chunks_dir_wo_split = '/'.join(uncompressed_chunks_dir.split('/')[:-1])
 #            outputdir = os.path.join(uncompressed_chunks_dir_wo_split,'marineloc')

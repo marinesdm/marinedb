@@ -21,7 +21,7 @@ def apply(df, key, flag=False, eps=1e-5, dropna=False, verbose=True, indent=''):
     # flag = True/False: whether to flag or drop observations that do not meet the condition
     # default eps: 1e-5
     #   - GBIF coordinates are rounded to six decimal places
-    #   - five decimals places correspond to a precision of 1 meter at the equator (i.e., higher precision elsewhere)
+    #   - five decimal places correspond to a precision of 1 meter at the equator (i.e., higher precision elsewhere)
 
     df, key, _ = getcolumnname.apply(df, key, '', inplace=True)
 
