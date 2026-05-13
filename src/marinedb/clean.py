@@ -3,6 +3,8 @@
 
 # External imports
 
+import traceback #debug
+
 import os
 import re
 import json
@@ -213,20 +215,21 @@ def overwrite_outputdir_stdnan_dropempty_cleanup(config, inputdir, outputdir, cl
         for j, func in enumerate(procstep[colname]):
 
             funcname = get_key(func)
-            funcargs = list(inspect.signature(eval(f'tools.{funcname}.apply')).parameters.keys())
+            funcargs_signature = list(inspect.signature(eval(f'tools.{funcname}.apply')).parameters.keys())
+            funcargs_provided = config[proccat][i][colname][j][funcname].keys()
 
             # For all functions with an `outputdir` argument, substitute the argument
             # with the configuration file's `inputdir_path` or `outputdir_path value`
 
             if funcname == 'marineloc':
-                if 'uncompressed_chunks_dir' not in config[proccat][i][colname][j][funcname].keys():
+                if 'uncompressed_chunks_dir' not in funcargs_provided:
                     config[proccat][i][colname][j][funcname]['uncompressed_chunks_dir'] = os.path.join(inputdir, 'marineloc', 'split')
 #                    print() #debug
 #                    print('check marineloc')
 #                    print(funcname, ': ', config[proccat][i][colname][j][funcname]['uncompressed_chunks_dir'])
 #                    print()
 
-            if 'outputdir' in funcargs:
+            if 'outputdir' in funcargs_signature:
                 if funcname in ['format', 'marineloc', 'createwormsfilters']:
                     print(f"INFO | '{colname}': override the `outputdir` argument in `{funcname}` with the `inputdir_path` value from the configuration file")
                     config[proccat][i][colname][j][funcname]['outputdir'] = inputdir
@@ -235,19 +238,34 @@ def overwrite_outputdir_stdnan_dropempty_cleanup(config, inputdir, outputdir, cl
                     print(f"INFO | '{colname}': override the `outputdir` argument in `{funcname}` with the `outputdir_path` value from the configuration file")
                     config[proccat][i][colname][j][funcname]['outputdir'] = outputdir
                     isprint = True
-            if 'outputdir_createwormsfilters' in funcargs:
+            if 'outputdir_createwormsfilters' in funcargs_signature:
                 print(f"INFO | '{colname}': override the `outputdir_createwormsfilters` argument in `{funcname}` with the `inputdir_path` value from the configuration file")
                 config[proccat][i][colname][j][funcname]['outputdir_createwormsfilters'] = inputdir
                 isprint = True
-            if 'outputdir_isinworms' in funcargs:
+            if 'outputdir_isinworms' in funcargs_signature:
                 print(f"INFO | '{colname}': override the `outputdir_isinworms` argument in `{funcname}` with the `outputdir_path` value from the configuration file")
                 config[proccat][i][colname][j][funcname]['outputdir_isinworms'] = outputdir
                 isprint = True
 
-            # For all functions with an `stdnan` argument, set `stdnan` to False since all missing
-            # values in the database will be standardized before any processing steps are applied
+            # For all functions with a `stdnan` argument, set `stdnan` to False
+            # All missing values are normalized upstream before processing
+            # Exception:
+            # - `isinworms.py`, which applies a different `additional_policy`
+            # - `isnan.py` with a different `additional_policy`
 
-            if 'stdnan' in funcargs:
+            overwrite_stdnan = False
+
+            if ('stdnan' in funcargs_signature) and (funcname not in ['isinworms','isna']):
+                overwrite_stdnan = True
+
+            if (funcname == 'isna'):
+                overwrite_stdnan = True
+                if ('stdnan_additional_policy' in funcargs_provided):
+                    stdnan_additional_policy = config[proccat][i][colname][j][funcname]['stdnan_additional_policy']
+                    if (len(stdnan_additional_policy) != 0) and (stdnan_additional_policy != 'contains_letters_or_digits'):
+                        overwrite_stdnan = False
+
+            if overwrite_stdnan:
                 print(f"INFO | '{colname}': set `stdnan` argument in `{funcname}` to False")
                 config[proccat][i][colname][j][funcname]['stdnan'] = False
                 isprint = True
@@ -255,14 +273,14 @@ def overwrite_outputdir_stdnan_dropempty_cleanup(config, inputdir, outputdir, cl
             # For all functions with an `drop_empty` argument, set `drop_empty` to False
             # to ensure that each batch has the same number of columns after processing
 
-            if 'drop_empty' in funcargs:
+            if 'drop_empty' in funcargs_signature:
                 print(f"INFO | '{colname}': set `drop_empty` argument in `{funcname}` to False")
                 config[proccat][i][colname][j][funcname]['drop_empty'] = False
                 isprint = True
 
             # For all functions with a `cleanup` argument, replace it with the value provided when calling the script
 
-            if 'cleanup' in funcargs:
+            if 'cleanup' in funcargs_signature:
                 print(f"INFO | '{colname}': set `cleanup` argument in `{funcname}` to {cleanup}")
                 config[proccat][i][colname][j][funcname]['cleanup'] = cleanup
                 isprint = True
@@ -663,20 +681,38 @@ def dtypeconversion(df, config, verbose=True, indent=''):
                 if (known_key or known_value):
 
                     try:
+
                         if 'datetime' in coltype:
                             printv(f"WARNING | When converting '{colname}' to datetime, missing days and months will default to the 1st and January", verbose=verbose, indent=indent)
                             isprint = True
                             df = convertdatetype.apply(df, datekey=colname, format='ISO8601')
-                        if known_key:
-                            coltype = TYPE[coltype]
-                            df[colname] = df[colname].astype(coltype)
+
                         else:
-                            df[colname] = df[colname].astype(coltype)
-                    except (TypeError, ValueError, KeyError):
+
+                            if known_key:
+                                coltype = TYPE[coltype]
+
+                            if coltype == 'Int64': # NEW
+                                df[colname] = df[colname].astype('Float64').astype(coltype)
+
+                            elif coltype == 'boolean': # NEW
+                                try:
+                                    df[colname] = df[colname].astype(coltype)
+                                except (TypeError, ValueError):
+                                    df[colname] = df[colname].astype('string').str.lower().map({'true': True, 'false': False}).astype('boolean')
+
+                            else:
+                                df[colname] = df[colname].astype(coltype)
+
+                    except (TypeError, ValueError) as err:
+
+                        verbose=True # debug
                         printv(f"WARNING | Failed to convert '{colname}' to `{coltype}`", verbose=verbose, indent=indent)
                         coltype = ''
                         isprint = True
-                        print('1',df[colname]) #debug
+                        print('err') # debug
+                        traceback.print_exc() # debug
+                        print(df[colname].unique()) #debug
 
                 else:
 
@@ -826,7 +862,7 @@ def process_one_dataframe(df, config, config_variables_updated, isvariable, outp
             os.makedirs(outputdir)
         timefilepath = os.path.join(outputdir, f'time_' + 'temp%05d' % cpu_idx)
         with open(timefilepath, 'w', encoding='utf-8') as f:
-            f.write('\t'.join([str(cpu_idx), str(span), str(len(df))]) + '\n')
+            f.write('\t'.join([str(cpu_idx), str(span), str(nlines), str(len(df))]) + '\n')
 
     return config_variables_updated, columns
 
@@ -927,7 +963,7 @@ def assemble_outputfile(outputdir, outputfile, columns, cleanup=True):
 
     assert os.path.isdir(outputdir)
 
-    print(f'* Consolidate temporary files')
+    print(f'* Consolidate marinedb output files')
     print(f'  Storing in {outputfile}')
     print()
 
@@ -977,17 +1013,68 @@ def assemble_outputfile(outputdir, outputfile, columns, cleanup=True):
     if cleanup:
 
         print()
-        print('* Cleaning up intermediate files')
+        print('  * Cleaning up intermediate files')
         print()
 
         for file in files:
-            print(f'  >>> {file}')
+            print(f'    >>> {file}')
             os.remove(file)
 
         if len(os.listdir(outputdir)) == 0:
-            print(f'  >>> {outputdir}')
+            print(f'    >>> {outputdir}')
             os.rmdir(outputdir)
 
+    return None
+
+def concat_times(inputdir, outputdir, cleanup=True):
+
+    outputfile = os.path.join(outputdir, 'marinedb_times.txt')
+
+    print(f'* Consolidate marinedb processing time files')
+
+    if not os.path.isdir(inputdir):
+        print(f'  Directory "{inputdir}" not found')
+        print()
+        return None
+
+    files = [os.path.join(inputdir,file) for file in os.listdir(inputdir) if 'time_' in file]
+
+    if len(files) == 0:
+        print(f'  No files found in {inputdir}')
+        print()
+        return None
+    else:
+        print(f'  Storing in {outputfile}')
+        print()
+
+    colnames = ['batch','time','n_lines_before','n_lines_after']
+    init=True
+
+    for filepath in files:
+        content = pd.read_csv(filepath, sep='\t', names=colnames)
+        if init:
+            times = content[colnames].copy()
+            init = False
+        else:
+            times = pd.concat([times[colnames],content[colnames]], ignore_index=True, axis=0)
+
+    times.to_csv(outputfile, sep='\t', index=False)
+
+    if cleanup:
+
+        print()
+        print('  * Cleaning up intermediate files')
+        print()
+
+        for file in files:
+            print(f'    >>> {file}')
+            os.remove(file)
+
+        if len(os.listdir(inputdir)) == 0:
+            print(f'    >>> {inputdir}')
+            os.rmdir(inputdir)
+
+        print()
 
     return None
 
@@ -996,7 +1083,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Curate marine data')
     parser.add_argument('config_file', type=str, help='path to the yaml configuration file')
     parser.add_argument('--parallel', action=argparse.BooleanOptionalAction, help='whether to parallelize on multiple CPUs', default=False)
-    parser.add_argument('--cpu_max', type=int, help='maximum number of CPUs to be used', default=None)
+    parser.add_argument('--cpu-max', type=int, help='maximum number of CPUs to be used', default=None)
     parser.add_argument('--cleanup', action=argparse.BooleanOptionalAction, help='delete all intermediate files generated during processing', default=True)
     args = parser.parse_args()
 
@@ -1343,6 +1430,11 @@ if __name__ == '__main__':
                     isinworms_createwormsfilters_params['wormscall'] = createwormsfilters_params['wormscall']
                     isinworms_createwormsfilters_args.append('wormscall')
 
+#            wormscall_required_keys = ['scientificname','genus','family','order','cls','phylum','kingdom','match_type','status','valid_AphiaID','rank','isMarine','isBrackish']
+#            wormscall_missing_keys = set(wormscall_required_keys) - set(createwormsfilters_params['wormscall'])
+#            if len(wormscall_missing_keys) != 0:
+#                raise Exception(f'`clean.py` | `createwormsfilters`, `isinworms` : {", ".join(list(wormscall_missing_keys))} missing in `wormscall`')
+
             ## Set unspecified parameters in `createwormsfilters` to their default values
             for arg, val in default_createwormsfilters_params.items():
                 if arg not in createwormsfilters_args:
@@ -1352,7 +1444,7 @@ if __name__ == '__main__':
             if createwormsfilters_column != isinworms_column:
                 raise ValueError(f"`clean.py` | `createwormsfilters` and `isinworms` must operate on the same column containing scientific names, but received '{createwormsfilters_column}' and '{isinworms_column}' respectively.")
             intersection_args = set(isinworms_createwormsfilters_params.keys()).intersection(set(createwormsfilters_params.keys()))
-            exclude_args = set(['inputfile','identification_level','colname','verbose','indent','keep_fossil']) #'store','store_parallel','max_attempt'
+            exclude_args = set(['inputfile','colname','verbose','indent','skip_uniques_rebuild'])
             intersection_args -= exclude_args
             conflicting_args = [f'`{arg}`' for arg in intersection_args if createwormsfilters_params[arg] != isinworms_createwormsfilters_params[arg]]
             if len(conflicting_args) != 0:
@@ -1393,16 +1485,39 @@ if __name__ == '__main__':
 
         config['processing'][isinworms_column_idx][isinworms_column][isinworms_idx]['isinworms'] = isinworms_params
 
-        ## If `resolvetaxamatch` is specified, overwrite its `isinworms_params` parameter
-        ## with those defined in the main `isinworms` configuration
-
         if is_resolvetaxamatch:
 
-            print("INFO | `resolvetaxamatch` will use the `isinworms` parameters defined in the main configuration")
-            print()
-            config['postprocessing'][resolvetaxamatch_column_idx][resolvetaxamatch_column][resolvetaxamatch_idx]['resolvetaxamatch']['isinworms_params'] = isinworms_params
+            ## Ensure that uncertain mismatches are retained in `isinworms`
+            ## so they can later be resolved through manual review
+            print("INFO | `flag_uncertain` set to True in `isinworms` because `resolvetaxamatch` requires uncertain mismatches to be retained for manual review")
+            config['processing'][isinworms_column_idx][isinworms_column][isinworms_idx]['isinworms']['flag_uncertain'] = True
 
-        # Load existing filters or generate new ones if none are found
+            ## Ensure consistency between `uncertainty_level` in `isinworms` and `review_level` in `resolvetaxamatch`
+            ## If needed, increase `uncertainty_level` to prevent reviewable uncertain mismatches
+            ## from being prematurely categorized as "nomatch"
+
+            if 'review_level' in resolvetaxamatch_params.keys():
+                review_level = resolvetaxamatch_params['review_level']
+            else:
+                review_level = getdefaultargs.apply(resolvetaxamatch.apply)['review_level']
+
+            if 'uncertainty_level' in isinworms_params.keys():
+                uncertainty_level = isinworms_params['uncertainty_level']
+            else:
+                uncertainty_level = getdefaultargs.apply(eval(f'tools.isinworms.apply'))['uncertainty_level']
+
+            if review_level > uncertainty_level:
+                print(f"INFO | `uncertainty_level` increased to {review_level} in `isinworms` to ensure that records eligible for manual review in `resolvetaxamatch` are not categorized as 'nomatch'")
+                config['processing'][isinworms_column_idx][isinworms_column][isinworms_idx]['isinworms']['uncertainty_level'] = review_level
+
+            isinworms_params = config['processing'][isinworms_column_idx][isinworms_column][isinworms_idx]['isinworms']
+
+            ## Use the main `isinworms` configuration for `resolvetaxamatch` `isinworms_params`
+            config['postprocessing'][resolvetaxamatch_column_idx][resolvetaxamatch_column][resolvetaxamatch_idx]['resolvetaxamatch']['isinworms_params'] = isinworms_params
+            print("INFO | `resolvetaxamatch` `isinworms_params` overwritten with the main `isinworms` parameters")
+            print()
+
+        # Load existing taxonomic filters or generate new ones if none are found
 
         print('Initialization')
         print('--------------')
@@ -1428,13 +1543,6 @@ if __name__ == '__main__':
         end = time.time()
         print(f'TIME | step: {round(end - start)}s [total: {round(end - start_cleaning)}s]')
         print()
-
-    if is_resolvetaxamatch:
-
-        resolvetaxamatch_params = config['postprocessing'][resolvetaxamatch_column_idx][resolvetaxamatch_column][resolvetaxamatch_idx]['resolvetaxamatch']
-
-        if ('flag_uncertain' not in resolvetaxamatch_params['isinworms_params'].keys()) or (not resolvetaxamatch_params['isinworms_params']['flag_uncertain']):
-            raise Exception(f'`resolvetaxamatch.py` | `resolvetaxamatch.py` requires prior execution of `isinworms.py` with flag_uncertain=True (`isinworms_params`). Questionable taxonomic matches must be retained in order to resolve them interactively.')
 
 
     ##########################################
@@ -1472,7 +1580,7 @@ if __name__ == '__main__':
 
     ## If `resolvetaxamatch` and verbatim columns are specified,
     ## include verbatim and authorship columns in the `variables` section
-    if is_isinworms and is_isinworms_verbatim and ('resolvetaxamatch' in str(config['postprocessing'])):
+    if is_isinworms and is_isinworms_verbatim and is_resolvetaxamatch:
         variables = get_keys(config['variables'])
         for col in isinworms_params['verbatimcolumn']:
             if col not in variables:
@@ -1746,6 +1854,7 @@ if __name__ == '__main__':
 
             # Merge files generated during parallel processing
 
+            concat_times(os.path.join(outputdir, 'time'), os.path.dirname(outputfile))
             assemble_outputfile(outputdir, outputfile, columns, cleanup)
 
         # Store dtypes
