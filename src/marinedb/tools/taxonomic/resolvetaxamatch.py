@@ -5,6 +5,7 @@
 
 import os
 import time
+import math
 import shutil
 import pandas as pd
 from operator import itemgetter
@@ -27,7 +28,7 @@ __all__ = [] # populated using the @export decorator
 CHUNKSIZE = 100000
 
 @export
-def apply(inputfile, isinworms_params, matchtype_key='classif_matchtype_generatedby_isinworms', remove_verbatim_keys=True, manual_filter_file='manual_filter_generatedby_resolvetaxamatch.txt', resume=True, store_manual_filter=True, outputfile=None, verbose=True, indent=''):
+def apply(inputfile, isinworms_params, review_level=1, taxamatch_key = 'taxamatch_generatedby_isinworms', matchtype_key='classif_matchtype_generatedby_isinworms', remove_verbatim_keys=True, manual_filter_file='manual_filter_generatedby_resolvetaxamatch.txt', resume=True, store_manual_filter=True, outputfile=None, verbose=True, indent=''):
 
     # Output file name
 
@@ -48,7 +49,7 @@ def apply(inputfile, isinworms_params, matchtype_key='classif_matchtype_generate
 
     # Check that enough disk space is available
 
-    outputdir = resolvepath.apply(os.path.dirname(inputfile))
+    outputdir = resolvepath.apply(os.path.dirname(outputfile))
     _, _, available_disk_space = shutil.disk_usage(outputdir)
     inputfile_size = os.stat(inputfile).st_size
     required_space = inputfile_size + inputfile_size // 10
@@ -70,6 +71,22 @@ def apply(inputfile, isinworms_params, matchtype_key='classif_matchtype_generate
         if isinstance(isinworms_params['verbatimcolumn'], str):
             isinworms_params['verbatimcolumn'] = [isinworms_params['verbatimcolumn']]
 
+    # Review level: include mismatch cases from most to least likely to be false mismatches
+
+    # highest risk of false mismatch
+    # classification mismatch but kingdom match (potential taxonomic changes)
+    classif_matchtype = ['noclassification_kingdomMatch']
+
+    if review_level > 1:
+        # moderate risk of false mismatch
+        # classification match but authorship mismatch with isMore flag (potential code limitation)
+        classif_matchtype.append('classification_authorship_noMatchIsMore')
+
+    if review_level == 3:
+        # lower risk of false mismatch (more reliable mismatches)
+        # classification mismatch and authorship mismatch with isMore flag (potential code limitation)
+        classif_matchtype.append('noclassification_authorship_noMatchIsMore')
+
     # Select columns
 
     columns_mapping = isinworms_params['rank_mapping']
@@ -88,7 +105,9 @@ def apply(inputfile, isinworms_params, matchtype_key='classif_matchtype_generate
                 isinworms_params['verbatimcolumn'][idx] = reversed_columns_mapping[col]
             except KeyError:
                 pass
-
+    print(columns_mapping) #debug
+    print(columns_input)
+    print(columns_data)
     with open(inputfile,'r') as data:
         header = data.readline().strip('\n').split('\t')
     assert len(set(columns_data) - set(header)) == 0
@@ -122,7 +141,7 @@ def apply(inputfile, isinworms_params, matchtype_key='classif_matchtype_generate
             manual_filter_by_classification = manual_filter.fillna('_MISSING_').groupby(columns_input)
             manual_filter_keys = set(manual_filter_by_classification.groups.keys())
 
-    # Retrieve suspicious mismatches
+    # Retrieve mismatch cases likely to be false mismatches (candidates for manual review)
 
     params = {
               'sep': '\t',
@@ -132,13 +151,14 @@ def apply(inputfile, isinworms_params, matchtype_key='classif_matchtype_generate
               'engine': 'python'
              }
 
-    printv('* Retrieve unique taxonomic classifications flagged as uncertain mismatches', verbose=verbose, indent=indent)
+    printv('* Retrieve potential false mismatches for manual review', verbose=verbose, indent=indent)
     #low-confidence or suspect matches: on pourrait laisser choisir list matchtype_key, et intégrer le code qui va chercher les données originales pour gbif
 
     start = time.time()
-    unique_classification = set()
+    unique_combinations = set()
     before = 0
     nuncertain = 0
+    warning = False
 
     with pd.read_csv(inputfile, **params) as reader:
 
@@ -147,64 +167,81 @@ def apply(inputfile, isinworms_params, matchtype_key='classif_matchtype_generate
             chunk_length = len(chunk)
             before += chunk_length
 
-            # Select records flagged as uncertain mismatches (potential taxonomic changes)
+            # Select mismatch cases to be reviewed (based on review_level criteria)
 
-            chunk = chunk.loc[chunk[matchtype_key] == 'noclassification_suspicious', columns_data]
+            chunk = chunk.loc[chunk[matchtype_key].isin(classif_matchtype),:]
             chunk = chunk.astype('string')
-#            chunk = chunk.fillna('_MISSING_')
 
             if len(chunk) != 0:
+
+                if (not warning) and (chunk[taxamatch_key] != 'uncertain').any():
+
+                    printv('', verbose=verbose, indent=indent)
+                    printv(
+                         "WARNING | Some records cannot be reviewed manually because they "
+                         "were categorized as 'nomatch' during `isinworms` execution "
+                         "(`uncertainty_level` < `review_level`). These records will be "
+                         "excluded from the review process.",
+                         verbose=True,
+                         indent=indent + '  '
+                    )
+                    printv('', verbose=verbose, indent=indent)
+
+                    warning = True
+
+                if warning:
+                    chunk = chunk[chunk[taxamatch_key] == 'uncertain']
 
                 # Add unique classifications linked to these mismatches,
                 # excluding those already handled by the manual filter
 
-                chunk = chunk.drop_duplicates()
-                nuncertain += len(chunk)
-                unique_classification.update(
-                    t
-                    for t in chunk.itertuples(index=False, name=None)
-                    if t not in manual_filter_keys
-                )
-
+                if len(chunk) != 0:
+                    chunk = chunk[columns_data].drop_duplicates()
+                    nuncertain += len(chunk)
+                    unique_combinations.update(
+                        t
+                        for t in chunk.itertuples(index=False, name=None)
+                        if t not in manual_filter_keys
+                    )
 
             if ((i+1)%10 == 0):
                 nlines = i*CHUNKSIZE + chunk_length
-                printv(f'Progress | {nlines:,d} lines ({round(time.time()-start)}s): {len(unique_classification):,d} unique flagged classifications', verbose=verbose, indent=indent)
+                printv(f'  Progress | {nlines:,d} lines ({round(time.time()-start)}s): {len(unique_combinations):,d} unique flagged classifications', verbose=verbose, indent=indent)
 
-    # Manually resolve suspicious mismatches
+    # Manually review selected potential mismatches
 
     if nuncertain == 0:
-        printv('INFO | No suspicious taxonomic mismatches', verbose=verbose, indent=indent)
+        printv('INFO | No potential false mismatches found', verbose=verbose, indent=indent)
         if input_is_output:
             outputfile = inputfile
         else:
             os.rename(inputfile, outputfile)
+        printv('', verbose=verbose, indent=indent)
         printv(f'resolvetaxamatch | before: {before:,d}, after : {before:,d} (0)', verbose=verbose, indent=indent)
         return outputfile
 
+    ncombinations = len(unique_combinations)
+    nbatch = math.ceil(ncombinations/50)
 
     printv('', verbose=verbose, indent=indent)
-    printv(f'* Manually resolve questionable taxonomic matches | {nuncertain} matches to be reviewed', verbose=verbose, indent=indent)
+    printv(f'* Review potential false mismatches | {ncombinations} unique classifications to be reviewed ({nbatch} batches)', verbose=verbose, indent=indent)
 
-    if len(unique_classification) != 0:
+    if ncombinations != 0:
 
-        classification = pd.DataFrame(list(unique_classification), columns=columns_input)
+        classification = pd.DataFrame(list(unique_combinations), columns=columns_input)
         classification = classification.astype('string')
-        classificationByClassification = classification.fillna('_MISSING_').groupby(columns_input)
+        classification_indices = classification.fillna('_MISSING_').groupby(columns_input)
 
-        assert classificationByClassification.ngroups == len(classification)
+        assert classification_indices.ngroups == len(classification)
 
         # Set parameters
 
         isinworms_params['parallel'] = False
         isinworms_params['store_createwormsfilters'] = False
-        if store_manual_filter:
-            isinworms_params['store_isinworms'] = True
-            isinworms_params['overwrite_isinworms'] = (not resume)
-            isinworms_params['outputfile'] = manual_filter_file
-            isinworms_params['outputdir_isinworms'] = os.path.dirname(outputfile)
-        else:
-            isinworms_params['store_isinworms'] = False
+        isinworms_params['store_isinworms'] = True
+        isinworms_params['overwrite_isinworms'] = (not resume)
+        isinworms_params['outputfile'] = manual_filter_file
+        isinworms_params['outputdir_isinworms'] = os.path.dirname(outputfile)
         isinworms_params['resume'] = True
         isinworms_params['verbose'] = verbose
         isinworms_params['indent'] = indent + '  '
@@ -226,30 +263,55 @@ def apply(inputfile, isinworms_params, matchtype_key='classif_matchtype_generate
 
         # Resolve suspicious mismatches
 
-        classification = isinworms.apply(classification, **isinworms_params)
+        for ibatch in range(nbatch):
+
+            printv(f'  Progress | {ibatch + 1} / {nbatch}', verbose=verbose, indent=indent)
+
+            start = ibatch*50
+            if ibatch == (nbatch-1):
+                end = ncombinations
+            else:
+                end = start + 50
+
+            classification_batch = classification.iloc[start:end,:].copy()
+            classification_batch_reviewed = isinworms.apply(classification_batch, **isinworms_params)
+
+            if start == 0:
+                classification_reviewed = classification_batch_reviewed
+                isinworms_params['overwrite_isinworms'] = False
+            else:
+                classification_reviewed = pd.concat([classification_reviewed, classification_batch_reviewed])
 
         keys = list(columns_mapping.keys())
         for key in keys:
-            _, new_key, _ = getcolumnname.apply(classification, key, '', inplace=True)
+            _, new_key, _ = getcolumnname.apply(classification_reviewed, key, '', inplace=True)
             columns_mapping[new_key] = columns_mapping.pop(key)
-        classification = classification.rename(columns=columns_mapping)
+        classification_reviewed = classification_reviewed.rename(columns=columns_mapping)
+
+        if not store_manual_filter:
+            # clean
+            os.remove(manual_filter_file)
 
     else:
 
-        printv(f"INFO | All uncertain taxonomic matches already resolved in {manual_filter_file}. Processing automatically without user interaction.", verbose=verbose, indent=indent)
+        printv(f"INFO | All potential mismatches already resolved in {manual_filter_file}. Processing automatically without user interaction.", verbose=verbose, indent=indent)
 
 
-    if len(unique_classification) != 0:
-        columns_output = list(classification.columns)
+    if len(unique_combinations) != 0:
+        columns_output = list(classification_reviewed.columns)
         flag_columns = [c for c in columns_output if 'flag' in c]
         assert len(flag_columns) == 1
     else:
         columns_output = list(set(manual_filter.columns) - set(columns_input))
         flag_columns = [c for c in columns_output if 'flag' in c]
 
-    # Expand resolved taxonomic classifications to full dataset
+    print('columns_output:', columns_output)
+    print('flag_columns', flag_columns)
 
-    printv(f'* Apply resolved taxonomic classifications to full dataset', verbose=verbose, indent=indent)
+    # Apply resolved taxonomic classifications to the full dataset
+
+    printv('', verbose=verbose, indent=indent)
+    printv(f'* Apply resolved taxonomic classifications to the full dataset', verbose=verbose, indent=indent)
 
     init = True
     after = 0
@@ -263,11 +325,13 @@ def apply(inputfile, isinworms_params, matchtype_key='classif_matchtype_generate
 
             if init:
                 columns_overwrite = list(set(columns_output).intersection(chunk.columns))
+                print('columns_overwrite:', columns_overwrite) # debug
                 nomatch_flag = [c for c in chunk.columns if ('flag_taxamatch' in c) and ('nomatch' in c)]
                 assert len(nomatch_flag) <= 1
                 isflag = (len(nomatch_flag) == 1)
 
-            indices = list(chunk[chunk[matchtype_key] == 'noclassification_suspicious'].index)
+            resolve_mask = (chunk[taxamatch_key] == 'uncertain') & chunk[matchtype_key].isin(classif_matchtype)
+            indices = list(chunk[resolve_mask].index)
 
             if len(indices) != 0:
 
@@ -290,13 +354,13 @@ def apply(inputfile, isinworms_params, matchtype_key='classif_matchtype_generate
 
                         # Use newly created filter
 
-                        idx_classification = classificationByClassification.get_group(clsf).index[0]
-                        chunk.loc[indices_chunk, columns_overwrite] = classification.loc[idx_classification, columns_overwrite].to_numpy()
+                        idx_classification = classification_indices.get_group(clsf).index[0]
+                        chunk.loc[indices_chunk, columns_overwrite] = classification_reviewed.loc[idx_classification, columns_overwrite].to_numpy()
 
                 if isflag:
-                    chunk.loc[chunk['taxamatch_generatedby_isinworms'] == 'nomatch', nomatch_flag] = True
+                    chunk.loc[chunk[taxamatch_key] == 'nomatch', nomatch_flag] = True
                 else:
-                    chunk = chunk[chunk['taxamatch_generatedby_isinworms'] != 'nomatch']
+                    chunk = chunk[chunk[taxamatch_key] != 'nomatch']
 
             after += len(chunk)
 
