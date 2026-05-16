@@ -22,10 +22,10 @@ __all__ = [] # populated using the @export decorator
 def apply(inputfile, sep='\t', column_names=None, column_indices=None, outputdir='./', outputfile=None):
 
     if (column_names is None) and (column_indices is None):
-        raise Exception(f'`columnsubsetfile.py` | Either `column_names` or `column_indices` must be provided')
+        raise Exception(f'`extractcolumns.py` | Either `column_names` or `column_indices` must be provided')
 
     if (outputfile is None) or (len(outputfile) == 0):
-        outputfile = getdefaultoutputfile.apply(inputfile, 'columnsubsetfile', outputdir=outputdir)
+        outputfile = getdefaultoutputfile.apply(inputfile, 'extractcolumns', outputdir=outputdir)
     if len(os.path.dirname(outputfile)) == 0:
         outputfile = resolvepath.apply(os.path.join(outputdir, outputfile))
 
@@ -56,8 +56,8 @@ def apply(inputfile, sep='\t', column_names=None, column_indices=None, outputdir
 
     print(f"* Generate {outputfile} containing only the {column_names} column(s) from {inputfile}")
 
-    column_subset_algorithm = files('marinedb.utils').joinpath('column_subset.sh')
-    cmd = ['bash', column_subset_algorithm, '-f', inputfile, '-c', column_indices, '-o', outputfile,'-d', sep]
+    extract_columns_algorithm = files('marinedb.utils').joinpath('extractcolumns.sh')
+    cmd = ['bash', extract_columns_algorithm, '-f', inputfile, '-c', column_indices, '-o', outputfile,'-d', sep]
     p = subprocess.run(cmd)
 
     return outputfile
