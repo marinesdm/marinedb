@@ -11,7 +11,7 @@ from marinedb.utils.allexport import export
 from marinedb.utils.printverbose import printv
 
 from marinedb.tools import getcolumnname
-from marinedb.tools.spatial import isbelow_minfloatprecision as mfp
+from marinedb.tools.spatial import belowminfloatprecision as mfp
 
 # Global variable
 
@@ -23,20 +23,20 @@ def apply(df, latkey, lonkey, value, flag=False, dropna=False, verbose=True, ind
     df, latkey, _ = getcolumnname.apply(df, latkey, '', inplace=True)
     df, lonkey, _ = getcolumnname.apply(df, lonkey, '', inplace=True)
 
-    # Apply `isbelow_minfloatprecision` separately to latitude and longitude
+    # Apply `belowminfloatprecision` separately to latitude and longitude
 
     printv('', verbose=verbose)
-    printv(f"* Apply `isbelow_minfloatprecision` to '{latkey}'", verbose=verbose, indent=indent)
+    printv(f"* Apply `belowminfloatprecision` to '{latkey}'", verbose=verbose, indent=indent)
     df = mfp.apply(df, latkey, value, flag=True, dropna=dropna, verbose=verbose, indent=(indent + '  '))
     printv('', verbose=verbose)
-    printv(f"* Apply `isbelow_minfloatprecision` to '{lonkey}'", verbose=verbose, indent=indent)
+    printv(f"* Apply `belowminfloatprecision` to '{lonkey}'", verbose=verbose, indent=indent)
     df = mfp.apply(df, lonkey, value, flag=True, dropna=dropna, verbose=verbose, indent=(indent + '  '))
     printv('', verbose=verbose)
 
     columns = list(df.columns)
-    flag_columns = [col for col in columns if ('flag' in col) and ('isbelow_minfloatprecision' in col)]
+    flag_columns = [col for col in columns if ('flag' in col) and ('belowminfloatprecision' in col)]
     assert len(flag_columns) == 2
-    precision_columns = [col for col in columns if ('generatedby' in col) and ('isbelow_minfloatprecision' in col)]
+    precision_columns = [col for col in columns if ('generatedby' in col) and ('belowminfloatprecision' in col)]
     assert len(precision_columns) == 2
     dropcolumns = flag_columns + precision_columns
 
