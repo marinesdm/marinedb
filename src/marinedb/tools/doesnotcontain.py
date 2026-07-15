@@ -9,6 +9,7 @@ import pandas as pd
 
 # Internal import
 
+from marinedb.utils import dictpprint
 from marinedb.utils.allexport import export
 from marinedb.utils.printverbose import printv
 
@@ -69,17 +70,26 @@ def apply(df, key, values, flag=False, minimize_flagname=False, flagname_mapping
             start_idx = 0
         else:
             temp = {}
+            num = []
             for k,v in flagname_mapping.items():
-                temp[str(k)] = int(v)
+                try:
+                    temp[str(k)] = int(v)
+                    num.append(int(v))
+                except:
+                    temp[str(k)] = v
             flagname_mapping = temp
-            start_idx = max(list(flagname_mapping.values())) + 1
+            if len(num) != 0:
+                start_idx = max(num) + 1
+            else:
+                start_idx = 0
 
         value_str = [str(val) for val in values]
         value_update = list(set(value_str) - set(list(flagname_mapping.keys())))
         value_update = {val: (start_idx + idx) for idx, val in enumerate(value_update)}
         if len(value_update) != 0:
             flagname_mapping.update(value_update)
-            printv(f'INFO | `flagname_mapping` is set to {flagname_mapping}', verbose=verbose, indent=indent)
+            printv(f'INFO | `flagname_mapping` is set to:', verbose=verbose, indent=indent)
+            dictpprint.apply(flagname_mapping, verbose=verbose, indent=indent+'      ')
             printv(f'INFO | Save `flagname_mapping` to {outputfile}', verbose=verbose, indent=indent)
             with open(outputfile, 'w', encoding='utf-8') as file:
                 json.dump(flagname_mapping, file, ensure_ascii=False, indent=4)
@@ -90,9 +100,11 @@ def apply(df, key, values, flag=False, minimize_flagname=False, flagname_mapping
 
     if isinstance(values, str):
         values = [values]
+        pattern_values = values
     else:
         values = [str(val) for val in values]
-    searchfor = '|'.join(values)
+        pattern_values = [f'(?:{val})' for val in values]
+    searchfor = '|'.join(pattern_values)
 
     df['tempcol'] = df[key].copy()
     df['tempcol'] = df['tempcol'].astype('string')
@@ -110,14 +122,16 @@ def apply(df, key, values, flag=False, minimize_flagname=False, flagname_mapping
         if flagname_mapping is not None:
             temp = flagname_mapping.copy()
             for k in flagname_mapping.keys():
-                temp[str(k)] = temp.pop(k)
+                v = str(temp.pop(k))
+                if len(v) != 0:
+                    temp[str(k)] = v
             flagname_mapping = temp
-            value_str = '-'.join([str(flagname_mapping.get(val, val)) for val in values])
+            colname_values = '-'.join([flagname_mapping.get(val, val) for val in values])
         else:
-            value_str = '-'.join(values)
+            colname_values = '-'.join(values)
 
         doesnotcontain[ismissing] = pd.NA
-        df[f'flag_{key}_doesnotcontain_{value_str}'] = doesnotcontain
+        df[f'flag_{key}_doesnotcontain_{colname_values}'] = doesnotcontain
 
         return df
 
