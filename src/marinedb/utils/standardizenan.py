@@ -3,9 +3,10 @@
 
 # External import
 
+import re
 import numpy as np
 import pandas as pd
-import re
+from unidecode import unidecode
 
 # Internal import
 
@@ -36,7 +37,8 @@ STR_NAN_VALUES = ['-1.#IND',
                   '',
                   'nd',
                   'None',
-                  'Unknown']
+                  'Unknown',
+                  '#VALUE!']
 
 def isnan(value, nan_values=None, additional_policy=''):
 
@@ -56,7 +58,7 @@ def isnan(value, nan_values=None, additional_policy=''):
     elif isinstance(nan_values,str):
         nan_values = [nan_values]
     nan_values = nan_values + STR_NAN_VALUES
-    nan_values = [v.lower() for v in nan_values]
+    nan_values = [str(v).lower() for v in nan_values]
     nan_values = list(set(nan_values))
 
     if str(value).lower() in nan_values:
@@ -64,14 +66,18 @@ def isnan(value, nan_values=None, additional_policy=''):
 
     if additional_policy:
 
+        value_to_check = str(value)
+
         if additional_policy == 'contains_letters':
             pattern = r'[a-zA-Z]'
+            value_to_check = unidecode(value_to_check)
         elif additional_policy == 'contains_digits':
             pattern = r'[0-9]'
         else:
             pattern = r'[a-zA-Z0-9]'
+            value_to_check = unidecode(value_to_check)
 
-        if not re.search(pattern, str(value)):
+        if not re.search(pattern, value_to_check):
             return True
 
     return False
