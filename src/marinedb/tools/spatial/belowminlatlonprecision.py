@@ -42,10 +42,10 @@ def apply(df, latkey, lonkey, value, flag=False, dropna=False, verbose=True, ind
 
     # Check whether the float precision of latitude and longitude is below `value`
 
-    isbelow_minlatlonprecision = (df[flag_columns[0]] & df[flag_columns[1]])
-    isbelow_minlatlonprecision = isbelow_minlatlonprecision.astype('boolean')
+    is_below_minlatlonprecision = (df[flag_columns[0]] & df[flag_columns[1]])
+    is_below_minlatlonprecision = is_below_minlatlonprecision.astype('boolean')
     ismissing = (pd.isnull(df[latkey]) | pd.isnull(df[lonkey]))
-    isbelow_minlatlonprecision[ismissing] = pd.NA
+    is_below_minlatlonprecision[ismissing] = pd.NA
 
     printv(f'* Flag and/or filter', verbose=verbose, indent=indent)
     printv('', verbose=verbose)
@@ -57,10 +57,10 @@ def apply(df, latkey, lonkey, value, flag=False, dropna=False, verbose=True, ind
         ## Precision
         precision = df[precision_columns].max(axis=1).astype('Int64')
         precision[ismissing] = pd.NA
-        df[f'{latkey}_{lonkey}_floatprecision_generatedby_isbelow_minlatlonprecision'] = precision
+        df[f'{latkey}_{lonkey}_floatprecision_generatedby_belowminlatlonprecision'] = precision
 
         ## Flag
-        df[f'flag_{latkey}_{lonkey}_isbelow_minlatlonprecision_{str(value)}'] = isbelow_minlatlonprecision
+        df[f'flag_{latkey}_{lonkey}_belowminlatlonprecision_{str(value)}'] = is_below_minlatlonprecision
 
         ## Clean
         df.drop(columns=dropcolumns, inplace=True)
@@ -74,9 +74,9 @@ def apply(df, latkey, lonkey, value, flag=False, dropna=False, verbose=True, ind
         #   - with missing latitude and/or longitude when `dropna`
 
         ## Apply missing data handling strategy
-        isbelow_minlatlonprecision[ismissing] = dropna
+        is_below_minlatlonprecision[ismissing] = dropna
 
         ## Clean
         df.drop(columns=dropcolumns, inplace=True)
 
-        return df[~isbelow_minlatlonprecision].reset_index(drop=True)
+        return df[~is_below_minlatlonprecision].reset_index(drop=True)

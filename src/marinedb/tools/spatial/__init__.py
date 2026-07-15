@@ -3,4 +3,4 @@
 
 from . import *
 
-__all__ = ['doeslateqlon', 'isbelow_minlatlonprecision', 'iszero', 'islatloninvalid', 'islatlonzero']
+__all__ = ['doeslateqlon', 'belowminlatlonprecision', 'iszero', 'islatloninvalid', 'islatlonzero']

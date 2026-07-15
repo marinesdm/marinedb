@@ -31,7 +31,7 @@ def get_floatprecision(series_flt):
 def apply(df, key, value, flag=False, dropna=False, verbose=True, indent=''):
 
     if not isinstance(value,int):
-        raise ValueError(f'`isbelow_minfloatprecision.py` | `value` must be an integer (value={value})')
+        raise ValueError(f'`belowminfloatprecision.py` | `value` must be an integer (value={value})')
 
     df, key, _ = getcolumnname.apply(df, key, '', inplace=True)
 
@@ -39,7 +39,7 @@ def apply(df, key, value, flag=False, dropna=False, verbose=True, indent=''):
 
     printv(f'* Count the number of decimal places', verbose=verbose, indent=indent)
 
-    precision_column = f'{key}_floatprecision_generatedby_isbelow_minfloatprecision'
+    precision_column = f'{key}_floatprecision_generatedby_belowminfloatprecision'
     if precision_column in df.columns:
         printv(f'INFO | {precision_column} column already exists and will be used', verbose=verbose, indent=indent)
     else:
@@ -47,10 +47,10 @@ def apply(df, key, value, flag=False, dropna=False, verbose=True, indent=''):
 
     # Check whether the float precision of `key` is below `value`
 
-    isbelow_minfloatprecision = (df[precision_column] < value)
-    isbelow_minfloatprecision = isbelow_minfloatprecision.astype('boolean')
+    is_below_minfloatprecision = (df[precision_column] < value)
+    is_below_minfloatprecision = is_below_minfloatprecision.astype('boolean')
     ismissing = pd.isnull(df[key].astype('Float64'))
-    isbelow_minfloatprecision[ismissing] = pd.NA
+    is_below_minfloatprecision[ismissing] = pd.NA
 
     printv(f'* Flag and/or filter', verbose=verbose, indent=indent)
 
@@ -58,7 +58,7 @@ def apply(df, key, value, flag=False, dropna=False, verbose=True, indent=''):
 
         # Flag rows where the float precision of `key` is below `value`
 
-        df[f'flag_{key}_isbelow_minfloatprecision_{str(value)}'] = isbelow_minfloatprecision
+        df[f'flag_{key}_belowminfloatprecision_{str(value)}'] = is_below_minfloatprecision
 
         return df
 
@@ -69,9 +69,9 @@ def apply(df, key, value, flag=False, dropna=False, verbose=True, indent=''):
         #   - with missing values in `key` if `dropna`
 
         ## Apply missing data handling strategy
-        isbelow_minfloatprecision[ismissing] = dropna
+        is_below_minfloatprecision[ismissing] = dropna
 
         ## Clean
         df.drop(columns=[precision_column], inplace=True)
 
-        return df[~isbelow_minfloatprecision].reset_index(drop=True)
+        return df[~is_below_minfloatprecision].reset_index(drop=True)
