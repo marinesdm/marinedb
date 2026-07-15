@@ -75,7 +75,7 @@ def apply(df, datekey=None, yearkey=None, year_min=1700, year_max=YEAR_NOW, flag
         else:
             flagname = f'flag_{yearkey}_isdateunlikely_{year_min}-{year_max}'
         ismissing = pd.isnull(df[yearkey])
-#        df.loc[~ismissing, flagname] = ((~df.loc[~ismissing, columns_isboundedby[0]]) | (~df.loc[~ismissing, columns_isboundedby[1]]))
+
         df.loc[~ismissing, flagname] = (df.loc[~ismissing, columns_isboundedby].sum(axis=1) != len(columns_isboundedby))
         df[flagname] = df[flagname].astype('boolean')
 

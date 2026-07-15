@@ -112,7 +112,7 @@ def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_numb
         flag = False
         printv(f"INFO | As drop_interval='{drop_interval}', `flag` will be ignored", verbose=verbose, indent=indent)
 
-    df, datekey, datekeyout = getcolumnname.apply(df, datekey, 'processdateinterval', inplace=inplace)
+    df, datekey, datekeyout = getcolumnname.apply(df, datekey, 'processdateinterval', inplace=inplace, minimize_columns=False)
     if not inplace:
         df[datekeyout] = df[datekey].copy()
 
@@ -232,8 +232,6 @@ def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_numb
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore', FutureWarning)
                 df[f'{basedatekey}_intervalwidth_generatedby_processdateinterval'] = pd.NA
-#                df.loc[df[flagname],f'{basedatekey}_intervalwidth_generatedby_processdateinterval'] = df.loc[df[flagname],'end'].dt.to_pydatetime() - df.loc[df[flagname],'start'].dt.to_pydatetime()
-#                df.loc[df[flagname],f'{basedatekey}_intervalwidth_generatedby_processdateinterval'] = df.loc[df[flagname],f'{basedatekey}_intervalwidth_generatedby_processdateinterval'].apply(lambda width: width.days)
                 df.loc[df[flagname],f'{basedatekey}_intervalwidth_generatedby_processdateinterval'] = (df.loc[df[flagname],'end'] - df.loc[df[flagname],'start']).dt.days
                 df[f'{basedatekey}_intervalwidth_generatedby_processdateinterval'] = df[f'{basedatekey}_intervalwidth_generatedby_processdateinterval'].astype('Int64')
 
