@@ -20,7 +20,7 @@ __all__ = [] # populated using the @export decorator
 
 @export
 def apply(df, key=None, values=None, dropna=False, std=False, std_additional_values=None, std_inplace=False, flag=True, verbose=True, indent=''):
-    print(std_additional_values)
+
     if values is None:
         raise ValueError(f"`basisofrecordisin.py` | `values` must be specified")
 
