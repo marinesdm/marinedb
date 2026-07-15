@@ -78,10 +78,6 @@ def lowerbound_subset_inmemory(inputfile, sep='\t', dtypes=None, speciesidkey=No
     nspecies_below_limit = (count < limit).sum()
     pct = round((nspecies_below_limit / nspecies) * 100, 2)
 
-#    if (not is_species_id):
-#
-#        df.drop(columns=speciesidkey, inplace=True)
-
     if flag:
 
         # Flag rows corresponding to taxa with more than `limit` occurrences in the dataset
@@ -247,8 +243,6 @@ def lowerbound_subset_distributed(inputfile, sep='\t', limit=50, speciesidkey=No
     ismissing_indices = deque(ismissing_indices)
     isabovelimit_indices = deque(isabovelimit_indices)
 
-#    printv(f'* Filter or flag species with more than {limit} observations', verbose=verbose, indent=indent)
-
     tempfile = os.path.join(outputdir, 'taxasubset_file.temp')
     check = 0 # debug
     with open(inputfile,'r') as inputdata:
@@ -280,7 +274,6 @@ def lowerbound_subset_distributed(inputfile, sep='\t', limit=50, speciesidkey=No
     if len(lines) != 0:
         check += len(lines) # debug
         store_lines(lines, tempfile, verbose=verbose, indent=indent)
-#        printv(f'Processing | {idx + 1} lines done', verbose=verbose, indent=indent)
 
     assert check == nobs_after #debug
 
@@ -342,7 +335,6 @@ def apply(inputfile, sep='\t', limit=50, flag=False, dropna=False, force_distrib
             params['dtypes'] = dtypes
 
         outputfile, speciesidkey = lowerbound_subset_inmemory(inputfile, **params)
-#        printv('', verbose=verbose, indent=indent)
 
     else:
 
@@ -352,20 +344,17 @@ def apply(inputfile, sep='\t', limit=50, flag=False, dropna=False, force_distrib
         printv('', verbose=verbose, indent=indent)
 
         outputfile, speciesidkey = lowerbound_subset_distributed(inputfile, **params)
-#        printv('', verbose=verbose, indent=indent)
 
     # Clean
 
     if inputfile !=  outputfile:
         printv(f'* Delete {inputfile}', verbose=verbose, indent=indent)
-#        os.remove(inputfile) #debug
+        os.remove(inputfile)
 
     if flag and (dtypesfile is not None):
         dtypes[f'flag_taxasubset_isabove_{limit}'] = 'boolean'
         with open(dtypesfile,'w') as f:
             json.dump(dtypes, f, indent=4)
-
-#    printv('', verbose=verbose, indent=indent)
 
     return outputfile, speciesidkey
 
