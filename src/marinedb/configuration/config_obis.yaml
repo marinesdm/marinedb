@@ -1,17 +1,19 @@
 data:
 
-  inputfile_path: "/data/smartbiodiv/eberhocoi/obis/obis_marine.txt"
+  inputfile_path: "/data/dream/zrr/elena/data/obis_marine.txt"
 
-  inputdir_path: "/data/smartbiodiv/eberhocoi/obis_marinedb/source"
+  inputdir_path: "/data/dream/zrr/elena/obis_marinedb/source"
 
-  outputdir_path: "/data/smartbiodiv/eberhocoi/obis_marinedb/drop"
+  outputdir_path: "/data/dream/zrr/elena/obis_marinedb/flag"
 
   outputfile_path: "obis_processedby_marinedb.txt"
 
   processing:
     - species:
         - createwormsfilters:
+            skip_uniques_rebuild: True
             wormscall:
+              - 'AphiaID'
               - 'scientificname'
               - 'genus'
               - 'family'
@@ -22,13 +24,10 @@ data:
               - 'match_type'
               - 'status'
               - 'valid_AphiaID'
-#              - 'lsid'
-              - 'isExtinct'
+              - 'lsid'
               - 'isMarine'
-              - 'rank'
+              - 'isBrackish'
               - 'authority'
-              - 'unacceptreason'
-            identification_level: 'species'
             doublecheck: True
             overwrite: True
             overwrite_parallel: True
@@ -47,16 +46,17 @@ data:
               phylum: 'phylum'
               kingdom: 'kingdom'
             worms_dtypes:
+              AphiaID: 'Int64'
               match_type: 'string'
               status: 'string'
               valid_AphiaID: 'Int64'
-#              lsid: 'string'
-              isExtinct: 'Int64'
+              lsid: 'string'
               isMarine: 'Int64'
+              isBrackish: 'Int64'
               rank: 'string'
               authority: 'string'
-              unacceptreason: 'string'
             check_ambiguity: True
+            uncertainty_level: 3
             fuzzy: True
             verbatimcolumn: ['scientificName', 'scientificNameAuthorship', 'originalScientificName']
             verbatimauthorshiponly: [False, True, False]
@@ -67,23 +67,39 @@ data:
             resume_mode: 'soft'
             parallel: True
             flag_nomatch: False
-            flag_uncertain: True
+            flag_uncertain: False
             store_isinworms: False
     - kingdom:
         - notisin:
             values: ['Bacteria', 'Archaea', 'Viruses']
             flag: False
-            dropna: True
     - class:
         - isin:
             values: ['Aves']
             flag: True
+    - status_generatedby_isinworms:
+        - notisin:
+            values:
+              - 'accepted'
+              - 'alternative representation'
+              - 'unaccepted'
+              - 'unreplaced junior homonym'
+              - 'junior homonym'
+              - 'superseded combination'
+              - 'superseded rank'
+            flag: True
+            minimize_flagname: True
+            flagname_mapping:
+              'accepted': 0
+              'alternative representation': 1
+              'unaccepted': 2
+              'unreplaced junior homonym': 3
+              'junior homonym': 4
+              'superseded combination': 5
+              'superseded rank': 6
     - basisOfRecord:
         - mapbasisofrecord:
             inplace: True
-        - isin:
-            values: ['OBSERVATION','OCCURRENCE']
-            flag: True
     - tool:
         - islatloninvalid: # excluded at data acquisition
             latkey: 'decimalLatitude'
@@ -94,21 +110,30 @@ data:
             latkey: 'decimalLatitude'
             lonkey: 'decimalLongitude'
             flag: False
-            dropna: True
         - doeslateqlon:
             latkey: 'decimalLatitude'
             lonkey: 'decimalLongitude'
             flag: False
-            dropna: True
-        - isbelow_minlatlonprecision:
+        - belowminlatlonprecision:
             latkey: 'decimalLatitude'
             lonkey: 'decimalLongitude'
             value: 2
             flag: False
-            dropna: True
-#    - depth:
+    - coordinateUncertaintyInMeters:
+            operator: '>'
+            value: 1000
+            flag: False
+            dropna: False
+#    - minimumDepthInMeters:
 #        - isna:
 #            flag: True
+#            stdnan: True
+#            stdnan_additional_policy: 'contains_digits'
+#    - maximumDepthInMeters:
+#        - isna:
+#            flag: True
+#            stdnan: True
+#            stdnan_additional_policy: 'contains_digits'
     - tool:
         - temporal:
             # parse dates
@@ -116,66 +141,51 @@ data:
             yearkey: 'year'
             monthkey: 'month'
             daykey: 'day'
-            inplace: True
+            inplace_parse: False
             stdnan: True
             # process date intervals
             flag_interval: True
             drop_interval: False
             strategy_interval: 'overlap'
+            inplace_interval: False
             # split dates
             split_date: 'all'
-            drop_mismatch_split: False
+            drop_mismatch_split: True
+            inplace_split: True
             dropna_date: True
         - isdateunlikely:
             yearkey: 'year'
+            year_max: 2025
             flag: False
-            dropna: True # should not occur at this stage
     - year:
+        - isna:
+            flag: False
         - isboundedby:
-            operator: '>='
+            operator: '<'
             value: 1950
-            flag: False
-            dropna: True
+            flag: True
     - flags:
-        - doesnotcontain:
+        - contains:
             values:
-              - 'DATE_IN_FUTURE' # none should be present, removed during processing stage
-              - 'LON_OUT_OF_RANGE' # none should be present, removed during processing stage
-              - 'LAT_OUT_OF_RANGE' # none should be present, removed during processing stage
-              - 'NO_COORD' # none should be present, removed during processing stage
-              - 'ZERO_COORD' # none should be present, removed during processing stage
-              - 'NOT_MARINE' # none should be present, removed during processing stage
+              - 'DATE_IN_FUTURE'
+              - 'ON_LAND'
             flag: False
-            minimize_flagname: True
-            dropna: False
-        - contains: # none should be present, removed during processing stage
-            values:
-              - 'NO_DEPTH.*ON_LAND|ON_LAND.*NO_DEPTH'
-            flag: True
-            minimize_flagname: True
-            flagname_mapping: {'NO_DEPTH.*ON_LAND|ON_LAND.*NO_DEPTH': 'NO-DEPTH-AND-ON-LAND'}
-    - absence:
-        - isin:
-            values: True
-            flag: True
-
-  # dtype conversion, select & rename columns
+#        - contains:
+#            values:
+#              - 'DEPTH_EXCEEDS_BATH'
+#              - 'MIN_DEPTH_EXCEEDS_MAX'
+#              - 'DEPTH_OUT_OF_RANGE'
+#              flag: True
+#              minimize_flagname: True
+#            flagname_mapping:
+#              'DEPTH_EXCEEDS_BATH': 0
+#              'MIN_DEPTH_EXCEEDS_MAX': 1
+#              'DEPTH_OUT_OF_RANGE': 2
 
   variables:
 
-   #- original_name:
-   #    new_name: dtypes
-   # OR
-   #- original_name: new_name
-   # OR
-   #- original_name
-   #
-   # Note:
-   # * by default: dtypes=str
-   # * `new_name` may be the same as `old_name`
-
     - id:
-        id: 'int' #ICI
+        obis_id: 'str'
     - decimalLatitude:
         decimalLatitude: 'float'
     - decimalLongitude:
@@ -187,8 +197,10 @@ data:
         month: 'int'
     - day:
         day: 'int'
-    - depth:
-        depth: 'float'
+#    - minimumDepthInMeters:
+#        minimumDepthInMeters: 'float'
+#    - maximumDepthInMeters:
+#        maximumDepthInMeters: 'float'
     - species
     - genus
     - family
@@ -197,11 +209,13 @@ data:
     - phylum
     - kingdom
     - basisOfRecord
-    - absence:
-        absence: 'bool'
-    - flags:
-        obis_issue: 'str'
-#    - license
+#    - flags:
+#        obis_issue: 'str'
+    - license
+    - flag_status_generatedby_isinworms_notisin_0-1-2-3-4-5-6:
+        flag_status_generatedby_isinworms_notfitforuse: 'bool'
+#    - flag_flags_contains_0-1-2:
+#        flag_depth_issue: 'bool'
     - dataset_id            # OBIS/GBIF/JeDI overlap
     - datasetID             # OBIS/GBIF/JeDI overlap
     - occurrenceID          # OBIS/GBIF/JeDI overlap
@@ -214,9 +228,10 @@ data:
 
   postprocessing:
     - tool:
-      - resolvetaxamatch
+      - resolvetaxamatch:
+          review_level: 3
     - tool:
       - taxasubset:
           lowerbound: 50
           flag: True
-          store: True
+          dropna: True

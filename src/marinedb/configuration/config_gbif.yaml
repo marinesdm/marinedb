@@ -1,17 +1,19 @@
 data:
 
-  inputfile_path: "/mnt/smartbiodiv/gbifbuilding/gbif_marine.txt.gz"
+  inputfile_path: "/data/dream/zrr/elena/data/gbif_marine.txt"
 
-  inputdir_path: "/data/smartbiodiv/eberhocoi/gbif_marinedb/source"
+  inputdir_path: "/data/dream/zrr/elena/gbif_marinedb/source"
 
-  outputdir_path: "/data/smartbiodiv/eberhocoi/gbif_marinedb/drop/"
+  outputdir_path: "/data/dream/zrr/elena/gbif_marinedb/curated"
 
   outputfile_path: "gbif_processedby_marinedb.txt"
 
   processing:
     - verbatimScientificName:
         - createwormsfilters:
+            skip_uniques_rebuild: True
             wormscall:
+              - 'AphiaID'
               - 'scientificname'
               - 'genus'
               - 'family'
@@ -22,13 +24,10 @@ data:
               - 'match_type'
               - 'status'
               - 'valid_AphiaID'
-#              - 'lsid'
-              - 'isExtinct'
+              - 'lsid'
               - 'isMarine'
-              - 'rank'
+              - 'isBrackish'
               - 'authority'
-              - 'unacceptreason'
-            identification_level: 'species'
             doublecheck: True
             overwrite: True
             overwrite_parallel: True
@@ -47,16 +46,16 @@ data:
               phylum: 'phylum'
               kingdom: 'kingdom'
             worms_dtypes:
+              AphiaID: 'Int64'
               match_type: 'string'
               status: 'string'
               valid_AphiaID: 'Int64'
-#              lsid: 'string'
-              isExtinct: 'Int64'
+              lsid: 'string'
               isMarine: 'Int64'
-              rank: 'string'
+              isBrackish: 'Int64'
               authority: 'string'
-              unacceptreason: 'string'
             check_ambiguity: True
+            uncertainty_level: 3
             fuzzy: True
             verbatimcolumn: ['verbatimScientificName', 'verbatimScientificNameAuthorship']
             verbatimauthorshiponly: [False, True]
@@ -67,23 +66,46 @@ data:
             resume_mode: 'soft'
             parallel: True
             flag_nomatch: False
-            flag_uncertain: True
+            flag_uncertain: False
             store_isinworms: False
     - kingdom:
         - notisin:
             values: ['Bacteria', 'Archaea', 'Viruses']
             flag: False
-            dropna: True
     - class:
         - isin:
             values: ['Aves']
             flag: True
-    - basisOfRecord:
-        - isin:
-            values: ['OBSERVATION','OCCURRENCE']
+    - status_generatedby_isinworms:
+        - notisin:
+            values:
+              - 'accepted'
+              - 'alternative representation'
+              - 'unaccepted'
+              - 'unreplaced junior homonym'
+              - 'junior homonym'
+              - 'superseded combination'
+              - 'superseded rank'
             flag: True
+            minimize_flagname: True
+            flagname_mapping:
+              'accepted': 0
+              'alternative representation': 1
+              'unaccepted': 2
+              'unreplaced junior homonym': 3
+              'junior homonym': 4
+              'superseded combination': 5
+              'superseded rank': 6
+    - basisOfRecord:
+        - mapbasisofrecord:
+            inplace: True
+    - occurrenceStatus:
+        - isin:
+            values: ['ABSENT']
+            flag: True
+            dropna: True
     - tool:
-        - islatloninvalid: # excluded at data acquisition
+        - islatloninvalid:
             latkey: 'decimalLatitude'
             lonkey: 'decimalLongitude'
             flag: False
@@ -92,21 +114,25 @@ data:
             latkey: 'decimalLatitude'
             lonkey: 'decimalLongitude'
             flag: False
-            dropna: True
         - doeslateqlon:
             latkey: 'decimalLatitude'
             lonkey: 'decimalLongitude'
             flag: False
-            dropna: True
-        - isbelow_minlatlonprecision:
+        - belowminlatlonprecision:
             latkey: 'decimalLatitude'
             lonkey: 'decimalLongitude'
             value: 2
             flag: False
-            dropna: True
+    - coordinateUncertaintyInMeters:
+            operator: '>'
+            value: 1000
+            flag: False
+            dropna: False
 #    - depth:
 #        - isna:
 #            flag: True
+#            stdnan: True
+#            stdnan_additional_policy: 'contains_digits'
     - tool:
         - temporal:
             # parse dates
@@ -114,71 +140,60 @@ data:
             yearkey: 'year'
             monthkey: 'month'
             daykey: 'day'
-            inplace: True
+            inplace_parse: True
             stdnan: True
             # process date intervals
             flag_interval: True
             drop_interval: False
             strategy_interval: 'overlap'
+            inplace_interval: False
             # split dates
             split_date: 'all'
-            drop_mismatch_split: False # should not occur
+            drop_mismatch_split: True
+            inplace_split: True
             dropna_date: True
-        - isdateunlikely: # excluded at data acquisition
+        - isdateunlikely:
             yearkey: 'year'
+            year_max: 2024
             flag: False
-            dropna: True # should not occur at this stage
     - year:
+        - isna:
+            flag: False
         - isboundedby:
-            operator: '>='
+            operator: '<'
             value: 1950
-            flag: False
-            dropna: True
+            flag: True
     - issue:
-        - doesnotcontain:
-            values:
-              - 'COORDINATE_INVALID' # none should be present, excluded at data acquisition
-              - 'COORDINATE_OUT_OF_RANGE' # none should be present, excluded at data acquisition
-              - 'COORDINATE_REPROJECTION_FAILED' # marginal, not excluded at data acquisition, but removed during the processing stage (if replaced by NaN) 
-              - 'ZERO_COORDINATE' # none should be present, removed during the processing stage
-              - 'RECORDED_DATE_UNLIKELY' # none should be present, removed during the processing stage
-              - 'RECORDED_DATE_INVALID' # none should be present, removed during the processing stage
-              - 'INDIVIDUAL_COUNT_CONFLICTS_WITH_OCCURRENCE_STATUS' # marginal
-            flag: False
-            minimize_flagname: True
-            dropna: False
         - contains:
             values:
-              - 'COORDINATE_REPROJECTION_SUSPICIOUS'
-              - 'GEODETIC_DATUM_INVALID' # more prevalent in GBIF marine data, exclusion may be overly strict
-              - 'COUNTRY_COORDINATE_MISMATCH'
-              - 'CONTINENT_COORDINATE_MISMATCH'
-              - 'DEPTH_UNLIKELY'
-              - 'RECORDED_DATE_MISMATCH'
+              - 'INDIVIDUAL_COUNT_CONFLICTS_WITH_OCCURRENCE_STATUS'
+              - 'COORDINATE_REPROJECTION_FAILED'
+              - 'PRESUMED_NEGATED_LATITUDE'
+              - 'PRESUMED_SWAPPED_COORDINATE'
+              - 'PRESUMED_NEGATED_LONGITUDE'
+              - '(?:(?:COUNTRY|CONTINENT)_COORDINATE_MISMATCH.*?GEODETIC_DATUM_INVALID)|(?:GEODETIC_DATUM_INVALID.*?(?:COUNTRY|CONTINENT)_COORDINATE_MISMATCH)'
+            flag: False
+        - contains:
+            values:
+              - 'GEODETIC_DATUM_INVALID'
             flag: True
-            minimize_flagname: True
-    - occurrenceStatus:
-        - isin:
-            values: ['ABSENT']
-            flag: True
-
-  # dtype conversion, select & rename columns
+#        - contains:
+#          # See the limitations of GBIF's depth-processing workflow discussed in the article
+#            values:
+#              - 'DEPTH_UNLIKELY'
+#              - 'DEPTH_NON_NUMERIC'
+#              - 'DEPTH_NOT_METRIC'
+#            flag: True
+#            minimize_flagname: True
+#            flagname_mapping:
+#              'DEPTH_UNLIKELY': 0
+#              'DEPTH_NON_NUMERIC': 1
+#              'DEPTH_NOT_METRIC': 2
 
   variables:
 
-   #- original_name:
-   #    new_name: dtypes
-   # OR
-   #- original_name: new_name
-   # OR
-   #- original_name
-   #
-   # Note:
-   # * by default: dtypes=str
-   # * `new_name` may be the same as `old_name`
-
     - gbifID:
-        gbifID: 'int'
+        gbif_id: 'int'
     - decimalLatitude:
         decimalLatitude: 'float'
     - decimalLongitude:
@@ -190,8 +205,10 @@ data:
         month: 'int'
     - day:
         day: 'int'
-    - depth:
-        depth: 'float'
+#    - depth:
+#        depth: 'float'
+#    - depthAccuracy:
+#        depthAccuracy: 'float'
     - verbatimScientificName: species
     - genus
     - family
@@ -200,13 +217,17 @@ data:
     - phylum
     - kingdom
     - basisOfRecord
-    - occurrenceStatus:
-        occurrenceStatus: 'str'
+    - flag_occurrenceStatus_isin_ABSENCE:
+        flag_absence: 'bool'
 #    - individualCount:
 #        individualCount: 'int'
-    - issue:
-        gbif_issue: 'str'
-#    - license
+#    - issue:
+#        gbif_issue: 'str'
+    - license
+    - flag_status_generatedby_isinworms_notisin_0-1-2-3-4-5-6:
+        flag_status_generatedby_isinworms_notfitforuse: 'bool'
+#    - flag_issue_contains_0-1-2:
+#        flag_depth_issue: 'bool'
     - datasetKey        # OBIS/GBIF/JeDI overlap
     - occurrenceID      # OBIS/GBIF/JeDI overlap
     - publishingOrgKey  # OBIS/GBIF/JeDI overlap
@@ -214,14 +235,13 @@ data:
     - collectionCode    # OBIS/GBIF/JeDI overlap
     - catalogNumber     # OBIS/GBIF/JeDI overlap
     - recordNumber      # OBIS/GBIF/JeDI overlap
-    - marinedb_mask:
-        marinedb_mask: 'int'
 
   postprocessing:
     - tool:
-      - resolvetaxamatch
+      - resolvetaxamatch:
+          review_level: 3
     - tool:
       - taxasubset:
           lowerbound: 50
           flag: True
-          store: True
+          dropna: True
