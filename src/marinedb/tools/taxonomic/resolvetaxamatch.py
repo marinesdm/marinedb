@@ -28,7 +28,32 @@ __all__ = [] # populated using the @export decorator
 CHUNKSIZE = 100000
 
 @export
-def apply(inputfile, isinworms_params, review_level=1, taxamatch_key = 'taxamatch_generatedby_isinworms', matchtype_key='classif_matchtype_generatedby_isinworms', remove_verbatim_keys=True, manual_filter_file='manual_filter_generatedby_resolvetaxamatch.txt', resume=True, store_manual_filter=True, outputfile=None, verbose=True, indent=''):
+def apply(inputfile, isinworms_params, review_level=1, taxamatch_key = 'taxamatch_generatedby_isinworms', matchtype_key='classif_matchtype_generatedby_isinworms', auxiliary_columns=None, flag_uncertain=True, manual_filter_file='manual_filter_generatedby_resolvetaxamatch.txt', resume=True, store_manual_filter=True, outputfile=None, verbose=True, indent=''):
+
+    with open(inputfile,'r') as data:
+        header = data.readline().strip('\n').split('\t')
+    print('flag_uncertain',flag_uncertain)
+    # Auxiliary columns required during processing
+    # but not requested by the user
+
+    if auxiliary_columns is None:
+        auxiliary_columns = []
+    elif len(auxiliary_columns) != 0:
+        print(auxiliary_columns) #debug
+        update_colnames = pd.DataFrame([],columns=header)
+        temp = []
+        for colname in auxiliary_columns:
+            _, updated_colname, _ = getcolumnname.apply(update_colnames, colname, '', inplace=True)
+            if colname == updated_colname:
+                updated_colname = [c for c in header if c.startswith(colname)]
+                assert len(updated_colname) == 1
+                updated_colname = updated_colname[0]
+            temp.append(updated_colname)
+        auxiliary_columns = temp
+        print(auxiliary_columns) #debug
+
+    if not flag_uncertain:
+        auxiliary_columns.append('flag_taxamatch_generatedby_isinworms_isin_uncertain')
 
     # Output file name
 
@@ -66,7 +91,6 @@ def apply(inputfile, isinworms_params, review_level=1, taxamatch_key = 'taxamatc
     # Handle verbatim columns
 
     is_verbatim = ('verbatimcolumn' in isinworms_params.keys())
-    remove_verbatim_keys = remove_verbatim_keys and is_verbatim
     if is_verbatim:
         if isinstance(isinworms_params['verbatimcolumn'], str):
             isinworms_params['verbatimcolumn'] = [isinworms_params['verbatimcolumn']]
@@ -98,6 +122,7 @@ def apply(inputfile, isinworms_params, review_level=1, taxamatch_key = 'taxamatc
         verbatim_columns = list(set(isinworms_params['verbatimcolumn']) - set(columns_data))
         columns_input += verbatim_columns
         columns_data += verbatim_columns
+        auxiliary_columns += verbatim_columns
         # reverse `columns_mapping`
         reversed_columns_mapping = {v:k for k,v in columns_mapping.items()}
         for idx, col in enumerate(isinworms_params['verbatimcolumn']):
@@ -105,9 +130,7 @@ def apply(inputfile, isinworms_params, review_level=1, taxamatch_key = 'taxamatc
                 isinworms_params['verbatimcolumn'][idx] = reversed_columns_mapping[col]
             except KeyError:
                 pass
-    print(columns_mapping) #debug
-    print(columns_input)
-    print(columns_data)
+
     with open(inputfile,'r') as data:
         header = data.readline().strip('\n').split('\t')
     assert len(set(columns_data) - set(header)) == 0
@@ -171,6 +194,7 @@ def apply(inputfile, isinworms_params, review_level=1, taxamatch_key = 'taxamatc
 
             chunk = chunk.loc[chunk[matchtype_key].isin(classif_matchtype),:]
             chunk = chunk.astype('string')
+            chunk = chunk.fillna('_MISSING_')
 
             if len(chunk) != 0:
 
@@ -228,9 +252,9 @@ def apply(inputfile, isinworms_params, review_level=1, taxamatch_key = 'taxamatc
 
     if ncombinations != 0:
 
-        classification = pd.DataFrame(list(unique_combinations), columns=columns_input)
-        classification = classification.astype('string')
-        classification_indices = classification.fillna('_MISSING_').groupby(columns_input)
+        classification = pd.DataFrame(list(unique_combinations), columns=columns_input, dtype='string')
+        classification_indices = classification.groupby(columns_input)
+        classification = classification.replace('_MISSING_', pd.NA)
 
         assert classification_indices.ngroups == len(classification)
 
@@ -305,9 +329,6 @@ def apply(inputfile, isinworms_params, review_level=1, taxamatch_key = 'taxamatc
         columns_output = list(set(manual_filter.columns) - set(columns_input))
         flag_columns = [c for c in columns_output if 'flag' in c]
 
-    print('columns_output:', columns_output)
-    print('flag_columns', flag_columns)
-
     # Apply resolved taxonomic classifications to the full dataset
 
     printv('', verbose=verbose, indent=indent)
@@ -325,10 +346,9 @@ def apply(inputfile, isinworms_params, review_level=1, taxamatch_key = 'taxamatc
 
             if init:
                 columns_overwrite = list(set(columns_output).intersection(chunk.columns))
-                print('columns_overwrite:', columns_overwrite) # debug
                 nomatch_flag = [c for c in chunk.columns if ('flag_taxamatch' in c) and ('nomatch' in c)]
                 assert len(nomatch_flag) <= 1
-                isflag = (len(nomatch_flag) == 1)
+                flag_nomatch = (len(nomatch_flag) == 1)
 
             resolve_mask = (chunk[taxamatch_key] == 'uncertain') & chunk[matchtype_key].isin(classif_matchtype)
             indices = list(chunk[resolve_mask].index)
@@ -357,15 +377,18 @@ def apply(inputfile, isinworms_params, review_level=1, taxamatch_key = 'taxamatc
                         idx_classification = classification_indices.get_group(clsf).index[0]
                         chunk.loc[indices_chunk, columns_overwrite] = classification_reviewed.loc[idx_classification, columns_overwrite].to_numpy()
 
-                if isflag:
+                if flag_nomatch:
                     chunk.loc[chunk[taxamatch_key] == 'nomatch', nomatch_flag] = True
                 else:
                     chunk = chunk[chunk[taxamatch_key] != 'nomatch']
 
+            if not flag_uncertain:
+                chunk = chunk[chunk[taxamatch_key] != 'uncertain']
+
             after += len(chunk)
 
-            if remove_verbatim_keys:
-                chunk = chunk.drop(columns=verbatim_columns)
+            if len(auxiliary_columns) != 0:
+                chunk = chunk.drop(columns=auxiliary_columns)
 
             # Store
 
@@ -377,15 +400,18 @@ def apply(inputfile, isinworms_params, review_level=1, taxamatch_key = 'taxamatc
 
             if ((i+1)%2 == 0): #3
                 nlines = i*CHUNKSIZE + chunk_length
-                printv(f'Progress | {nlines:,d} lines ({round(time.time()-start)}s): {after:,d} lines remaining', verbose=verbose, indent=indent)
+                printv(f'Progress | {nlines:,d} lines ({round(time.time()-start)}s)', verbose=verbose, indent=indent)
 
     # Clean
 
     printv('', verbose=verbose, indent=indent)
-    printv(f'* Delete {inputfile}', verbose=verbose, indent=indent)
-#    os.remove(inputfile) #debug
-#    if input_is_output:
-#        os.rename(outputfile, inputfile)
+
+    if outputfile != inputfile:
+        printv(f'* Delete {inputfile}', verbose=verbose, indent=indent)
+        os.remove(inputfile)
+
+    if input_is_output:
+        os.rename(outputfile, inputfile)
 
     printv(f'resolvetaxamatch | before: {before:,d}, after : {after:,d} ({after - before:,d})', verbose=verbose, indent=indent)
     printv('', verbose=verbose, indent=indent)
