@@ -66,7 +66,7 @@ def generate_species_id_distributed(inputfile, is_species_id, columns, sep='\t',
         columns_idx.append(other_column_idx)
 
     columns_idx = ','.join(columns_idx)
-    column_subset_algorithm = files('marinedb.utils').joinpath('column_subset.sh')
+    extract_columns_algorithm = files('marinedb.utils').joinpath('extractcolumns.sh')
 
     tempfile = os.path.join(outputdir, 'taxasubset_file.temp')
     try:
@@ -76,7 +76,7 @@ def generate_species_id_distributed(inputfile, is_species_id, columns, sep='\t',
 
     printv(f"* Generate {tempfile} with only the {','.join(columns_print)} column(s)", verbose=verbose, indent=indent)
 
-    cmd = ['bash', column_subset_algorithm, '-f', inputfile, '-c', columns_idx, '-o', tempfile,'-d', sep]
+    cmd = ['bash', extract_columns_algorithm, '-f', inputfile, '-c', columns_idx, '-o', tempfile,'-d', sep]
     p = subprocess.run(cmd)
 
     printv(f'* Loading data from {tempfile}', verbose=verbose, indent=indent)
