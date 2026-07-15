@@ -97,7 +97,7 @@ def parse_javastdout(single_stdout, single_request):
 
     return datestr_processed
 
-def parse_java(multiple_datestr, datekey, raise_javaexception=False, verbose=True, indent=''):
+def parse_java(multiple_datestr, datekey, java_exception='ignore', verbose=True, indent=''):
 
     basedatekey = datekey.split('_processedby_')[0].upper()
 
@@ -129,11 +129,11 @@ def parse_java(multiple_datestr, datekey, raise_javaexception=False, verbose=Tru
                 stderr_message = stderr_message.split()
                 error_type = stderr_message[0]
                 error_msg = ' '.join(stderr_message[1:])
-                if raise_javaexception:
+                if java_exception == 'raise':
                     raise Exception(f'`parsedate.py` | {error_type} raised for {keys[i]}: {error_msg}')
-                else:
+                if java_exception == 'warn':
                     printv(f'WARNING | {error_type} raised for {keys[i]}: {error_msg}', verbose=verbose, indent=indent)
-                    stderr[i] = f'{basedatekey}_JAVA_' + error_type.split('.')[-1].upper()
+                stderr[i] = f'{basedatekey}_JAVA_' + error_type.split('.')[-1].upper()
 
             elif stderr_type == 'ERROR':
                 if len(stderr_message.split()) > 1:
@@ -207,15 +207,15 @@ def create_javaarg(datesstr_list, format=None):
 
     return multiple_datestr
 
-def gbif_dateparser(df, datekey, index, format=None, raise_javaexception=False, verbose=True, indent=''):
+def gbif_dateparser(df, datekey, index, format=None, java_exception='ignore', verbose=True, indent=''):
 
     multiple_datesstr = df.loc[index,datekey].tolist()
     multiple_datestr = create_javaarg(multiple_datesstr, format=format)
-    result = parse_java(multiple_datestr, datekey, raise_javaexception=raise_javaexception, verbose=verbose, indent=indent)
+    result = parse_java(multiple_datestr, datekey, java_exception=java_exception, verbose=verbose, indent=indent)
 
     return result
 
-def parallel_dateparser(df, datekey, datestr_index, cpu, format=None, raise_javaexception=False, verbose=True, indent=''):
+def parallel_dateparser(df, datekey, datestr_index, cpu, format=None, java_exception='ignore', verbose=True, indent=''):
 
     ndates = len(datestr_index)
     batch_size = 1000
@@ -231,7 +231,7 @@ def parallel_dateparser(df, datekey, datestr_index, cpu, format=None, raise_java
 
     params = {
               'format': format,
-              'raise_javaexception': raise_javaexception,
+              'java_exception': java_exception,
               'verbose': verbose,
               'indent': indent
              }
@@ -278,7 +278,7 @@ def assemble_date(df, datekey, datekeyout, yearkey=None, monthkey=None, daykey=N
 
     # Exclude lines with a missing or unlikely year value
 
-    date2process = pd.isnull(df[datekeyout]) & (df['issue_parsedate'] != f'{basedatekey}_UNLIKELY')
+    date2process = df[datekeyout].isna() & ((~df['issue_parsedate'].str.contains('UNLIKELY').astype('boolean')) | df['issue_parsedate'].isna())
 
     baseyearkey = yearkey.split('_processedby_')[0].upper()
     df[f'TEMPORARYPARSEDATE_{yearkey}'] = df[yearkey]
@@ -327,7 +327,7 @@ def assemble_date(df, datekey, datekeyout, yearkey=None, monthkey=None, daykey=N
 
         # Replace the date with a missing value where the day is specified but the month is missing
 
-        df.loc[(~pd.isnull(df[daykey])) & pd.isnull(df[monthkey]), daykey] = pd.NA
+        df.loc[(~df[daykey].isna().astype('boolean')) & df[monthkey].isna().astype('boolean'), daykey] = pd.NA
 
     # Assemble the date following the ISO 8601 standard
 
@@ -346,7 +346,7 @@ def assemble_date(df, datekey, datekeyout, yearkey=None, monthkey=None, daykey=N
     return df
 
 @export
-def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, format=None, raise_javaexception=False, inplace=False, stdnan=True, parallel=False, cpu=None, drop_empty=False, verbose=True, indent=''):
+def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, format=None, java_exception='ignore', inplace=False, stdnan=True, parallel=False, cpu=None, drop_empty=False, verbose=True, indent=''):
 
     if (yearkey is None) and (monthkey is not None):
         raise Exception(f'`parsedate.py` | `monthkey`={monthkey} but `yearkey` is None')
@@ -370,7 +370,7 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, format=None, ra
     params = {
               'format': format,
               'cpu': cpu,
-              'raise_javaexception': raise_javaexception,
+              'java_exception': java_exception,
               'verbose': verbose,
               'indent': indent
              }
