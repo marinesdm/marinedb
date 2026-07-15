@@ -12,7 +12,7 @@ def apply(dictionary, key_order=None, verbose=True, indent=''):
 
     if verbose:
         print(indent + '{')
-        print('\n'.join(indent + ' ' + '{}: {}'.format(k, dictionary[k]) for k in key_order))
+        print('\n'.join(indent + '  ' + '{}: {}'.format(k, dictionary[k]) for k in key_order))
         print(indent + '}')
 
     return None
