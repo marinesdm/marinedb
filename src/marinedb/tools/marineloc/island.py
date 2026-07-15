@@ -27,6 +27,7 @@ from mpl_toolkits.basemap import Basemap
 
 # Internal import
 
+import marinedb.tools
 from marinedb.utils import resolvepath
 from marinedb.utils.allexport import export
 from marinedb.utils.printverbose import printv
@@ -414,7 +415,7 @@ def apply(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=N
     # see `parallel_island.sh`
     random.shuffle(fileslist)
 
-    printv(f'Processing {len(fileslist)} files on {cpu} CPUs', verbose=verbose, indent=indent)
+    printv(f'* Processing {len(fileslist)} files on {cpu} CPUs', verbose=verbose, indent=indent)
 
     start = time.time()
 
@@ -433,7 +434,7 @@ def apply(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=N
         if store_time:
             concat_times(outputdir, outputdir=stats_outputdir, delete=True, overwrite=overwrite, verbose=verbose, indent=indent)
         if store_stats:
-            land_sea_statistics(outputdir, outputdir=stats_outputdir, overwrite=overwrite, verbose=verbose, indent=indent)
+            land_sea_statistics(outputdir, outputdir=stats_outputdir, sep=sep, overwrite=overwrite, verbose=verbose, indent=indent)
         printv('', verbose=verbose, indent=indent)
 
     printv(f'TIME | substep: {round(end - start,0)}s', verbose=verbose, indent=indent)
@@ -637,7 +638,7 @@ def land_sea_statistics(inputdir, outputdir='', outputfile='statistics.txt', sep
 
 
     printv(f'* Store land/sea/coast statistics in {outputfile}', verbose=verbose, indent=indent)
-    stats.to_csv(outputfile, sep=sep, mode='w', index=False)
+    stats.to_csv(outputfile, sep='\t', mode='w', index=False)
 
     return stats
 
@@ -875,7 +876,7 @@ def plot_island(df, latkey='latitude', lonkey='longitude', background=False, sho
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Identify marine coordinates', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('inputdir-path', type=str, help='directory path containing files to be processed')
+    parser.add_argument('inputdir_path', type=str, help='directory path containing files to be processed')
     parser.add_argument('--fileslist-path', type=str, help='path to the file that lists the files to be processed', default=None)
     parser.add_argument('--latitude-column', type=str, help='latitude column name', required=True)
     parser.add_argument('--longitude-column', type=str, help='longitude column name', required=True)
@@ -888,6 +889,7 @@ if __name__ == '__main__':
     parser.add_argument('--parallel', action=argparse.BooleanOptionalAction, help='whether to parallelize on multiple CPUs', default=False)
     parser.add_argument('--cpu', type=int, help='number of CPUs to be used', default=None)
     parser.add_argument('--store-time', action=argparse.BooleanOptionalAction, help='whether to store the processing times', default=True)
+    parser.add_argument('--store-stats', action=argparse.BooleanOptionalAction, help='whether to store the processing statistics', default=True)
     parser.add_argument('--cluster-mode', action=argparse.BooleanOptionalAction, help='whether the script is parallelized across multiple machines', default=False)
     args = parser.parse_args()
 
@@ -903,6 +905,7 @@ if __name__ == '__main__':
     parallel = args.parallel
     cpu = args.cpu
     store_time = args.store_time
+    store_stats = args.store_stats
     cluster_mode = args.cluster_mode
 
     if (fileslist_path is not None) and (len(fileslist_path) == 0):
@@ -930,6 +933,7 @@ if __name__ == '__main__':
               'parallel': parallel,
               'cpu': cpu,
               'store_time': store_time,
+              'store_stats': store_stats,
               'controlkey': controlkey,
               'cluster_mode': cluster_mode
              }
@@ -939,9 +943,9 @@ if __name__ == '__main__':
         print()
         print('Parameters')
         print('----------')
-        print(f'inputdir: {inputdir}')
+        print(f'  inputdir: {inputdir}')
         for key, value in params.items():
-            print(f'{key}: {value}')
+            print(f'  {key}: {value}')
         print()
 
     _ = apply(inputdir, **params)
