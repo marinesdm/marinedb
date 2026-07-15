@@ -51,8 +51,6 @@ def apply(df, key, values, flag=False, minimize_flagname=False, flagname_mapping
     df.loc[ismissing, doesnotcontain_flagcolumn] = dropna
 
     doescontain = (~df[doesnotcontain_flagcolumn])
-#    if any(doescontain): #debug
-#        print(df.loc[doescontain,key])
 
     # Clean
 

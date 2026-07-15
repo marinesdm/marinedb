@@ -25,11 +25,6 @@ def apply(df, key, stdnan=True, nan_values=None, stdnan_additional_policy='', fl
 
     ismissing = pd.isnull(df[key])
 
-    if ('species' in key.lower()) or ('scientificname' in key.lower()): #debug
-        if any(ismissing):
-            print('missing species (isna.py) :')
-            print(df.loc[ismissing, [key, 'match_type_generatedby_isinworms', 'taxamatch_generatedby_isinworms']])
-
     if flag:
         # Flag rows with missing values in the `key` column
         df[f'flag_{key}_isna'] = ismissing

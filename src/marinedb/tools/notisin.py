@@ -45,7 +45,6 @@ def apply(df, key, values, flag=False, minimize_flagname=False, flagname_mapping
     assert len(flagcolumn) == 1
     flagcolumn = flagcolumn[0]
     values_str = re.sub(f'flag_{key}_isin_', '', flagcolumn)
-#    values_str = '_'.join(flagcolumn.split('_')[3:])
 
     # Apply missing data handling strategy
 
