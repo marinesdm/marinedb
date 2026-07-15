@@ -258,8 +258,8 @@ def apply(inputfile, split_type='', columns=None, sep='\t', chunksize=CHUNKSIZE,
 
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser(description='Partition the parquet file', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('inputfile', type=str, help='path to the parquet file')
+    parser = argparse.ArgumentParser(description='Partition a file', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('inputfile', type=str, help='path to the file')
     parser.add_argument('--split-type', type=str, help="splitting method to use, either 'pandas' for files supported by pandas.read_csv, or 'parquet' for Parquet files, or 'uncompressed_gzip' for plain text or gzip-compressed files", default='')
     parser.add_argument('--columns', nargs='*', type=str, help='list containing the columns to retain', default=None)
     parser.add_argument('--delimiter', type=str, help='delimiter used in the input file', default='\t')

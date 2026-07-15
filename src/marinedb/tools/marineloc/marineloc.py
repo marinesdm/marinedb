@@ -49,14 +49,11 @@ def apply(inputfile, latkey='', lonkey='', idxkey='', controlkey='', uncompresse
         issplitdirname = (len(uncompressed_chunks_dir) != 0)
         if not issplitdirname:
             uncompressed_chunks_dir = os.path.join(os.path.dirname(inputfile), 'marineloc')
-#        print() # debug
-#        print('uncompressed_chunks_dir:', uncompressed_chunks_dir)
-#        print()
 
         issplitdir = os.path.isdir(uncompressed_chunks_dir)
         isnotempty = issplitdir and any(os.path.isfile(f) for f in glob.glob(os.path.join(uncompressed_chunks_dir, '*_split*')))
         issplit = issplitdirname and isnotempty
-#        print('issplit', issplit) # debug
+
         if not issplit:
 
             columns = [latkey, lonkey]
@@ -99,17 +96,6 @@ def apply(inputfile, latkey='', lonkey='', idxkey='', controlkey='', uncompresse
                     raise ValueError('`marineloc.py` | `idxkey` must be specified when `inputfile` has already been split into multiple files')
 
             printv('', verbose=verbose, indent=indent)
-
-#        if len(outputdir) == 0:
-#            uncompressed_chunks_dir_wo_split = '/'.join(uncompressed_chunks_dir.split('/')[:-1])
-#            outputdir = os.path.join(uncompressed_chunks_dir_wo_split,'marineloc')
-#        if 'marineloc' not in outputdir.split('/'):
-#            outputdir = os.path.join(outputdir, 'marineloc')
-
-#        try:
-#            os.mkdir(outputdir)
-#        except FileExistsError:
-#            pass
 
         # Generate a mask differentiating land, sea, and coast
 
