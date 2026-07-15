@@ -50,7 +50,7 @@ def h3grid_locations(df, latkey, lonkey, resolution, return_params=True):
 def select_locations(df, latkey, lonkey, speciesidkey, nloc_per_species, species_subset=None, max_resolution=8, location_sampling_seed=None, export_process=False, export_type='gif', outputdir='./', verbose=True, verbose_level=2, indent=''):
 
     # Settings
-#    print('nloc_per_species', nloc_per_species) # debug
+
     if verbose_level == 0:
         verbose = False
     if verbose_level > 2:
@@ -75,14 +75,6 @@ def select_locations(df, latkey, lonkey, speciesidkey, nloc_per_species, species
 
     if export_process and ('sampling' not in outputdir.split('/')):
         outputdir = os.path.join(outputdir, 'sampling', 'location')
-#    outputdir_split = outputdir.split('/')
-#    if (outputdir_split[-2] != 'sampling') or (outputdir_split[-1] != 'location'):
-#        outputdir = os.path.join(outputdir, 'sampling/location')
-
-#    if 'sampling' not in outputdir_split[-2:]:
-#        outputdir = os.path.join(outputdir, 'sampling/location')
-#    if outputdir_split[-1] != 'location':
-#        outputdir = os.path.join(outputdir, 'location')
 
     if species_subset is None:
         # Apply filtering to all species
@@ -117,13 +109,11 @@ def select_locations(df, latkey, lonkey, speciesidkey, nloc_per_species, species
             else:
                 printv(f"INFO | '{species}' species has exactly {nloc_per_species} distinct locations at the maximum specified resolution (i.e., {max_resolution})", verbose=verbose, indent=indent)
             # Update the location subset
-#            species_location_subset = subset_maxresolution.reset_index()[['index',speciesidkey,'cell']].values.tolist()
             species_location_subset = list(
                 subset_maxresolution
                 .reset_index()[['index',speciesidkey,'cell']]
                 .itertuples(index=False, name=None)
             )
-#            full_location_subset += species_location_subset
             full_location_subset.extend(species_location_subset)
             continue
 
@@ -142,11 +132,8 @@ def select_locations(df, latkey, lonkey, speciesidkey, nloc_per_species, species
         remaining_grid_locations = set(grid_locations) # use set() to create a distinct object
         sampled_location_indices = []
 
-        count_step = 0 # debug
         while n < nloc_per_species:
-#            if count_step%10==0: #debug
-#                print(f'Progress : {n}/{nloc_per_species}')
-#                print(f'Resolution : {resolution}')
+
             while (len(remaining_grid_locations) == 0):
 
                 # If all discretized locations at a given resolution have been sampled,
@@ -174,14 +161,38 @@ def select_locations(df, latkey, lonkey, speciesidkey, nloc_per_species, species
                 ## sampled grid cell identifiers
                 sampled_grid_locations = set(subset.loc[sampled_location_indices, 'cell'])
                 ## neighboring grid cell identifiers
-#                adjacent_grid_locations = set(np.concatenate(h3params.loc[list(sampled_grid_locations), 'ring_1'].values))
                 adjacent_grid_locations = {
                     cell
                     for neighbors in h3params.loc[list(sampled_grid_locations), 'ring_1']
                     for cell in neighbors
                 }
+
                 # Exclude sampled grid cells and their neighbors from candidate cells to maximize spatial coverage
                 remaining_grid_locations = grid_locations - adjacent_grid_locations
+
+                if export_process and (len(remaining_grid_locations) == 0): # NEW
+
+                    params = {
+                              'latkey': latkey,
+                              'lonkey': lonkey,
+                              'speciesidkey': speciesidkey,
+                              'sampled_cells': remaining_grid_locations,
+                              'adjacent_cells': set(),
+                              'previous_sampled_cells': sampled_grid_locations,
+                              'previous_adjacent_cells': adjacent_grid_locations,
+                              'species': species,
+                              'resolution': resolution,
+                              'step': step,
+                              'init': init,
+                              'export_type': export_type,
+                              'outputdir': outputdir,
+                              'verbose': verbose,
+                              'indent': indent + '  '
+                             }
+
+                    plot_h3grid_sampling(subset, **params)
+                    init = False
+                    step += 1
 
             if (nloc_per_species - n) >= len(remaining_grid_locations):
 
@@ -195,7 +206,6 @@ def select_locations(df, latkey, lonkey, speciesidkey, nloc_per_species, species
                     previous_sampled_cells = set(sampled_grid_locations)
                     previous_adjacent_cells = set(adjacent_grid_locations)
                     sampled_grid_locations = remaining_grid_locations
-#                    adjacent_grid_locations = set(np.concatenate(h3params.loc[list(sampled_grid_locations), 'ring_1'].values))
                     adjacent_grid_locations = {
                         cell
                         for neighbors in h3params.loc[list(sampled_grid_locations), 'ring_1']
@@ -231,7 +241,6 @@ def select_locations(df, latkey, lonkey, speciesidkey, nloc_per_species, species
 
             # Update number of sampled grid cells
             n += len(sampled_location_index)
-            count_step +=1 # debug
 
             if export_process:
 
@@ -266,13 +275,11 @@ def select_locations(df, latkey, lonkey, speciesidkey, nloc_per_species, species
             printv(f'INFO | Due to H3 grid edge effects, species {species} will be represented by only {len(sampled_grid_locations)} distinct locations', verbose=verbose, indent=indent)
 
         condition = subset_maxresolution['cell'].isin(sampled_grid_locations)
-#        species_location_subset = subset_maxresolution[condition].reset_index()[['index',speciesidkey,'cell']].values.tolist()
         species_location_subset = list(
             subset_maxresolution[condition]
             .reset_index()[['index', speciesidkey, 'cell']]
             .itertuples(index=False, name=None)
         )
-#        full_location_subset += species_location_subset
         full_location_subset.extend(species_location_subset)
 
         if export_process:
@@ -292,10 +299,7 @@ def select_locations(df, latkey, lonkey, speciesidkey, nloc_per_species, species
 
     return full_location_subset
 
-def downsample_observations(df, latkey, lonkey, speciesidkey, maxobs_per_taxon, resolution=8, downsample_seed=None, outputfile=None, outputdir='./', export_process=False, export_type='gif', verbose=True, verbose_level=2, indent=''):
-
-    if (outputfile is None) or (len(outputfile) == 0):
-        outputfile = getdefaultoutputfile.apply(inputfile, 'taxasubset', outputdir=outputdir)
+def downsample_observations(df, latkey, lonkey, speciesidkey, maxobs_per_taxon, outputfile, resolution=8, downsample_seed=None, outputdir='./', export_process=False, export_type='gif', verbose=True, verbose_level=2, indent=''):
 
     printv(f'* Cap data at {maxobs_per_taxon} observations per species', verbose=verbose, indent=indent)
     printv('', verbose=verbose, indent=indent)
@@ -357,7 +361,7 @@ def downsample_observations(df, latkey, lonkey, speciesidkey, maxobs_per_taxon, 
 
         debug = ncell_per_species[ncell_per_species > maxobs_per_taxon] #debug
         if len(debug) > 0:
-            print('debug')
+            print('[DEV] Unexpected')
             print(debug)
             raise Exception
 
@@ -442,7 +446,6 @@ def downsample_observations(df, latkey, lonkey, speciesidkey, maxobs_per_taxon, 
 
             location_sample = location_sample.set_index([speciesidkey,'cell']).sort_index()
             for taxon_id, cell, nsamples in nsamples_per_species_per_cell.itertuples(index=False, name=None):
-#                downsample_indices += location_sample.loc[(taxon_id, cell), 'index'].sample(n=nsamples, random_state=downsample_seed).tolist()
                 downsample_indices.extend(
                     location_sample.loc[(taxon_id, cell), 'index']
                     .sample(n=nsamples, random_state=downsample_seed)
@@ -479,7 +482,12 @@ def plot_h3grid_sampling(df, latkey, lonkey, speciesidkey, sampled_cells, adjace
     from matplotlib.collections import PatchCollection
     from matplotlib.colors import ListedColormap
 
-    global projected_geom_cache # NEW
+    if resolution > 1: # debug
+        for filename in glob.glob(f'*{species}*'):
+            os.remove(filename) # data_paper
+        return None
+
+    global projected_geom_cache
     try:
         projected_geom_cache
     except NameError:
@@ -530,10 +538,11 @@ def plot_h3grid_sampling(df, latkey, lonkey, speciesidkey, sampled_cells, adjace
         basemap.drawmapboundary(fill_color=water)
         _ = basemap.fillcontinents(color=earth,lake_color=water)
 
-        legend_elements = []
-        for i in range(len(labels)):
-            legend_elements.append(Patch(facecolor=cmap(i), edgecolor='white', label=labels[i]))
-        ax.legend(handles=legend_elements, loc='lower right', title='CELL STATUS', fontsize=(fontsize - 1), title_fontsize=fontsize) # fontsize = 16
+# temp sup legende article
+#        legend_elements = []
+#        for i in range(len(labels)):
+#            legend_elements.append(Patch(facecolor=cmap(i), edgecolor='white', label=labels[i]))
+#        ax.legend(handles=legend_elements, loc='lower right', title='CELL STATUS', fontsize=(fontsize - 1), title_fontsize=fontsize) # fontsize = 16
 
     df_plot = df[['cell', latkey, lonkey]].copy()
     df_plot = df_plot.groupby(['cell'])[[latkey, lonkey]].mean().reset_index()
@@ -556,16 +565,11 @@ def plot_h3grid_sampling(df, latkey, lonkey, speciesidkey, sampled_cells, adjace
     geoms = df_plot.geometry.to_list()
     sets  = df_plot['set'].to_numpy()
 
-#    for i, polygon in enumerate(df_plot.geometry):
     for cell, polygon, set_id in zip(cells, geoms, sets):
         if cell not in projected_geom_cache:
             polygon = antimeridian.fix_polygon(polygon)
             projected_geom_cache[cell] = shapely.ops.transform(basemap, polygon)
-#        polygon = antimeridian.fix_polygon(polygon)
-#        mpoly = shapely.ops.transform(basemap, polygon)
-#        patches.append(PolygonPatch(mpoly))
         patches.append(PolygonPatch(projected_geom_cache[cell]))
-#        colors.append(cmap(df_plot.loc[i,'set']))
         colors.append(cmap(set_id))
 
     p = PatchCollection(patches, alpha=0.8, edgecolor='white', linewidths=0.5, zorder=2, facecolors=colors)
@@ -605,7 +609,7 @@ def create_gif_h3grid_sampling(outputdir, species, export_type='gif', duration=2
     return None
 
 @export
-def apply(inputfile, limit, latkey, lonkey, sep='\t', speciesidkey=None, specieskey=None, genuskey=None, familykey=None, orderkey=None, classkey=None, phylumkey=None, kingdomkey=None, resolution=8, downsample_seed=None, dtypesfile=None, outputdir='./', outputfile=None, export_process=False, export_type='gif', verbose=True, verbose_level=2, indent=''):
+def apply(inputfile, limit, latkey, lonkey, sep='\t', speciesidkey=None, specieskey=None, genuskey=None, familykey=None, orderkey=None, classkey=None, phylumkey=None, kingdomkey=None, resolution=8, cleanup=False, dtypesfile=None, outputdir='./', outputfile=None, export_process=False, export_type='gif', verbose=True, verbose_level=2, indent=''):
 
     if export_process:
         if export_type not in {'gif', 'both', 'image'}:
@@ -658,7 +662,6 @@ def apply(inputfile, limit, latkey, lonkey, sep='\t', speciesidkey=None, species
                   'outputfile': outputfile,
                   'export_process': export_process,
                   'export_type': export_type,
-                  'downsample_seed': downsample_seed,
                   'verbose': verbose,
                   'verbose_level': verbose_level,
                   'indent': indent
@@ -666,13 +669,19 @@ def apply(inputfile, limit, latkey, lonkey, sep='\t', speciesidkey=None, species
 
         outputfile = downsample_observations(df, **params)
 
+        # Clean
+
+        if cleanup and (inputfile != outputfile):
+            printv(f'* Delete {inputfile}', verbose=verbose, indent=indent)
+            os.remove(inputfile)
+
     else:
 
         printv(
                 f"WARNING | Insufficient available memory: "
                 f"{convertbytes.apply(available_memory)} available, "
                 f"at least {convertbytes.apply(required_memory)} required. "
-                f"Distributed computation is not yet implemented."
+                f"Distributed computation is not yet implemented. "
                 f"Processing aborted.",
                 verbose=verbose,
                 indent=indent
