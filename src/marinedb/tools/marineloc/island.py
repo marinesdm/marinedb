@@ -181,9 +181,9 @@ def island_basemap(lat, lon):
 
     """
 
-    Return a boolean array indicating whether the coordinates are on land or at sea.
+    Return a boolean array indicating whether the coordinates are on land or at sea.<br/>
     Code from Basemap documentation.
-    See: https://basemaptutorial.readthedocs.io/en/latest/utilities.html#is-land
+    See: [https://basemaptutorial.readthedocs.io/en/latest/utilities.html#is-land](https://basemaptutorial.readthedocs.io/en/latest/utilities.html#is-land)
 
     Parameters
     ----------
