@@ -29,12 +29,8 @@ from marinedb.tools.taxonomic import taxasubset_upperbound
 
 __all__ = [] # populated using the @export decorator
 
-def upperbound_subset(df, limit=-1, flag=False): #TODO
-    print('`taxasubset.py` | `upperbound_subset` has not been implemented yet')
-    return None
-
 @export
-def apply(inputfile, sep='\t', lowerbound=-1, upperbound=-1, flag=False, dropna=False, seed=None, force_distributed=False, speciesidkey=None, specieskey=None, genuskey=None, familykey=None, orderkey=None, classkey=None, phylumkey=None, kingdomkey=None, latkey=None, lonkey=None, resolution=8, dtypesfile=None, outputdir='./', outputfile=None, export_process=False, export_type='both', verbose=True, verbose_level=2, indent=''):
+def apply(inputfile, sep='\t', lowerbound=-1, upperbound=-1, flag=False, dropna=False, force_distributed=False, speciesidkey=None, specieskey=None, genuskey=None, familykey=None, orderkey=None, classkey=None, phylumkey=None, kingdomkey=None, latkey=None, lonkey=None, resolution=8, cleanup=False, dtypesfile=None, outputdir='./', outputfile=None, export_process=False, export_type='both', verbose=True, verbose_level=2, indent=''):
 
     if (upperbound <= 0) and (lowerbound <= 0):
 
@@ -105,7 +101,7 @@ def apply(inputfile, sep='\t', lowerbound=-1, upperbound=-1, flag=False, dropna=
                    'phylumkey':phylumkey,
                    'kingdomkey':kingdomkey,
                    'resolution': resolution,
-                   'downsample_seed': seed,
+                   'cleanup': cleanup,
                    'dtypesfile': dtypesfile,
                    'outputdir': outputdir,
                    'outputfile': outputfile,
