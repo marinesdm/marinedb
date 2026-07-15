@@ -36,6 +36,8 @@ def format_jedi(inputfile, outputfile):
     jedi_dataset.loc[jedi_dataset['scientificName'] == 'Halicreas minum', 'scientificName'] = 'Halicreas minimum'
     # Create the 'kingdom' column
     jedi_dataset['kingdom'] = 'Animalia'
+    # Create an index column
+    jedi_dataset['jedi_id'] = jedi_dataset.index.tolist()
 
     jedi_dataset.to_csv(outputfile, sep='\t', index=False)
 
