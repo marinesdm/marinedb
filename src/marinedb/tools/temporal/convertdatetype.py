@@ -76,7 +76,7 @@ def convert_year(df, yearkey, drop_ambiguous=False, drop_empty=True, verbose=Tru
 
     ismissing = pd.isnull(df[yearkey])
     yearlength = df[yearkey].astype('string').str.len()
-    invalidyear =  (~ismissing) & ((yearlength == 3) | (yearlength > 4))
+    invalidyear =  (~ismissing) & ((yearlength == 3) | (yearlength > 4) | (df[yearkey] <= 0))
     df.loc[invalidyear, yearkey] = pd.NA
     df = modifyissuecolumn.apply(df, issuekey='issue_convertdatetype', issuemsg=f'{baseyearkey}_INVALID', subset=invalidyear)
 
