@@ -98,7 +98,6 @@ def extract_marine_indices(inputdir, controlkey=None, outputfile='marine_filter'
 
     printv(f'* Extract indices from {len(files)} files', verbose=verbose, indent=indent + '  ')
 
-#    init_array = True
     chunks = []
     nrows = 0
     init_storage = True
@@ -122,29 +121,16 @@ def extract_marine_indices(inputdir, controlkey=None, outputfile='marine_filter'
         chunks.append(df_file)
         nrows += len(df_file)
 
-#        if init_array and (len(df_file) != 0):
-#
-#            marinedata = df_file[columns].values
-#            init_array = False
-#
-#        elif len(df_file) != 0:
-#            marinedata = np.append(marinedata, df_file[columns].values, axis=0)
-
-#        if (not init_array) and (len(marinedata) >= 1000000):
         if nrows >= 1_000_000:
             marinedata = pd.concat(chunks, ignore_index=True)
-#            marinedata = pd.DataFrame(marinedata, columns=columns)
             marinedata['index'] = marinedata['index'].astype(int)
             write(marinedata, outputfile, init=init_storage, sep=sep)
 
-#            init_array = True
             chunks = []
             nrows = 0
             init_storage = False
 
-#    if len(marinedata) != 0:
     if chunks:
-#        marinedata = pd.DataFrame(marinedata, columns=columns)
         marinedata = pd.concat(chunks, ignore_index=True)
         marinedata['index'] = marinedata['index'].astype(int)
         write(marinedata, outputfile, init=init_storage, sep=sep)
@@ -196,7 +182,7 @@ def apply(inputdir, latkey, lonkey, idxkey, controlkey=None, sep='\t', fileslist
 
     printv('', verbose=verbose)
 
-    if cleanup: # NEW NEW NEW
+    if cleanup:
 
         printv('* Cleaning up intermediate files', verbose=verbose, indent=indent)
         printv('', verbose=verbose, indent=indent)
@@ -236,7 +222,9 @@ if __name__ == '__main__':
     parser.add_argument('--parallel', action=argparse.BooleanOptionalAction, help='whether to enable parallel processing across multiple CPUs', default=False)
     parser.add_argument('--cpu', type=int, help='number of CPUs to be used', default=None)
     parser.add_argument('--store-time', action=argparse.BooleanOptionalAction, help='whether to store the processing times', default=True)
+    parser.add_argument('--store-stats', action=argparse.BooleanOptionalAction, help='whether to store the processing statistics', default=True)
     parser.add_argument('--outputfile-path', type=str, help='path to the file where the filter will be saved', default='./marine_filter')
+    parser.add_argument('--cleanup', action=argparse.BooleanOptionalAction, help='whether to clean up intermediate files', default=True)
     args = parser.parse_args()
 
     print()
@@ -256,7 +244,9 @@ if __name__ == '__main__':
               'parallel': args.parallel,
               'cpu': args.cpu,
               'store_time': args.store_time,
-              'outputfile': args.outputfile_path
+              'store_stats': args.store_stats,
+              'outputfile': args.outputfile_path,
+              'cleanup': args.cleanup
              }
 
     start = time.time()
