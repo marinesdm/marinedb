@@ -79,6 +79,7 @@ RANK_MAPPING_RENAMED = copy.deepcopy(RANK_MAPPING)
 # They are removed afterward if not requested by the user
 
 WORMSCALL = [
+             'AphiaID', #*
              'scientificname', #*
              'genus', #*
              'family', #*
@@ -101,6 +102,7 @@ COLNAMES = list(set(WORMSCALL) - set(RANK_MAPPING.keys())) + list(RANK_MAPPING.v
 ## WORMS-specific column dtypes
 
 WORMS_DTYPES = {
+                'AphiaID':'Int64',
                 'match_type':'string',
                 'status':'string',
                 'valid_AphiaID':'Int64',
@@ -843,8 +845,6 @@ def evaluateTaxaCandidatesByAuthorship(verbatim, candidates, verbatimauthorshipo
             column1 = list(itemgetter(*columns)(colmap1))
             column2 = list(itemgetter(*columns)(colmap2))
             candidates_authorships = pd.concat([candidates_authorships,res1[column1],res2[column2]],axis=1)
-#            print(res1) #debug
-#            print(res2)
 
             ## Final match
 
@@ -912,7 +912,7 @@ def evaluateTaxaCandidatesByAuthorship(verbatim, candidates, verbatimauthorshipo
                     idx2 = idx2 + morematch[conditions21 | conditions22].index.to_list()
 
                     if (len(idx1) == 0) and (len(idx2) == 0): #debug
-                        print('candidates sensu conflict:')
+                        print('[DEV] Unexpected')
                         print(temp)
                         print(candidates[columns])
                         print(verbatim)
@@ -1167,6 +1167,8 @@ def resolveTaxaMatch(data_classif, worms_classif, check_ambiguity=True, uncertai
     is_match_ambiguous = False
     ambiguity_msg_list = []
     authorship_issue_msg = ''
+    additional_issue_msg = ''
+
     isverbatim = (verbatimcolumn is not None)
 
     isnomatch = worms_classif['match_type'].str.contains(r'nomatch|above',regex=True)
@@ -1292,14 +1294,11 @@ def resolveTaxaMatch(data_classif, worms_classif, check_ambiguity=True, uncertai
             match_idx = np.where(match['match'])[0][0]
             classif = pd.DataFrame([[doesmatch,'classification_singleMatch'] + worms_classif.loc[match_idx,wormscolumns].to_numpy().flatten().tolist()], columns=colnames)
             if (not check_ambiguity) or (not isverbatim) or candidates['authority'].isna().any():
-                if isverbatim and candidates['authority'].isna().any():
-                    print("is_unique_higher_rank_match mais pas check_ambiguity, ou pas d'autorité dans verbatim ou worms")
-                    print(worms_classif.loc[:,[RANK_MAPPING_RENAMED['scientificname'],'authority']])
                 processed = True
                 check_ambiguity = False
             else:
                 # Check if authorship-based matching contradicts the unique higher-rank match
-                ambiguity_msg_list.append('UNIQUE-HIGHER-RANKS')
+                ambiguity_msg_list.append('HIGHER_RANKS')
                 doesmatch_final = doesmatch
                 match_idx_final = match_idx
                 classif_final = classif
@@ -1362,7 +1361,8 @@ def resolveTaxaMatch(data_classif, worms_classif, check_ambiguity=True, uncertai
                         classif = pd.DataFrame([classif], columns=colnames)
                         classif['classif_matchtype_generatedby_isinworms'] = 'classification_' + classif['classif_matchtype_generatedby_isinworms']
 
-                        if (uncertainty_level >= 2) and (classif['classif_matchtype_generatedby_isinworms'] == 'classification_authorship_noMatchIsMore'):
+                        classif_matchtype = classif.loc[0,'classif_matchtype_generatedby_isinworms']
+                        if (uncertainty_level >= 2) and (classif_matchtype == 'classification_authorship_noMatchIsMore'):
                             classif['taxamatch_generatedby_isinworms'] = 'uncertain'
 
                         if check_ambiguity:
@@ -1373,16 +1373,12 @@ def resolveTaxaMatch(data_classif, worms_classif, check_ambiguity=True, uncertai
                                     check_ambiguity = False
                                 else:
                                     candidates = worms_classif.loc[match_index,:]
-                                    ambiguity_msg_list.append('BEST-AUTHORSHIP')
+                                    ambiguity_msg_list.append('AUTHORSHIP')
 
                             else:
 
-                                ambiguity_msg_list.append('BEST-AUTHORSHIP')
+                                ambiguity_msg_list.append('AUTHORSHIP')
                                 is_match_ambiguous = (match_idx is None) or (match_idx != match_idx_final)
-                                if is_match_ambiguous: # debug
-                                    print("ambiguité unique higher rank et verbatim")
-                                    print('verbatim:',verbatim)
-                                    print(worms_classif.loc[:,[RANK_MAPPING_RENAMED['scientificname'],'authority']])
 
                     else:
                         index += 1
@@ -1428,10 +1424,10 @@ def resolveTaxaMatch(data_classif, worms_classif, check_ambiguity=True, uncertai
                         is_match_ambiguous = (len(index_intersection) != len(candidates))
 
                     if is_match_ambiguous:
-                        ambiguity_msg_list.append('BEST-HIGHER-RANKS')
+                        ambiguity_msg_list.append('HIGHER_RANKS')
 
                 if (not isverbatim) and check_ambiguity:
-                    ambiguity_msg_list.append('BEST-HIGHER-RANKS')
+                    ambiguity_msg_list.append('HIGHER_RANKS')
 
                 if (not processed) and (len(candidates) == 1):
 
@@ -1490,7 +1486,7 @@ def resolveTaxaMatch(data_classif, worms_classif, check_ambiguity=True, uncertai
                         processed = True
 
                 if check_ambiguity and is_match_ambiguous:
-                    ambiguity_msg_list.append('BEST-SPECIESNAME')
+                    ambiguity_msg_list.append('SPECIES_NAME')
 
 
             # STEP N°6: Do all candidates have the same classification and "accepted" status?
@@ -1587,7 +1583,8 @@ def resolveTaxaMatch(data_classif, worms_classif, check_ambiguity=True, uncertai
                             classif = pd.DataFrame([classif], columns=colnames)
                             classif['classif_matchtype_generatedby_isinworms'] = 'noclassification_' + classif['classif_matchtype_generatedby_isinworms']
 
-                            if (uncertainty_level == 3) and (classif['classif_matchtype_generatedby_isinworms'] == 'noclassification_authorship_noMatchIsMore'):
+                            classif_matchtype = classif.loc[0,'classif_matchtype_generatedby_isinworms']
+                            if (uncertainty_level == 3) and (classif_matchtype == 'noclassification_authorship_noMatchIsMore'):
                                 classif['taxamatch_generatedby_isinworms'] = 'uncertain'
 
                         else:
@@ -1616,24 +1613,6 @@ def resolveTaxaMatch(data_classif, worms_classif, check_ambiguity=True, uncertai
     classif['isBrackish'] = classif['isBrackish'].astype('Float64').astype('Int64')
     classif['isExtinct'] = classif['isExtinct'].astype('Float64').astype('Int64')
 
-    if doesmatch == 'match':
-
-        ismarineunknown = pd.isnull(classif.loc[0,'isMarine'])
-        isbrackishunknown = pd.isnull(classif.loc[0,'isBrackish'])
-
-        isnonmarine = (not ismarineunknown) and (classif.loc[0,'isMarine'] == 0)
-        isnonbrackish = (not isbrackishunknown) and (classif.loc[0,'isBrackish'] == 0)
-
-        if (ismarineunknown and isbrackishunknown) or (isnonmarine and isbrackishunknown) or (ismarineunknown and isnonbrackish):
-            doesmatch = 'uncertain'
-            classif.loc[0, colnames[0]] = doesmatch
-            classif.loc[0, colnames[1]] = classif.loc[0, colnames[1]] + '_marine_unsure'
-
-        if isnonmarine and isnonbrackish:
-            doesmatch = 'nomatch'
-            classif_matchtype = classif.loc[0, colnames[1]] + '_non_marine'
-            classif = pd.DataFrame([[doesmatch,classif_matchtype] + [pd.NA]*len(wormscolumns)], columns=colnames)
-
     if doesmatch == 'uncertain':
 
         candidates['isMarine'] = candidates['isMarine'].astype('Float64').astype('Int64')
@@ -1647,14 +1626,29 @@ def resolveTaxaMatch(data_classif, worms_classif, check_ambiguity=True, uncertai
             classif.loc[0, colnames[0]] = doesmatch
             classif.loc[0, colnames[1]] = classif.loc[0, colnames[1]] + '_non_marine'
 
+    if doesmatch == 'match':
+
+        ismarineunknown = pd.isnull(classif.loc[0,'isMarine'])
+        isbrackishunknown = pd.isnull(classif.loc[0,'isBrackish'])
+
+        isnonmarine = (not ismarineunknown) and (classif.loc[0,'isMarine'] == 0)
+        isnonbrackish = (not isbrackishunknown) and (classif.loc[0,'isBrackish'] == 0)
+
+        if (ismarineunknown and isbrackishunknown) or (isnonmarine and isbrackishunknown) or (ismarineunknown and isnonbrackish):
+            doesmatch = 'uncertain'
+            classif.loc[0, colnames[0]] = doesmatch
+            classif.loc[0, colnames[1]] = classif.loc[0, colnames[1]] + '_marine_unsure'
+            candidates = classif
+
+        if isnonmarine and isnonbrackish:
+            doesmatch = 'nomatch'
+            classif_matchtype = classif.loc[0, colnames[1]] + '_non_marine'
+            classif = pd.DataFrame([[doesmatch,classif_matchtype] + [pd.NA]*len(wormscolumns)], columns=colnames)
+
     # Remove fossils
 
     if not keep_fossil:
 
-#        worms_classif['isExtinct'] = worms_classif['isExtinct'].astype('Float64').astype('Int64')
-#        indices = worms_classif[worms_classif['isExtinct'] == 1].index
-
-#        if match_idx in indices:
         if doesmatch == 'match':
 
              isextinct = (not pd.isnull(classif.loc[0,'isExtinct'])) and (classif.loc[0,'isExtinct'] == 1)
@@ -1672,14 +1666,25 @@ def resolveTaxaMatch(data_classif, worms_classif, check_ambiguity=True, uncertai
 
             if isextinct:
                 doesmatch = 'nomatch'
-                classif.loc[0, colnames[0]] = doesmatch
-                classif.loc[0, colnames[1]] = classif.loc[0, colnames[1]] + '_fossil'
+                classif_matchtype = classif.loc[0, colnames[1]] + '_fossil'
+                classif = pd.DataFrame([[doesmatch,classif_matchtype] + [pd.NA]*len(wormscolumns)], columns=colnames)
+
+    # A match was found, but the WoRMS resolution path is cyclic.
+    # This cycle can occur when mapping a subspecies or an unaccepted
+    # name to an accepted species name (see `createwormsfilters.py`).
+    # Downgrade the match status and flag it for manual review.
+
+    if (doesmatch == 'match') and (classif.loc[0,'status'] == 'cycle'):
+        doesmatch = 'uncertain'
+        classif.loc[0, colnames[0]] = doesmatch
+        additional_issue_msg = 'UNRESOLVED_TAXONOMIC_CYCLE'
 
     # Populate the `issue_isinworms` column
 
-    ambiguity_msg = ('AMBIGUOUS_MATCH_' + '_'.join(ambiguity_msg_list) if is_match_ambiguous else '')
-    if ambiguity_msg or authorship_issue_msg:
-        classif['issue_isinworms'] = ';'.join([authorship_issue_msg,ambiguity_msg]).strip(';')
+    ambiguity_msg = ('AMBIGUOUS_' + '_'.join(ambiguity_msg_list) + '_MATCH' if is_match_ambiguous else '')
+
+    if ambiguity_msg or authorship_issue_msg or additional_issue_msg:
+        classif['issue_isinworms'] = ';'.join([authorship_issue_msg, ambiguity_msg, additional_issue_msg]).strip(';')
     else:
         classif['issue_isinworms'] = pd.NA
 
@@ -1921,6 +1926,7 @@ def applyTaxaMatching(classification, matchfilter=None, interactive_mode=False, 
                             except ValueError as error:
                                 print(error)
                                 printv(f"Invalid index. Please select one of the following: {', '.join(map(str, worms_indices))}", verbose=True, indent=indent)
+                                continue
                             if index not in worms_indices:
                                 printv(f"Invalid index. Please select one of the following: {', '.join(map(str, worms_indices))}", verbose=True, indent=indent)
                             else:
@@ -2095,14 +2101,21 @@ def applyAcceptedTaxaMapping(classification, acceptedfilter=None, keep_fossil=Fa
         classification.loc[isabovespecies,'classif_matchtype_generatedby_isinworms'] += '_taxonNoSpecies'
         classification.loc[isabovespecies,'taxamatch_generatedby_isinworms'] = 'nomatch'
 
+        # Remove quarantined or deleted taxa
+
+        isquarantineddeleted = (classification['status'] == 'quarantined') | (classification['status'] == 'deleted')
+        classification.loc[isquarantineddeleted,'classif_matchtype_generatedby_isinworms'] += '_taxonQuarantineDeleted'
+        classification.loc[isquarantineddeleted,'taxamatch_generatedby_isinworms'] = 'nomatch'
+
         # Remove fossils
 
         if not keep_fossil:
 
             classification['isExtinct'] = classification['isExtinct'].astype('Float64').astype('Int64')
             isfossil = (classification['isExtinct'] == 1)
-            classification.loc[isfossil,'classif_matchtype_generatedby_isinworms'] += '_fossil'
-            classification.loc[isfossil,'taxamatch_generatedby_isinworms'] = 'nomatch'
+            isfossil_noflag = isfossil & (~classification['classif_matchtype_generatedby_isinworms'].str.contains('_fossil'))
+            classification.loc[isfossil_noflag,'classif_matchtype_generatedby_isinworms'] += '_fossil'
+            classification.loc[isfossil_noflag,'taxamatch_generatedby_isinworms'] = 'nomatch'
             subset_columns = list(set(classification.columns) - set(['classif_matchtype_generatedby_isinworms','taxamatch_generatedby_isinworms']))
             classification.loc[isfossil,subset_columns] = pd.NA
 
@@ -2270,12 +2283,10 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
     if len(set(RANK_MAPPING.keys()).symmetric_difference(worms_ranks)) != 0:
         raise Exception(f'`isinworms.py` | `RANK_MAPPING` keys should be {worms_ranks}')
 
-    wormscall_required_keys = worms_ranks + ['match_type','status','valid_AphiaID', 'rank', 'isMarine', 'isBrackish']
+    wormscall_required_keys = worms_ranks + ['AphiaID', 'match_type','status','valid_AphiaID', 'rank', 'isMarine', 'isBrackish']
     wormscall_missing_keys = set(wormscall_required_keys) - set(WORMSCALL)
     if len(wormscall_missing_keys) != 0:
         WORMSCALL += wormscall_missing_keys
-        print('WORMSCALL:',WORMSCALL) # debug
-#        raise Exception(f'`isinworms.py` | {wormscall_missing_keys} WoRMS keys are missing in `WORMSCALL`')
 
     if worms_dtypes is not None:
         WORMS_DTYPES.update(worms_dtypes)
@@ -2432,7 +2443,6 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
         classification = pd.DataFrame([],columns=COLNAMES)
     else:
         classification = harmonizeTaxonomyWithWoRMS(taxonomy.replace('_MISSING_',pd.NA), **params, **params_store, **params_parallel)
-        print(classification.columns) # debug
 
     # Convert WORMS-specific column dtypes
 
@@ -2455,6 +2465,10 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
     df['issue_isinworms'] = df['issue_isinworms'].astype('string')
 
     worms_metadata = [v for k,v in worms_metadata_mapping.items() if k not in wormscall_missing_keys]
+    worms_dtypes_keys = list(WORMS_DTYPES_RENAMED.keys())
+    for k in worms_dtypes_keys:
+        if k not in worms_metadata:
+            WORMS_DTYPES_RENAMED.pop(k, None)
     df[worms_metadata] = pd.NA
     df[worms_metadata] = df[worms_metadata].astype(WORMS_DTYPES_RENAMED)
 
@@ -2521,31 +2535,17 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
             outputfile = os.path.join(outputdir_isinworms, 'marinedata_processedby_isinworms.txt')
         if len(os.path.dirname(outputfile)) == 0:
             outputfile = os.path.join(outputdir_isinworms, outputfile)
-        print('outputfile:', outputfile)
-        print('classification')
-        print(classification.columns) # debug
+
         classification = classification.rename(columns=classification_mapping)
-        columns_to_keep = [c for c in classification.columns if c not in verbatimcolumn]
-        classification = classification[columns_to_keep]
-        print(classification.columns) # debug
-        print()
+        if verbatimcolumn is not None:
+            columns_to_keep = [c for c in classification.columns if c not in verbatimcolumn]
+            classification = classification[columns_to_keep]
 
         taxonomy_mapping = {v:k for k,v in RANK_MAPPING_RENAMED.items()}
         taxonomy = taxonomy.rename(columns=taxonomy_mapping)
-        print('taxonomy')
-        print(taxonomy.columns) # debug
-        print(taxonomy) # debug
-        print()
-
-        print('taxonomy_columns',taxonomy_columns) # debug
-        print('worms_metadata',worms_metadata)
-        print('worms_metadata_mapping',worms_metadata_mapping)
-        print('COLNAMES',COLNAMES)
-        print()
 
         assert len(taxonomy) == len(classification) #debug
         classification = pd.concat([taxonomy, classification], axis=1)
-        print(classification.columns)
 
         if os.path.isfile(outputfile):
             if not overwrite_isinworms:
@@ -2563,223 +2563,3 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
 
     return df
 
-
-#À SUPPRIMER APRES DEBUG
-
-def applyTOgz(gzfile,idcol,**params):
-
-    outputfile = os.path.join(params['outputdir'],params['outputfile'])
-    init=True
-    docontinue=False
-
-    if os.path.isfile(outputfile):
-
-        print(f'INFO | {outputfile} exists and will be used')
-
-#        with open(outputfile,'r') as processed_data:
-
-#            header = processed_data.readline().strip('\n').split('\t')
-#            id_index = header.index(idcol)
-
-#            for line in processed_data:
-#                line = line.strip('\n').split('\t')
-#                idprocessed.append(int(line[id_index]))
-#                last = int(line[id_index])
-#            init=False #DEBUG
-#            print("last:",last) #DEBUG
-        last = 1624092725
-        init=False
-        docontinue=True
-        print("last:",last)
-
-#    print('INFO | Number of lines processed:',len(idprocessed))
-
-    BATCH_SIZE=100000
-
-    with gzip.open(gzfile,'r') as gbif_data:
-
-        header = gbif_data.readline().decode("utf8").strip('\n').split('\t')
-        header_length = len(header)
-        id_index = header.index(idcol)
-
-        batch = 0
-        data2clean = []
-        error = 0
-        start=time.time()
-
-        for idx, line in enumerate(gbif_data):
-
-#           if idx<174650000:
-#                continue
-
-            # Add observations
-
-            obs = line.decode("utf8").strip('\n').split('\t')
-            obs = [preprocessquotationmark.apply(val) for val in obs]
-
-            if len(obs)==header_length:
-
-                 if docontinue:
-                    id = int(obs[id_index])
-                    if id==last:
-                        docontinue=False
-                    if (idx+1)%100000==0:
-                        print(f'Processing | {idx+1} lines done (processed={len(idprocessed)}, data2clean={len(data2clean)})')
-                 else:
-                     data2clean.append(obs)
-                     batch += 1
-
-            else:
-
-                error += 1
-                print(f'SplittingError: splitting gives more fields than columns line n°{idx}, the value will be ignored')
-                print(f'line n°{idx}: {line}')
-
-
-            if batch == BATCH_SIZE:
-
-                df2clean = pd.DataFrame(data2clean,columns=header)
-
-                # Process data
-                print()
-                print(f'Processing | {idx+1} lines done')
-                _ = apply(df2clean,**params,overwrite_isinworms=init)
-
-                end=time.time()
-                print()
-                print(f'TIME : {np.round(end-start,0)}s')
-
-                init=False
-                data2clean.clear()
-                batch=0
-                start=time.time()
-
-    if batch!=0:
-
-        df2clean = pd.DataFrame(data2clean,columns=header)
-
-        # Process data
-        print()
-        print(f'Processing | {idx+1} lines done')
-        _ = apply(df2clean,**params,overwrite_isinworms=init)
-
-        end=time.time()
-        print()
-        print(f'TIME : {np.round(end-start,0)}s')
-
-    return True
-
-if __name__ == "__main__":
-
-    parser = argparse.ArgumentParser(description='Create WoRMS filters')
-#    parser.add_argument('data_txtfile', type=str, help='path to the tab-separated file to be processed')
-    parser.add_argument('gzfile', type=str, help='path to the tab-separated file to be processed')
-    parser.add_argument('--wormscall', nargs='*', type=str, help='list containing the WoRMS variables to keep', default=WORMSCALL)
-    parser.add_argument('--worms_dtypes', type=json.loads, help='dictionary of the dtypes of WoRMS-specific columns', default=json.dumps(WORMS_DTYPES))
-    parser.add_argument('--matchfilter_txtfile', type=str, help='path to the WoRMS match filter', default=None)
-    parser.add_argument('--acceptedfilter_txtfile', type=str, help='path to the WoRMS accepted filter', default=None)
-    parser.add_argument('--check_ambiguity', action=argparse.BooleanOptionalAction, help='check if a different order of the matching criteria would have led to a different result', default=True)
-    parser.add_argument('--fuzzy', action=argparse.BooleanOptionalAction, help='fuzzy or exact matching on higher ranks', default=True)
-    parser.add_argument('--fixed_allowedMismatch', action=argparse.BooleanOptionalAction, help='set a fixed number of allowed mismatches for higher ranks, regardless of missing values', default=False)
-    parser.add_argument('--fixed_allowedMismatch_withNaN', type=int, help='number of allowed mismatches for higher ranks with missing values', default=1)
-    parser.add_argument('--fixed_allowedMismatch_withoutNaN', type=int, help='number of allowed mismatches for higher ranks without missing values', default=2)
-    parser.add_argument('--verbatimcolumn', nargs='*', type=str, help='columns containing authorship information', default=None)
-    parser.add_argument('--verbatimauthorshiponly', nargs='*', type=str, help='`verbatimcolumn` contains only authorship information', default=None) #False avant CHECK FUNC
-    parser.add_argument('--keep_fossil', action=argparse.BooleanOptionalAction, help='keep fossil taxa', default=False)
-    parser.add_argument('--min_length', type=int, help='minimum length of the words comprising the scientific name', default=3)
-    parser.add_argument('--doublecheck', action=argparse.BooleanOptionalAction, help='double-check or not three-word scientific names by querying only the first two words', default=True)
-    parser.add_argument('--store', action=argparse.BooleanOptionalAction, help='whether to store the filters', default=True)
-    parser.add_argument('--outputdir', type=str, help='path to folder where files will be stored', default='./')
-    parser.add_argument('--outputfile', type=str, help='name or path to the output file', default='')
-    parser.add_argument('--overwrite_createwormsfilters', action=argparse.BooleanOptionalAction, help='overwrite existing `createwormsfilters` filters', default=False)
-    parser.add_argument('--resume', action=argparse.BooleanOptionalAction, help='reuse existing filters and temporary files', default=True)
-    parser.add_argument('--resume_mode', type=str, help="whether to keep all previously retrieved data ('soft') or only the currently requested ones ('hard')", default='soft')
-    parser.add_argument('--parallel', action=argparse.BooleanOptionalAction, help='parallelize requests (maximum 2 CPUs)', default=False)
-    parser.add_argument('--max_attempt', type=int, help='maximum number of retries in case of errors when running in parallelized mode', default=3)
-    parser.add_argument('--store_parallel', action=argparse.BooleanOptionalAction, help='whether to store the filters in parallelized mode', default=True)
-    parser.add_argument('--overwrite_parallel_createwormsfilters', action=argparse.BooleanOptionalAction, help='overwrite existing `createwormsfilters` filters in parallelized mode', default=False)
-    parser.add_argument('--resume_parallel', action=argparse.BooleanOptionalAction, help='reuse existing filters in parallelized mode', default=True)
-    parser.add_argument('--drop_conditions', type=json.loads, help='dictionary {"key":"value"} specifying drop conditions', default=None)
-    # drop_conditions format: '{"key":"value"}'
-    parser.add_argument('--overwrite_isinworms', action=argparse.BooleanOptionalAction, help='overwrite existing `isinworms` output file', default=False)
-
-    args = parser.parse_args()
-
-    verbatimauthorshiponly = []
-    if (args.verbatimauthorshiponly is not None):
-
-        for idx,value in enumerate(args.verbatimauthorshiponly):
-
-            if value in ['True','False']:
-                value = (value == 'True')
-                verbatimauthorshiponly.append(value)
-
-            else:
-                raise ValueError(f'`isinworms.py` | `verbatimauthorshiponly` must be True or False, but `verbatimauthorshiponly[{idx}]`={value}')
-
-    if len(args.outputfile) == 0:
-        outputfile = args.data_txtfile.split('.')[0].split('/')[-1]
-        outputfile = outputfile + '_processedby_isinworms.txt'
-    else:
-        outputfile = args.outputfile
-
-#    df = pd.read_csv(args.data_txtfile, sep='\t', low_memory=False)
-    matchfilter = pd.read_csv(args.matchfilter_txtfile, sep='\t', low_memory=False)
-    acceptedfilter = pd.read_csv(args.acceptedfilter_txtfile, sep='\t', low_memory=False)
-
-    print_params = {
-                    #'data': args.data_txtfile,
-                    'matchfilter': args.matchfilter_txtfile,
-                    'acceptedfilter': args.acceptedfilter_txtfile
-                   }
-
-    params = {
-              'gzfile':args.gzfile,
-              'wormscall': args.wormscall,
-              'worms_dtypes': args.worms_dtypes,
-              'check_ambiguity': args.check_ambiguity,
-              'fuzzy': args.fuzzy,
-              'fixed_allowedMismatch': args.fixed_allowedMismatch,
-              'fixed_allowedMismatch_withNaN': args.fixed_allowedMismatch_withNaN,
-              'fixed_allowedMismatch_withoutNaN': args.fixed_allowedMismatch_withoutNaN,
-              'verbatimcolumn': args.verbatimcolumn,
-              'verbatimauthorshiponly': verbatimauthorshiponly,
-              'keep_fossil': args.keep_fossil,
-              'min_length': args.min_length,
-              'doublecheck': args.doublecheck,
-              'resume' : args.resume,
-              'resume_mode' : args.resume_mode,
-              'store': args.store,
-              'overwrite_createwormsfilters': args.overwrite_createwormsfilters,
-              'outputdir': args.outputdir,
-              'outputfile': outputfile,
-              'parallel': args.parallel,
-              'max_attempt': args.max_attempt,
-              'resume_parallel': args.resume_parallel,
-              'store_parallel': args.store_parallel,
-              'overwrite_parallel_createwormsfilters': args.overwrite_parallel_createwormsfilters,
-              'drop_conditions':args.drop_conditions,
-              'inplace': False
-             }
-
-
-    print_params.update(params)
-
-    params['matchfilter'] = matchfilter
-    params['acceptedfilter'] = acceptedfilter
-
-    print()
-    print('    Parameters')
-    print('    ----------')
-    for key, value in print_params.items():
-        print(f'    {key}: {value}')
-    print()
-
-    start=time.time()
-
-    #_ = apply(df, **params)
-    applyTOgz(**params, idcol='gbifID')
-
-    end=time.time()
-
-    print(f'    TIME : {round(end - start,0)}s')
