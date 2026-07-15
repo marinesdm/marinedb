@@ -91,12 +91,12 @@ SCN_IGNORE: #scn: scientific name
     - ovigerous
     - ovig
     - ov
-    - agamo #uniparental organisms
+    - agamo # uniparental organisms
     - agamossp
     - agamosp
     - agamovar
-    - m #male
-    #- f #female
+    - m # male
+#    - f # female, already specified for forma
     - exuviae
     - exuvia
     - ex
@@ -120,13 +120,13 @@ SCN_IGNORE: #scn: scientific name
     - uncultured
     - candidatus
     - candidate
-    - group #Group ICNCP
-    - gp #Gp ICNCP
+    - group # Group ICNCP
+    - gp # Gp ICNCP
     - convariety
     - convar
     - hybrid
     - hyb
-    - nm #nothomorph
+    - nm # nothomorph
     - clone
     - environmental
     - env
@@ -143,23 +143,23 @@ SCN_IGNORE: #scn: scientific name
     - unidentified
     - inquirenda
     - inq
-    #- dubia #counterexample:'Lindernia dubia', 'Halcampactis dubia'
+#    - dubia # counterexample:'Lindernia dubia', 'Halcampactis dubia'
     - dub
     - exclusa
     - incertae
     - sedis
     - sed
     - new
-    #- nudum #counterexample:'Eriogonum nudum'
+#    - nudum # counterexample:'Eriogonum nudum'
     - nud
     - nod
     - novum
     - nova
     - nov
     - n
-    #- affinis #counterexample:'Dryopteris affinis subsp. borreri'
+#    - affinis # counterexample:'Dryopteris affinis subsp. borreri'
     - aff
-    #- ex
+#    - ex
     - proxima
     - prox
     - near
@@ -208,30 +208,32 @@ SCN_IGNORE: #scn: scientific name
     - incl
     - all
     - vide
-    - ined #ineditus
-    - alt #alternativum
-    - ambig #ambiguum
-    - cons #conservandum
+    - ined # ineditus
+    - alt # alternativum
+    - ambig # ambiguum
+    - cons # conservandum
     - orth
-    - inval #invalida
-    - illeg #illegitima
-    - superfl #superflua
-    - inadmiss #inadmissibile
-    - obl #oblitum
-    - praeocc #protectum
-    - provis #provisorium
+    - inval # invalida
+    - illeg # illegitima
+    - superfl # superflua
+    - inadmiss # inadmissibile
+    - obl # oblitum
+    - praeocc # protectum
+    - provis # provisorium
     - prov
-    - rej #rejiciendum
-    - prop #propositum
+    - rej # rejiciendum
+    - prop # propositum
     - seminud
     - subnud
-    - supp #suppressum
+    - supp # suppressum
     - utique
     - design
-    - hom #homonymum
+    - hom # homonymum
     - unnamed
     - unamed
     - identified
+    - endosymbiont # host inferred
+
 
 AUTHORSHIP_IGNORE:
 
@@ -257,7 +259,7 @@ AUTHORSHIP_IGNORE:
     - and
     - apud
     - y
-    - ms #manuscript name
+    - ms # manuscript name
     - in
     - author
     - auctt # auctorum: latin of authors
