@@ -126,7 +126,21 @@ NaN2AllowedMismatch = {0:2,
 class NotImplemented(Exception): #À SUPPRIMER APRES DEBUG
     pass
 
-def resume(filter, values, issciname):
+def resume(filter, values, issciname) -> list:
+    """
+    This function resumes something and this is $\\mathbf{x} = \\mathbb{R}$.
+
+    Args:
+        filter: This is something for filtering
+
+        values: ome values to filter
+
+        issciname: something
+
+    Returns:
+        L: The list values that fit the filter, I believe
+    
+    """
 
     if not issciname:
         filter['group'].astype('Float64').astype('Int64')
