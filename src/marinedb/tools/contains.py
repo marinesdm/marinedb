@@ -68,7 +68,7 @@ def apply(df, key, values, flag=False, minimize_flagname=False, flagname_mapping
     else:
 
         # Drop rows:
-        #   - where `key` does not contain values in `values`
+        #   - where `key` DOES NOT contain values in `values`
         #   - with missing values in `key` if `dropna`
 
         return df[doescontain].reset_index(drop=True)

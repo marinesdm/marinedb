@@ -59,7 +59,7 @@ def apply(df, key, values, flag=False, minimize_flagname=False, flagname_mapping
 
     if flag:
 
-        # Flag rows where `key` values are not in `values`
+        # Flag rows where `key` values ARE NOT in `values`
 
         notisin[ismissing] = pd.NA
         df[f'flag_{key}_notisin_{values_str}'] = notisin
@@ -69,7 +69,7 @@ def apply(df, key, values, flag=False, minimize_flagname=False, flagname_mapping
     else:
 
         # Drop rows:
-        #   - where `key` values are not in `values`
+        #   - where `key` values ARE in `values`
         #   - with missing values in `key` if `dropna`
 
         return df[notisin].reset_index(drop=True)
