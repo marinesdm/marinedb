@@ -18,6 +18,7 @@ import shutil
 import inspect
 import argparse
 import pandas as pd
+from copy import deepcopy
 from itertools import groupby
 from operator import itemgetter
 from joblib import Parallel, delayed
@@ -81,7 +82,10 @@ SUPPORTED_PROCFUNCTIONS = ['marineloc',
                            'isdateunlikely'
                            ]
 
-SUPPORTED_POSTPROCFUNCTIONS = ['taxasubset', 'resolvetaxamatch']
+SUPPORTED_POSTPROCFUNCTIONS = [
+                               'taxasubset',
+                               'resolvetaxamatch'
+                              ]
 
 BATCH_SIZE = 100000
 
@@ -664,7 +668,6 @@ def dtypeconversion(df, config, verbose=True, indent=''):
 
                     except (TypeError, ValueError) as err:
 
-                        verbose=True # debug
                         printv(f"WARNING | Failed to convert '{colname}' to `{coltype}`", verbose=verbose, indent=indent)
                         coltype = ''
                         isprint = True
@@ -757,7 +760,6 @@ def curate_data(df, config, config_variables_updated, isvariable, init=False, ve
         printv('', verbose=verbose, indent=indent)
 
         colnames_mapping = get_column_mapping(config_variables_updated)
-
         df = df[list(colnames_mapping.keys())]
 
         # Apply dtype conversion
@@ -1082,7 +1084,9 @@ if __name__ == '__main__':
     config['inputdir_path'] = resolvepath.apply(config['inputdir_path'])
 
     if (not os.path.isdir(config['inputdir_path'])):
-        raise FileNotFoundError(f"`clean.py` | No such directory: '{config['inputdir_path']}'")
+#        raise FileNotFoundError(f"`clean.py` | No such directory: '{config['inputdir_path']}'")
+        print(f"INFO | Input directory '{config['inputdir_path']}' does not exist")
+        os.mkdir(config['inputdir_path'])
 
     initial_files = os.listdir(config['inputdir_path'])
 
@@ -1093,6 +1097,7 @@ if __name__ == '__main__':
     config['outputdir_path'] = resolvepath.apply(config['outputdir_path'])
 
     if (not os.path.isdir(config['outputdir_path'])):
+        print(f"INFO | Output directory '{config['outputdir_path']}' does not exist")
         try:
             os.mkdir(config['outputdir_path'])
         except FileExistsError:
@@ -1311,10 +1316,10 @@ if __name__ == '__main__':
         resolvetaxamatch_column_idx = resolvetaxamatch_filter[0][0]
         resolvetaxamatch_column = resolvetaxamatch_column[0]
         resolvetaxamatch_idx = get_keys(config['postprocessing'][resolvetaxamatch_column_idx][resolvetaxamatch_column]).index('resolvetaxamatch')
-        resolvetaxamatch_params = config['postprocessing'][resolvetaxamatch_column_idx][resolvetaxamatch_column][resolvetaxamatch_idx]
+        resolvetaxamatch_params = deepcopy(config['postprocessing'][resolvetaxamatch_column_idx][resolvetaxamatch_column][resolvetaxamatch_idx])
         if isinstance(resolvetaxamatch_params, str):
             config['postprocessing'][resolvetaxamatch_column_idx][resolvetaxamatch_column][resolvetaxamatch_idx] = {'resolvetaxamatch':{}}
-            resolvetaxamatch_params = config['postprocessing'][resolvetaxamatch_column_idx][resolvetaxamatch_column][resolvetaxamatch_idx]
+            resolvetaxamatch_params = deepcopy(config['postprocessing'][resolvetaxamatch_column_idx][resolvetaxamatch_column][resolvetaxamatch_idx])
         resolvetaxamatch_params = resolvetaxamatch_params['resolvetaxamatch']
 
         if (not is_isinworms):
@@ -1337,7 +1342,7 @@ if __name__ == '__main__':
         isinworms_column_idx = isinworms_filter[0][0]
         isinworms_column = isinworms_column[0]
         isinworms_idx = get_keys(config['processing'][isinworms_column_idx][isinworms_column]).index('isinworms')
-        isinworms_params = config['processing'][isinworms_column_idx][isinworms_column][isinworms_idx]['isinworms']
+        isinworms_params = deepcopy(config['processing'][isinworms_column_idx][isinworms_column][isinworms_idx]['isinworms'])
         isinworms_args = list(isinworms_params.keys())
 
         if 'interactive_mode' not in isinworms_args:
@@ -1367,7 +1372,7 @@ if __name__ == '__main__':
             createwormsfilters_column_idx = createwormsfilters_filter[0][0]
             createwormsfilters_column = createwormsfilters_column[0]
             createwormsfilters_idx = get_keys(config['processing'][createwormsfilters_column_idx][createwormsfilters_column]).index('createwormsfilters')
-            createwormsfilters_params = config['processing'][createwormsfilters_column_idx][createwormsfilters_column][createwormsfilters_idx]['createwormsfilters']
+            createwormsfilters_params = deepcopy(config['processing'][createwormsfilters_column_idx][createwormsfilters_column][createwormsfilters_idx]['createwormsfilters'])
             createwormsfilters_params['colname'] = createwormsfilters_column
             createwormsfilters_params['store'] = True
             createwormsfilters_params['store_parallel'] = True
@@ -1417,7 +1422,7 @@ if __name__ == '__main__':
 
         else:
 
-            createwormsfilters_params = isinworms_createwormsfilters_params
+            createwormsfilters_params = deepcopy(isinworms_createwormsfilters_params)
             createwormsfilters_params['verbose'] = True
             createwormsfilters_params['indent'] = '   '
 
@@ -1445,11 +1450,12 @@ if __name__ == '__main__':
         auxiliary_columns = list(missing_keys)
 
         config['processing'][isinworms_column_idx][isinworms_column][isinworms_idx]['isinworms'] = isinworms_params
+        config['processing'][createwormsfilters_column_idx][createwormsfilters_column][createwormsfilters_idx]['createwormsfilters'] = createwormsfilters_params
 
         if is_resolvetaxamatch:
 
-            # Auxiliary columns required during processing and removed from the final dataset,
-            # as they were not requested by the user
+            # Ensure that auxiliary columns required during processing but
+            # not requested by the user are removed from the final dataset
 
             config['postprocessing'][resolvetaxamatch_column_idx][resolvetaxamatch_column][resolvetaxamatch_idx]['resolvetaxamatch']['auxiliary_columns'] = auxiliary_columns
 
@@ -1512,7 +1518,6 @@ if __name__ == '__main__':
         end = time.time()
         print(f'TIME | step: {round(end - start)}s [total: {round(end - start_cleaning)}s]')
         print()
-
 
     ##########################################
     ############### Processing ###############
