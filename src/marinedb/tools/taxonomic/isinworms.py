@@ -790,12 +790,6 @@ def evaluateTaxaCandidatesByAuthorship(verbatim, candidates, verbatimauthorshipo
                     if len(candidates_authorships) == 0:
 
                         ismore = True
-#                        _ , _ , more1 = parseAuthorship(verbatim_authorship[0])
-#                        _ , _ , more2 = parseAuthorship(verbatim_authorship[1])
-#                        condition1 = (not pd.isnull(more1)) and (len(more1) > 0)
-#                        condition2 = (not pd.isnull(more2)) and (len(more2) > 0)
-#                        if condition1 or condition2:
-#                            ismore = True
 
                         return candidates, ismore, issue
 
@@ -1521,8 +1515,6 @@ def resolveTaxaMatch(data_classif, worms_classif, check_ambiguity=True, uncertai
                     # Decision not possible, review manually or delete
 
                     doesmatch = 'uncertain'
-#                    match_idx = candidates.index[0]
-#                    classif = pd.DataFrame([[doesmatch,'classification_allAccepted'] + worms_classif.loc[match_idx,wormscolumns].to_numpy().flatten().tolist()], columns=colnames)
                     match_idx = None
                     classif = pd.DataFrame([[doesmatch,'classification_allAccepted'] + [pd.NA]*len(wormscolumns)], columns=colnames)
                     processed = True
@@ -2278,15 +2270,24 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
 
     # Parameters
 
-    ## Global variables
+    ## Global variables & mutable objects
 
     global WORMSCALL, WORMS_DTYPES, RANK_MAPPING, COLNAMES
 
     if wormscall is not None:
-        WORMSCALL = wormscall
+        WORMSCALL = wormscall.copy()
+
+    if worms_dtypes is not None:
+        worms_dtypes = worms_dtypes.copy()
+
+    if verbatimcolumn is not None:
+        verbatimcolumn = verbatimcolumn.copy()
+
+    if verbatimauthorshiponly is not None:
+        verbatimauthorshiponly = verbatimauthorshiponly.copy()
 
     if rank_mapping is not None:
-        RANK_MAPPING = rank_mapping
+        RANK_MAPPING = rank_mapping.copy()
 
     diff = set(RANK_MAPPING.values()) - set(df.columns)
     if len(diff) != 0:
@@ -2371,10 +2372,16 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
                       }
 
     taxonomy_columns_mapping = {}
+    rank_verbatim_overlap = [] # NEW
+    print('columns before:', df.columns)
     for key,rank in RANK_MAPPING.items():
         df, rankin, rankout = getcolumnname.apply(df, rank, 'isinworms', inplace)
         RANK_MAPPING_RENAMED[key] = rankin
         taxonomy_columns_mapping[rankin] = rankout
+        if (verbatimcolumn is not None) and (rank in verbatimcolumn) and inplace: # NEW
+            rank_verbatim_overlap.append(rank)
+            df[rank] = df[rankout]
+    print('columns after:',df.columns)
 
     taxonomy_columns = [RANK_MAPPING_RENAMED[r] for r in worms_ranks]
     worms_metadata = list(set(WORMSCALL) - set(RANK_MAPPING_RENAMED.keys()))
@@ -2399,8 +2406,11 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
         if ('authority' not in WORMSCALL):
             raise Exception(f"`isinworms.py` | `verbatimcolumn` is not None, but 'authority' not in `WORMSCALL`")
 
-        for i,col in enumerate(verbatimcolumn):
-            df, verbatimcolumn[i], _ = getcolumnname.apply(df, col, '', inplace=True)
+        for i, col in enumerate(verbatimcolumn):
+            if col not in rank_verbatim_overlap: # NEW
+                df, verbatimcolumn[i], _ = getcolumnname.apply(df, col, '', inplace=True)
+
+        params['verbatimcolumn'] = verbatimcolumn
 
         columns = taxonomy_columns + [c for c in verbatimcolumn if c not in taxonomy_columns] # do not use set() to preserve order
 
@@ -2551,6 +2561,7 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
             outputfile = os.path.join(outputdir_isinworms, outputfile)
 
         classification = classification.rename(columns=classification_mapping)
+
         if verbatimcolumn is not None:
             columns_to_keep = [c for c in classification.columns if c not in verbatimcolumn]
             classification = classification[columns_to_keep]

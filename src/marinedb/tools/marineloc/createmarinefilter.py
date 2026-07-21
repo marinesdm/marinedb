@@ -78,7 +78,6 @@ def extract_marine_indices(inputdir, controlkey=None, outputfile='marine_filter'
 
     if len(os.path.dirname(outputfile)) == 0:
         outputfile = os.path.join(inputdir,outputfile)
-    print('outputfile:', outputfile)
 
     # If a file has been processed multiple times,
     # consider only one corresponding `island.py` output file
