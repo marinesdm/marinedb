@@ -4,7 +4,7 @@ data:
 
   inputdir_path: "/data/dream/zrr/elena/obis_marinedb/source"
 
-  outputdir_path: "/data/dream/zrr/elena/obis_marinedb/flag"
+  outputdir_path: "/data/dream/zrr/elena/obis_marinedb/curated"
 
   outputfile_path: "obis_processedby_marinedb.txt"
 
@@ -100,6 +100,9 @@ data:
     - basisOfRecord:
         - mapbasisofrecord:
             inplace: True
+        - doesnotcontain:
+            values: 'FOSSIL'
+            flag: False
     - tool:
         - islatloninvalid: # excluded at data acquisition
             latkey: 'decimalLatitude'
@@ -120,6 +123,7 @@ data:
             value: 2
             flag: False
     - coordinateUncertaintyInMeters:
+        - isboundedby:
             operator: '>'
             value: 1000
             flag: False
@@ -141,7 +145,7 @@ data:
             yearkey: 'year'
             monthkey: 'month'
             daykey: 'day'
-            inplace_parse: False
+            inplace_parse: True
             stdnan: True
             # process date intervals
             flag_interval: True

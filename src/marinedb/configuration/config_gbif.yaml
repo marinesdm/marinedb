@@ -99,6 +99,9 @@ data:
     - basisOfRecord:
         - mapbasisofrecord:
             inplace: True
+        - doesnotcontain:
+            values: 'FOSSIL'
+            flag: False
     - occurrenceStatus:
         - isin:
             values: ['ABSENT']
@@ -124,6 +127,7 @@ data:
             value: 2
             flag: False
     - coordinateUncertaintyInMeters:
+        - isboundedby:
             operator: '>'
             value: 1000
             flag: False
@@ -164,7 +168,7 @@ data:
             value: 1950
             flag: True
     - issue:
-        - contains:
+        - doesnotcontain:
             values:
               - 'INDIVIDUAL_COUNT_CONFLICTS_WITH_OCCURRENCE_STATUS'
               - 'COORDINATE_REPROJECTION_FAILED'
@@ -217,7 +221,7 @@ data:
     - phylum
     - kingdom
     - basisOfRecord
-    - flag_occurrenceStatus_isin_ABSENCE:
+    - flag_occurrenceStatus_isin_ABSENT:
         flag_absence: 'bool'
 #    - individualCount:
 #        individualCount: 'int'

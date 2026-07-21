@@ -1,7 +1,6 @@
 data:
 
-#  inputfile_path: "/data/dream/zrr/elena/data/JeDI.csv"
-  inputfile_path: "/data/dream/zrr/elena/jedi_marinedb/source/marineloc/JeDI_processedby_format_marineloc.csv"
+  inputfile_path: "/data/dream/zrr/elena/data/JeDI.csv"
 
   inputdir_path: "/data/dream/zrr/elena/jedi_marinedb/source"
 
@@ -10,17 +9,17 @@ data:
   outputfile_path: "jedi_processedby_marinedb.txt"
 
   processing:
-#    - tool:
-#        - format:
-#            dataset_name: 'jedi'
-#            overwrite: False
-#    - tool:
-#        - marineloc:
-#            latkey: 'decimalLatitude'
-#            lonkey: 'decimalLongitude'
-#            split_type: 'pandas'
-#            parallel: True
-#            filterfile: '/data/dream/zrr/elena/jedi_marinedb/source/marineloc/processed/marine_filter'
+    - tool:
+        - format:
+            dataset_name: 'jedi'
+            overwrite: False
+    - tool:
+        - marineloc:
+            latkey: 'decimalLatitude'
+            lonkey: 'decimalLongitude'
+            split_type: 'pandas'
+            parallel: True
+            filterfile: '/data/dream/zrr/elena/jedi_marinedb/source/marineloc/processed/marine_filter'
     - scientificName:
         - createwormsfilters:
             skip_uniques_rebuild: True
@@ -109,6 +108,9 @@ data:
     - samplingProtocol:
         - mapbasisofrecord:
             inplace: False
+        - doesnotcontain:
+            values: 'FOSSIL'
+            flag: False
     - occurrenceStatus:
         - isin:
             values: 'absent'
