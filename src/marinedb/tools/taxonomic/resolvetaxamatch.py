@@ -32,7 +32,7 @@ def apply(inputfile, isinworms_params, review_level=1, taxamatch_key = 'taxamatc
 
     with open(inputfile,'r') as data:
         header = data.readline().strip('\n').split('\t')
-    print('flag_uncertain',flag_uncertain)
+
     # Auxiliary columns required during processing
     # but not requested by the user
 
@@ -41,15 +41,17 @@ def apply(inputfile, isinworms_params, review_level=1, taxamatch_key = 'taxamatc
     elif len(auxiliary_columns) != 0:
         print(auxiliary_columns) #debug
         update_colnames = pd.DataFrame([],columns=header)
-        temp = []
-        for colname in auxiliary_columns:
+
+        for i,colname in enumerate(auxiliary_columns):
             _, updated_colname, _ = getcolumnname.apply(update_colnames, colname, '', inplace=True)
-            if colname == updated_colname:
-                updated_colname = [c for c in header if c.startswith(colname)]
+            if (colname == updated_colname) and (colname not in header):
+                updated_colname = [c for c in header if c.startswith(f"{colname}_")]
+                print('colname:', colname) # debug
+                print('updated_colname', updated_colname)
                 assert len(updated_colname) == 1
                 updated_colname = updated_colname[0]
-            temp.append(updated_colname)
-        auxiliary_columns = temp
+            auxiliary_columns[i] = updated_colname
+
         print(auxiliary_columns) #debug
 
     if not flag_uncertain:
@@ -355,7 +357,7 @@ def apply(inputfile, isinworms_params, review_level=1, taxamatch_key = 'taxamatc
 
             if len(indices) != 0:
 
-                chunk.loc[indices, columns_data] = chunk.loc[indices, columns_data].fillna('_MISSING_')
+                chunk.loc[indices, columns_data] = chunk.loc[indices, columns_data].astype('string').fillna('_MISSING_')
                 chunkByClassification = chunk.loc[indices, columns_data].groupby(columns_data)
 
                 chunk_classifications = set(chunkByClassification.groups.keys())
@@ -386,6 +388,8 @@ def apply(inputfile, isinworms_params, review_level=1, taxamatch_key = 'taxamatc
                 chunk = chunk[chunk[taxamatch_key] != 'uncertain']
 
             after += len(chunk)
+
+            chunk = chunk.replace('_MISSING_', pd.NA)
 
             if len(auxiliary_columns) != 0:
                 chunk = chunk.drop(columns=auxiliary_columns)
