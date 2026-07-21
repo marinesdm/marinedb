@@ -22,6 +22,7 @@ from marinedb.utils.printverbose import printv
 from marinedb.utils import getdefaultoutputfile
 
 from marinedb.tools.taxonomic import taxasubset_species_identifier
+from marinedb.tools.taxonomic.plot_taxasubset_upperbound_sampling import H3GeometryCache, H3SamplingMapCartopy, STATUS_COLORS, create_gif_H3_sampling
 
 # Global variable
 
@@ -70,8 +71,6 @@ def select_locations(df, latkey, lonkey, speciesidkey, nloc_per_species, species
                 change_export_process = input(indent + f'Do you want to set `export_process` to False? (y/n) ').strip().lower()
             if change_export_process == 'y':
                 export_process = False
-        if export_process:
-            init = True
 
     if export_process and ('sampling' not in outputdir.split('/')):
         outputdir = os.path.join(outputdir, 'sampling', 'location')
@@ -94,6 +93,21 @@ def select_locations(df, latkey, lonkey, speciesidkey, nloc_per_species, species
             verbose = False
 
     for species in process:
+
+        if export_process:
+
+            geometry_cache = H3GeometryCache(target_crs="EPSG:8857", backend="cartopy") # NEW
+
+            sampling_map = H3SamplingMapCartopy(          # NEW
+                geometry_cache=geometry_cache,
+                export_type=export_type,
+                cell_column="cell",
+                palette=STATUS_COLORS,
+                show_legend=True,
+                show_coastlines=True,
+                verbose=verbose,
+                indent=indent
+            )
 
         printv(f'>>> taxon_id {species}', verbose=verbose, indent=indent)
         subset = df.loc[df[speciesidkey] == species, [latkey, lonkey, speciesidkey]].copy()
@@ -173,9 +187,6 @@ def select_locations(df, latkey, lonkey, speciesidkey, nloc_per_species, species
                 if export_process and (len(remaining_grid_locations) == 0): # NEW
 
                     params = {
-                              'latkey': latkey,
-                              'lonkey': lonkey,
-                              'speciesidkey': speciesidkey,
                               'sampled_cells': remaining_grid_locations,
                               'adjacent_cells': set(),
                               'previous_sampled_cells': sampled_grid_locations,
@@ -183,15 +194,10 @@ def select_locations(df, latkey, lonkey, speciesidkey, nloc_per_species, species
                               'species': species,
                               'resolution': resolution,
                               'step': step,
-                              'init': init,
-                              'export_type': export_type,
                               'outputdir': outputdir,
-                              'verbose': verbose,
-                              'indent': indent + '  '
                              }
 
-                    plot_h3grid_sampling(subset, **params)
-                    init = False
+                    plot_H3_sampling(subset, sampling_map, **params) # NEW
                     step += 1
 
             if (nloc_per_species - n) >= len(remaining_grid_locations):
@@ -245,9 +251,6 @@ def select_locations(df, latkey, lonkey, speciesidkey, nloc_per_species, species
             if export_process:
 
                 params = {
-                          'latkey': latkey,
-                          'lonkey': lonkey,
-                          'speciesidkey': speciesidkey,
                           'sampled_cells': sampled_grid_locations,
                           'adjacent_cells': adjacent_grid_locations,
                           'previous_sampled_cells': previous_sampled_cells,
@@ -255,15 +258,10 @@ def select_locations(df, latkey, lonkey, speciesidkey, nloc_per_species, species
                           'species': species,
                           'resolution': resolution,
                           'step': step,
-                          'init': init,
-                          'export_type': export_type,
                           'outputdir': outputdir,
-                          'verbose': verbose,
-                          'indent': indent + '  '
                          }
 
-                plot_h3grid_sampling(subset, **params)
-                init = False
+                plot_H3_sampling(subset, sampling_map, **params) # NEW
                 step += 1
 
         # Update the location subset
@@ -283,12 +281,12 @@ def select_locations(df, latkey, lonkey, speciesidkey, nloc_per_species, species
         full_location_subset.extend(species_location_subset)
 
         if export_process:
-            if (export_type == 'both') or (export_type == 'gif'):
-                create_gif_h3grid_sampling(outputdir, species, export_type, verbose=verbose, indent=indent) # + '  ')
 
-    if export_process:
-        import matplotlib.pyplot as plt
-        plt.close()
+            if (export_type == 'both') or (export_type == 'gif'):
+                create_gif_H3_sampling(outputdir, species, export_type, verbose=verbose, indent=indent) # + '  ')
+
+            sampling_map.close()
+            geometry_cache.clear()
 
     if verbose_level == 1:
         verbose = True
@@ -471,142 +469,22 @@ def downsample_observations(df, latkey, lonkey, speciesidkey, maxobs_per_taxon, 
 
     return outputfile
 
-def plot_h3grid_sampling(df, latkey, lonkey, speciesidkey, sampled_cells, adjacent_cells, previous_sampled_cells, previous_adjacent_cells, species, resolution, step, init, export_type='image', outputdir='./', verbose=True, indent=''):
+def plot_H3_sampling(df, sampling_map, sampled_cells, adjacent_cells, previous_sampled_cells, previous_adjacent_cells, species, resolution, step, outputdir='./'):
 
-    import shapely
-    import antimeridian
-    import matplotlib.pyplot as plt
-    from descartes import PolygonPatch
-    from matplotlib.patches import Patch
-    from mpl_toolkits.basemap import Basemap
-    from matplotlib.collections import PatchCollection
-    from matplotlib.colors import ListedColormap
+    current_cell_ids = (df["cell"].astype(str).drop_duplicates())
 
-    if resolution > 1: # debug
-        for filename in glob.glob(f'*{species}*'):
-            os.remove(filename) # data_paper
-        return None
+    sampling_map.update(
+        cell_ids=current_cell_ids,
+        previous_sampled_cells=previous_sampled_cells,
+        previous_adjacent_cells=previous_adjacent_cells,
+        sampled_cells=sampled_cells,
+        adjacent_cells=adjacent_cells,
+        species=species,
+        resolution=resolution,
+        step=step
+    )
 
-    global projected_geom_cache
-    try:
-        projected_geom_cache
-    except NameError:
-        projected_geom_cache = {}
-
-    cmap = ListedColormap(['seagreen', 'black', 'grey', 'salmon', 'orange'])
-    labels = ['available', 'sampled (previous)', 'adjacent (previous)', 'sampled (current)', 'adjacent (current)']
-    if export_type == 'gif':
-#        dpi = 300
-        dpi = 80
-    else:
-#        dpi = 100 * (resolution + 1)
-        dpi = 150
-
-    if init:
-
-        plt.close()
-
-        global basemap
-        global fig
-        global ax
-
-        water = 'lightskyblue'
-        earth = 'cornsilk'
-
-        if export_type == 'gif':
-            figsize = (10, 8)
-            fontsize = 10
-        else:
-            figsize = (12, 10)
-            fontsize = 11
-        fig, ax = plt.subplots(figsize=figsize)
-#        fig, ax = plt.subplots(figsize=(30,25))
-
-        basemap = Basemap(
-                          llcrnrlat = -80,
-                          urcrnrlat = 80,
-                          llcrnrlon = -180,
-                          urcrnrlon = 180,
-                          projection = 'merc',
-                          resolution = 'i',
-                          ellps = 'WGS84',
-                          ax = ax
-                         )
-
-        basemap.drawcoastlines()
-        basemap.drawcountries()
-        basemap.drawmapboundary(fill_color=water)
-        _ = basemap.fillcontinents(color=earth,lake_color=water)
-
-# temp sup legende article
-#        legend_elements = []
-#        for i in range(len(labels)):
-#            legend_elements.append(Patch(facecolor=cmap(i), edgecolor='white', label=labels[i]))
-#        ax.legend(handles=legend_elements, loc='lower right', title='CELL STATUS', fontsize=(fontsize - 1), title_fontsize=fontsize) # fontsize = 16
-
-    df_plot = df[['cell', latkey, lonkey]].copy()
-    df_plot = df_plot.groupby(['cell'])[[latkey, lonkey]].mean().reset_index()
-
-    adjacent_cells = set(adjacent_cells - previous_adjacent_cells - sampled_cells)
-    previous_adjacent_cells = set(previous_adjacent_cells - previous_sampled_cells)
-    sampled_cells = set(sampled_cells - previous_sampled_cells)
-
-    df_plot['set'] = 0
-    df_plot.loc[df_plot['cell'].isin(previous_sampled_cells),'set'] = 1
-    df_plot.loc[df_plot['cell'].isin(previous_adjacent_cells),'set'] = 2
-    df_plot.loc[df_plot['cell'].isin(sampled_cells),'set'] = 3
-    df_plot.loc[df_plot['cell'].isin(adjacent_cells),'set'] = 4
-
-    df_plot = df_plot.set_index('cell').h3.h3_to_geo_boundary().reset_index()
-
-    patches = []
-    colors = []
-    cells = df_plot['cell'].to_numpy()
-    geoms = df_plot.geometry.to_list()
-    sets  = df_plot['set'].to_numpy()
-
-    for cell, polygon, set_id in zip(cells, geoms, sets):
-        if cell not in projected_geom_cache:
-            polygon = antimeridian.fix_polygon(polygon)
-            projected_geom_cache[cell] = shapely.ops.transform(basemap, polygon)
-        patches.append(PolygonPatch(projected_geom_cache[cell]))
-        colors.append(cmap(set_id))
-
-    p = PatchCollection(patches, alpha=0.8, edgecolor='white', linewidths=0.5, zorder=2, facecolors=colors)
-    ax.add_collection(p)
-    title = ax.set_title(f'SPECIES: {species} - RES: {resolution:02} - STEP: {step:02}')
-
-    outputfile = os.path.join(outputdir, f'{species}_RES{resolution:02}_STEP{step:02}.png')
-    if export_type != 'gif':
-        printv(f'INFO | save to {outputfile}', verbose=verbose, indent=indent)
-    plt.savefig(outputfile, dpi=dpi, bbox_inches='tight')
-
-    p.remove()
-
-    return None
-
-@export
-def create_gif_h3grid_sampling(outputdir, species, export_type='gif', duration=2000, verbose=True, indent=''):
-
-    from PIL import Image
-    Image.MAX_IMAGE_PIXELS = None
-
-    images = sorted(glob.glob(os.path.join(outputdir,f'{species}*')))
-    frames = [Image.open(image) for image in images]
-
-    if (export_type == 'both'):
-        for i, frame in enumerate(frames[1:]):
-            frames[i+1] = frames[i+1].resize(frames[0].size)
-
-    gif_path = os.path.join(outputdir, f'{species}_H3grid_sampling.gif')
-    printv(f'INFO | save to {gif_path}', verbose=verbose, indent=indent)
-    frames[0].save(gif_path, format="GIF", append_images=frames[1:], save_all=True, duration=duration)
-
-    if (export_type == 'gif'):
-        for image in images:
-            os.remove(image)
-
-    return None
+    sampling_map.save(species, step, resolution, outputdir)
 
 @export
 def apply(inputfile, limit, latkey, lonkey, sep='\t', speciesidkey=None, specieskey=None, genuskey=None, familykey=None, orderkey=None, classkey=None, phylumkey=None, kingdomkey=None, resolution=8, cleanup=False, dtypesfile=None, outputdir='./', outputfile=None, export_process=False, export_type='gif', verbose=True, verbose_level=2, indent=''):
@@ -673,7 +551,7 @@ def apply(inputfile, limit, latkey, lonkey, sep='\t', speciesidkey=None, species
 
         if cleanup and (inputfile != outputfile):
             printv(f'* Delete {inputfile}', verbose=verbose, indent=indent)
-            os.remove(inputfile)
+#            os.remove(inputfile) # debug
 
     else:
 
