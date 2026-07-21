@@ -56,8 +56,6 @@ def apply(df, config_dict, verbose=True, indent='', store_stats=True, outputdir_
     header += ['init']
     stats += [len(df)]
 
-#    basisofrecord_generated = False
-
     count = 1
     for procstep in config_dict:
 
@@ -96,18 +94,11 @@ def apply(df, config_dict, verbose=True, indent='', store_stats=True, outputdir_
 
             else:
 
-#                if (proc_name == 'mapbasisofrecord') and basisofrecord_generated:
-#                    previous_colname = colname
-#                    colname = new_colname
-
                 printv(f'* {colname}', verbose=verbose, indent=indent)
                 printv(indent + f'** {proc_name}', verbose=verbose, indent=indent)
                 procstep_string = '_'.join([colname, proc_name])
 
                 df = eval(f"{proc_name}.apply(df, colname, **proc_params)")
-
-#                if (proc_name == 'mapbasisofrecord') and basisofrecord_generated:
-#                    colname = previous_colname
 
             length_after = len(df)
             printv(f'{proc_name} | before: {length_before}, after: {length_after} ({length_after - length_before})', verbose=verbose, indent=indent + '   ')
@@ -121,10 +112,6 @@ def apply(df, config_dict, verbose=True, indent='', store_stats=True, outputdir_
             if len(new_columns) != 0:
 
                 printv(f'{proc_name} | new column(s): {list(new_columns)}', verbose=verbose, indent=indent + '   ')
-
-#                if (proc_name == 'mapbasisofrecord') and ('basisOfRecord_generatedby_mapbasisofrecord' in new_columns):
-#                    basisofrecord_generated = True
-#                    new_colname = 'basisOfRecord_generatedby_mapbasisofrecord'
 
             printv('', verbose=verbose, indent=indent)
 
