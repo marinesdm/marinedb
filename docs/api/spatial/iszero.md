@@ -1,5 +1,3 @@
-# Is Zero
+# iszero
 
-why not
-
-::: marinedb.tools.spatial.iszero.apply
+::: marinedb.tools.spatial.iszero

@@ -16,12 +16,52 @@ from marinedb.tools import getcolumnname
 __all__ = [] # populated using the @export decorator
 
 @export
-def apply(df, key, flag=False, eps=1e-5, dropna=False, verbose=True, indent=''):
+def apply(df, key, flag=False, eps=1e-5, dropna=False, verbose=True, indent='') -> pd.DataFrame:
+    """Flag or exclude records with values equal or close to zero.
 
-    # flag = True/False: whether to flag or drop observations that do not meet the condition
+    Values whose absolute value is less than or equal to ``eps`` are treated as
+    zero.
+
+    !!! warning
+
+        When ``flag=True``, records with zero-valued entries are flagged.
+
+        When ``flag=False``, records with zero-valued entries are excluded.
+
+    Args:
+        df (pandas.DataFrame):
+            Input DataFrame.
+
+        key (str):
+            Name of the column to inspect.
+
+        flag (bool, optional):
+            If ``True``, add a nullable Boolean column named
+            ``flag_<key>_iszero`` flagging records with values equal or close to
+            zero. If ``False``, exclude these records.
+
+        eps (float, optional):
+            Maximum absolute value treated as zero. A record meets the condition
+            when ``abs(value) <= eps``. Defaults to ``1e-5``.
+
+        dropna (bool, optional):
+            Defines how missing values in ``key`` are handled.
+
+            When ``flag=True``, missing values are always assigned ``pandas.NA``
+            in the flag column, regardless of the value of ``dropna``.
+
+            When ``flag=False``, missing values are excluded if ``True`` and
+            retained if ``False``.
+
+    Returns:
+        Processed DataFrame. When ``flag=True``, all records are retained and a
+            nullable Boolean flag column is added. When ``flag=False``, records with
+            values equal or close to zero are excluded and the index is reset.
+    """
+
     # default eps: 1e-5
     #   - GBIF coordinates are rounded to six decimal places
-    #   - five decimal places correspond to a precision of 1 meter at the equator (i.e., higher precision elsewhere)
+    #   - 5 decimal places = 1 meter precision at the equator 
 
     df, key, _ = getcolumnname.apply(df, key, '', inplace=True)
 

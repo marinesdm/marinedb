@@ -31,7 +31,55 @@ def value_mapping(str_value):
 
 
 @export
-def apply(df, key, operator, value, flag=False, dropna=False, verbose=True, indent=''):
+def apply(df, key, operator, value, flag=False, dropna=False, verbose=True, indent='') -> pd.DataFrame:
+    """Flag or exclude records based on a numeric boundary condition.
+
+    !!! warning
+
+        When ``flag=True``, records that satisfy the boundary condition are
+        flagged (i.e. records where the condition is met are flagged).
+
+        When ``flag=False``, records that do not satisfy the boundary condition
+        are excluded (i.e. records where the condition is not met are excluded).
+
+    Args:
+        df (pandas.DataFrame):
+            Input DataFrame.
+
+        key (str):
+            Name of the column to inspect.
+
+        operator (str):
+            Comparison operator defining the boundary condition. Accepted values
+            are ``"<"``, ``"<="``, ``">"`` and ``">="``.
+
+        value (int, float or str):
+            Numeric boundary value against which values in ``key`` are compared.
+
+        flag (bool, optional):
+            If ``True``, add a Boolean column named ``flag_<key>_isboundedby_<condition>`` 
+            flagging records that satisfy the boundary condition. 
+            If ``False``, exclude records that do not satisfy the condition.
+
+        dropna (bool, optional):
+            Defines how missing values in ``key`` are handled.
+
+            When ``flag=True``, missing values are always assigned ``pandas.NA``
+            in the flag column, regardless of the value of ``dropna``.
+
+            When ``flag=False``, missing values are excluded if ``True`` and
+            retained if ``False``.
+
+    Returns:
+        Processed DataFrame. When ``flag=True``, all records are retained and a
+            nullable Boolean flag column is added. When ``flag=False``, records that
+            do not satisfy the boundary condition are excluded and the index is reset.
+
+    Raises:
+        ValueError:
+            If ``operator`` is not a supported comparison operator, or if
+            the boundary value or column values cannot be converted to a number.
+    """
 
     df, key, _ = getcolumnname.apply(df, key, '', inplace=True)
 

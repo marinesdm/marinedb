@@ -1,3 +1,13 @@
-# Does lat eq lon ?
+# doeslateqlon
 
-maybe
+::: marinedb.tools.spatial.doeslateqlon
+
+!!! example
+    ```
+    - tool:
+        - doeslateqlon:
+            latkey: 'decimalLatitude'
+            lonkey: 'decimalLongitude'
+            flag: False
+            dropna: True
+    ```

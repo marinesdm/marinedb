@@ -28,7 +28,60 @@ def get_floatprecision(series_flt):
     return pd.Series(precision, index=series_flt.index)
 
 @export
-def apply(df, key, value, flag=False, dropna=False, verbose=True, indent=''):
+def apply(df, key, value, flag=False, dropna=False, verbose=True, indent='') -> pd.DataFrame:
+    """Flag or exclude records with insufficient decimal-place precision.
+
+    Decimal-place precision is measured as the number of digits after the decimal
+    point. A value falls below the threshold when it has fewer decimal places than
+    the specified minimum.
+
+    !!! warning
+
+        When ``flag=True``, records below the minimum precision are flagged.
+
+        When ``flag=False``, records below the minimum precision are excluded.
+
+    Args:
+        df (pandas.DataFrame):
+            Input DataFrame.
+
+        key (str):
+            Name of the column to inspect.
+
+        value (int):
+            Minimum required number of decimal places.
+
+        flag (bool, optional):
+            If ``True``, add a nullable Boolean column named
+            ``flag_<key>_belowminfloatprecision_<value>`` flagging records below
+            the minimum precision.
+
+            A column named
+            ``<key>_floatprecision_generatedby_belowminfloatprecision`` is also
+            added, containing the number of decimal places detected for each
+            value.
+
+            If ``False``, exclude records below the minimum precision.
+
+        dropna (bool, optional):
+            Defines how missing values in ``key`` are handled.
+
+            When ``flag=True``, missing values are assigned ``pandas.NA`` in the
+            flag column.
+
+            When ``flag=False``, missing values are excluded if ``True`` and
+            retained if ``False``.
+
+    Returns:
+        Processed DataFrame. When ``flag=True``, all records are retained and
+            precision and flag columns are added. When ``flag=False``, records below
+            the minimum precision are excluded, the temporary precision column is
+            removed, and the index is reset.
+
+    Raises:
+        ValueError:
+            If ``value`` is not an integer.
+    """
 
     if not isinstance(value,int):
         raise ValueError(f'`belowminfloatprecision.py` | `value` must be an integer (value={value})')

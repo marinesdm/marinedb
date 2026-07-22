@@ -39,11 +39,50 @@ def format_jedi(inputfile, outputfile):
     # Create an index column
     jedi_dataset['jedi_id'] = jedi_dataset.index.tolist()
 
+    outputfile = os.path.splitext(outputfile)[0] + '.txt'
     jedi_dataset.to_csv(outputfile, sep='\t', index=False)
 
-    return None
+    return outputfile
 
-def apply(inputfile, dataset_name, outputfile=None, outputdir=None, overwrite=True, verbose=True, indent=''):
+def apply(inputfile, dataset_name, outputfile=None, outputdir=None, overwrite=True, verbose=True, indent='') -> str:
+    """Apply dataset-specific transformations required by marinedb.
+
+    This preprocessing step is always performed before the main curation workflow. 
+    Currently, only JeDI dataset is supported. 
+
+    Args:
+        inputfile (str):
+            Path to the input dataset.
+
+        dataset_name (str):
+            Name of the dataset-specific formatting procedure to apply. Currently,
+            only ``"jedi"`` is supported.
+
+        outputfile (str, optional):
+            Path or name of the formatted output file.
+
+            If omitted, the output name is derived from ``inputfile`` by adding
+            ``"_processedby_format"`` before the file extension.
+
+        outputdir (str, optional):
+            Directory in which to write the formatted dataset.
+
+            If omitted, the directory is inferred from ``outputfile`` when it
+            contains a directory path, or from ``inputfile`` otherwise.
+
+        overwrite (bool, optional):
+            Whether to overwrite an existing output file.
+
+            If ``True``, the existing file is replaced. If ``False``, the existing
+            file is reused without modification.
+
+    Returns:
+        Path to the formatted output file.
+
+    Raises:
+        ValueError:
+            If ``dataset_name`` is not supported.
+    """
 
     if outputfile is None:
         temp = os.path.basename(inputfile).split('.')
@@ -69,7 +108,7 @@ def apply(inputfile, dataset_name, outputfile=None, outputdir=None, overwrite=Tr
             return outputfile
 
     if dataset_name == 'jedi':
-        format_jedi(inputfile, outputfile)
+        outputfile = format_jedi(inputfile, outputfile)
     else:
         raise ValueError(f"`format.py` | '{dataset_name}' is not supported. Only 'jedi' is currently accepted for `dataset_name`")
 
