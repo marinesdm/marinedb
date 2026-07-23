@@ -36,10 +36,10 @@ def apply(df, key, operator, value, flag=False, dropna=False, verbose=True, inde
 
     !!! warning
 
-        When ``flag=True``, records that satisfy the boundary condition are
+        - When ``flag=True``, records that satisfy the boundary condition are
         flagged (i.e. records where the condition is met are flagged).
 
-        When ``flag=False``, records that do not satisfy the boundary condition
+        - When ``flag=False``, records that do not satisfy the boundary condition
         are excluded (i.e. records where the condition is not met are excluded).
 
     Args:

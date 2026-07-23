@@ -23,11 +23,11 @@ def apply(df, latkey, lonkey, flag=False, dropna=True, verbose=True, indent='') 
     Valid latitude values range from -90 to 90 degrees, and 
     valid longitude values from -180 to 180 degrees, with boundary values included.
 
-    !!! warning
+    !!! info
 
-        When ``flag=True``, records with invalid coordinates are flagged.
+        - When ``flag=True``, records with invalid coordinates are flagged.
 
-        When ``flag=False``, records with invalid coordinates are excluded.
+        - When ``flag=False``, records with invalid coordinates are excluded.
 
     Args:
         df (pandas.DataFrame):

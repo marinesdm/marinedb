@@ -180,7 +180,7 @@ def filter_parquet(inputfile, filterfile, controlkey=None, filter_sep='\t', outp
                         mismatch_original = batch_df.loc[ismismatch, controlkey]
                         mismatch_filter = validation[ismismatch]
                         mismatch_index = list(ismismatch[ismismatch].index)
-                        raise Exception(f"`filtermarineslocations.py` | Value mismatch at line(s) {','.join(mismatch_index)} between original (e.g {mismatch_original[mismatch_index[0]]}) and filter file (e.g. {mismatch_index[mismatch_index[0]]}). This may indicate a processing error.")
+                        raise Exception(f"`filtermarinelocations.py` | Value mismatch at line(s) {','.join(map(str,mismatch_index))} between original (e.g {mismatch_original[mismatch_index[0]]}) and filter file (e.g. {mismatch_filter[mismatch_index[0]]}). This may indicate a processing error.")
 
                 if not isindex:
                     batch_df.drop(columns=['index'],inplace=True)
@@ -287,7 +287,6 @@ def filter_uncompressed_gzip(inputfile, filterfile, controlkey=None, inputfile_s
                 header.insert(0,'marinedb_mask')
 
             with open(outputfile, 'w') as file:
-#                file.write(inputfile_sep.join(header))
                 file.write('\t'.join(header))
 
             # Read the input file until all entries matching the indices from the filter file have been retrieved
@@ -332,7 +331,6 @@ def filter_uncompressed_gzip(inputfile, filterfile, controlkey=None, inputfile_s
                         if keep_mask:
                             obs.insert(0,str(int(float(lines[mask_idx]))))
 
-#                        data.append(inputfile_sep.join(obs))
                         data.append('\t'.join(obs))
 
                         nobs_after += 1
@@ -361,7 +359,102 @@ def filter_uncompressed_gzip(inputfile, filterfile, controlkey=None, inputfile_s
     return nerror, nobs_before, nobs_after
 
 @export
-def apply(inputfile, filterfile, inputfile_format='uncompressed_gzip', controlkey=None, keep_mask=False, inputfile_sep='\t', filter_sep='\t', outputfile='', cleanup=True, verbose=True, indent=''):
+def apply(inputfile, filterfile, inputfile_format='uncompressed_gzip', controlkey=None, inputfile_sep='\t', filter_sep='\t', outputfile='', cleanup=True, keep_mask=False, verbose=True, indent=''):
+    """Filter an occurrence file using a marine filter.
+
+    Retain the records from ``inputfile`` whose indices occur in ``filterfile``. 
+
+    When ``controlkey`` is provided, its values are compared between the original
+    dataset and the marine filter. Any mismatch interrupts processing because it
+    may indicate that the filter is not aligned with the original records.
+
+    Args:
+        inputfile (str):
+            Path to the original occurrence file from which marine records are
+            extracted.
+
+        filterfile (str):
+            Path to the marine-filter file. Its ``index`` column must be sorted in
+            ascending order.
+
+        inputfile_format (str, optional):
+            Format of the original occurrence file, which determines the method used
+            to read and filter it. Accepted values are:
+
+            - ``"uncompressed_gzip"`` for plain-text or gzip-compressed files;
+            - ``"pandas"`` for text formats supported by ``pandas.read_csv``;
+            - ``"parquet"`` for Parquet files.
+
+            The ``"pandas"`` and ``"uncompressed_gzip"`` options use the same
+            filtering procedure.
+
+        controlkey (str, optional):
+            Name of a column used to verify that the marine filter is aligned
+            with the original dataset.
+
+            For each selected index, the control value stored in ``filterfile`` is
+            compared with the corresponding value in ``inputfile``. Processing is
+            interrupted if the values differ. Missing values are considered
+            equivalent when both values are missing.
+
+        inputfile_sep (str, optional):
+            Field separator used when ``inputfile_format`` is ``"pandas"`` or
+            ``"uncompressed_gzip"``.
+
+            For tab-separated files, relying on the default value is recommended.
+            When specified explicitly from the command line, escaped separators
+            such as ``"\\t"`` should be enclosed in quotes.
+
+        filter_sep (str, optional):
+            Field separator used in the marine-filter file.
+
+            For tab-separated files, relying on the default value is recommended.
+            When specified explicitly from the command line, escaped separators
+            such as ``"\\t"`` should be enclosed in quotes.
+
+        outputfile (str, optional):
+            Path to the filtered tabular file containing the retained marine records.
+
+            If omitted, ``"_marine"`` is added to the name of ``inputfile`` before
+            its extension.
+
+        cleanup (bool, optional):
+
+            !!! danger
+
+                Whether to permanently remove the marine-filter file after the filtered
+                occurrence file has been created. 
+
+            If the directory containing the filter becomes empty after its removal,
+            that directory is also deleted.
+
+        keep_mask (bool, optional):
+            Whether to include the ``mask`` column from the marine filter in the
+            output produced when ``inputfile_format`` is ``"pandas"`` or
+            ``"uncompressed_gzip"``
+
+    Returns:
+        (str):
+            Path to the filtered occurrence file.
+
+    Raises:
+        ValueError:
+            If ``inputfile_format`` is not ``"pandas"``,
+            ``"uncompressed_gzip"``, or ``"parquet"``.
+
+        Exception:
+            If values in ``controlkey`` differ between the original dataset and
+            the marine filter for one or more selected indices.
+
+    Note:
+        when ``inputfile_format`` is ``"pandas"`` or ``"uncompressed_gzip"`, records 
+        containing a different number of fields from the header are skipped and 
+        reported during processing.
+
+        The order and full content of retained records are taken from
+        ``inputfile``. The marine filter is used only to identify the records to
+        retain and, when requested, to provide the ``mask`` column.
+    """
 
     inputfile_sep = inputfile_sep.encode('utf-8').decode('unicode_escape')
     filter_sep = filter_sep.encode('utf-8').decode('unicode_escape')
@@ -410,7 +503,7 @@ def apply(inputfile, filterfile, inputfile_format='uncompressed_gzip', controlke
 
     end = time.time()
 
-    if cleanup: # NEW NEW NEW
+    if cleanup:
 
         printv('* Cleaning up intermediate files', verbose=verbose, indent=indent)
         printv('', verbose=verbose, indent=indent)

@@ -1,10 +1,10 @@
-# iszero
+# island
 
 ## API reference
 
-<h3><code>marinedb.tools.spatial.iszero</code></h3>
+<h3><code>marinedb.tools.marineloc.island</code></h3>
 
-::: marinedb.tools.spatial.iszero.apply
+::: marinedb.tools.marineloc.island.apply
         options:
           show_root_heading: false
           show_root_toc_entry: false

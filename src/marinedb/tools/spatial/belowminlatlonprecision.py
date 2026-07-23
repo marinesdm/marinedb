@@ -26,12 +26,12 @@ def apply(df, latkey, lonkey, value, flag=False, dropna=False, verbose=True, ind
     A record falls below the threshold when both coordinates have
     fewer decimal places than the specified minimum.
 
-    !!! warning
+    !!! info
 
-        When ``flag=True``, records where both coordinates fall below the minimum
+        - When ``flag=True``, records where both coordinates fall below the minimum
         precision are flagged.
 
-        When ``flag=False``, records where both coordinates fall below the minimum
+        - When ``flag=False``, records where both coordinates fall below the minimum
         precision are excluded.
 
     Args:

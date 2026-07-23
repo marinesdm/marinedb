@@ -45,7 +45,7 @@ def apply(kernel_type='square', kernel_size=51, outputdir='./', verbose=True, in
         # elliptical kernel
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(kernel_size, kernel_size))
     else:
-        raise ValueError(f"`createmask.py` | `kernel_type` must be either 'square' or 'ellipse', got '{args.kernel_type}'")
+        raise ValueError(f"`createmask.py` | `kernel_type` must be either 'square' or 'ellipse', got '{kernel_type}'")
 
     gradient_mask_globe = cv2.morphologyEx(mask_globe, cv2.MORPH_GRADIENT, kernel)
 

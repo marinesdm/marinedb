@@ -29,7 +29,16 @@ nav = [
     { "Zero-valued coordinates" = "api/spatial/islatlonzero.md"},
     { "Equal latitude and longitude"= "api/spatial/doeslateqlon.md"},
     { "Low coordinate precision"= "api/spatial/belowminlatlonprecision.md"},
-    { "Advanced utilities" = "api/spatial/advanced.md" },
+    { "Advanced utilities" = "api/spatial/advanced.md"},
+    { "Land-sea filtering" = [
+      { "Overview" = "api/spatial/marineloc/index.md"},
+      { "1. File splitting" = "api/spatial/marineloc/split_pandas_parquet.md"},
+      { "2.1 Land-sea classification" = "api/spatial/marineloc/island.md"},
+      { "2.2 Distributed land-sea classification" = "api/spatial/marineloc/parallel_island.md"},
+      { "3. Marine-filter creation" = "api/spatial/marineloc/createmarinefilter.md"},
+      { "4. Marine-record filtering" = "api/spatial/marineloc/filtermarinelocations.md"},
+      { "Integrated land-sea filtering" = "api/spatial/marineloc/marineloc.md"},
+  ]},
   ]},
     { "Temporal" = [
     { "Overview" = "api/temporal/index.md"},

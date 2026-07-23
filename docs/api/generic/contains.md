@@ -1,6 +1,15 @@
 # doesnotcontain
 
-::: marinedb.tools.contains
+## API reference
+
+<h3><code>marinedb.tools.contains</code></h3>
+
+::: marinedb.tools.contains.apply
+        options:
+          show_root_heading: false
+          show_root_toc_entry: false
+
+## Basic usage
 
 !!! example
     ```

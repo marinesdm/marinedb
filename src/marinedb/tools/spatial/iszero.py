@@ -22,11 +22,11 @@ def apply(df, key, flag=False, eps=1e-5, dropna=False, verbose=True, indent='') 
     Values whose absolute value is less than or equal to ``eps`` are treated as
     zero.
 
-    !!! warning
+    !!! info
 
-        When ``flag=True``, records with zero-valued entries are flagged.
+        - When ``flag=True``, records with zero-valued entries are flagged.
 
-        When ``flag=False``, records with zero-valued entries are excluded.
+        - When ``flag=False``, records with zero-valued entries are excluded.
 
     Args:
         df (pandas.DataFrame):

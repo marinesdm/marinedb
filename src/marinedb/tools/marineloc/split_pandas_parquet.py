@@ -110,7 +110,7 @@ def split_uncompressed_gzip(inputfile, sep='\t', columns=None, chunksize=CHUNKSI
         last_file = pd.read_csv(split_files[-1], sep='\t')
         split_idx = re.findall(r'[0-9]+', split_files[-1].split('/')[-1])
         if len(split_idx) != 1:
-            raise Exception(f'`split_pandas_parquet.py` | Unsupported file name: {split_files[-1]}. The file name must contain exactly one split number.')
+            raise ValueError(f"`split_pandas_parquet.py` | Cannot resume from '{split_files[-1]}': the file name must contain exactly one split number.")
         split_idx = int(split_idx[0]) + 1
         last_index = int(float(last_file.loc[last_file.index[-1], 'index']))
         del last_file
@@ -127,7 +127,7 @@ def split_uncompressed_gzip(inputfile, sep='\t', columns=None, chunksize=CHUNKSI
         if columns is not None:
             diffcol = set(columns) - set(header)
             if len(diffcol) != 0:
-                raise Exception(f"`split_pandas_parquet.py` | {','.join(diffcol)} not found in {inputfile} header")
+                raise KeyError(f"`split_pandas_parquet.py` | Columns not found in '{inputfile}' header: {','.join(sorted(diffcol))}")
             columns_idx = [idx for idx, col in enumerate(header) if col in columns]
             isindex = ('index' in columns)
 
@@ -206,6 +206,67 @@ def split_uncompressed_gzip(inputfile, sep='\t', columns=None, chunksize=CHUNKSI
     return outputdir
 
 def apply(inputfile, split_type='', columns=None, sep='\t', chunksize=CHUNKSIZE, outputdir='./', verbose=True, indent=''):
+    """Split a large input file into smaller tabular files.
+
+    The input is divided into chunks of ``chunksize`` rows. The splitting method
+    can be selected explicitly or detected automatically from the input format.
+
+    Chunk files are written to a ``<outputdir>/split`` subdirectory using the naming pattern
+    ``<basename>_splitNNNNN``, unless outputdir already points to a ``split`` directory.
+
+    An ``index`` column is preserved when present and created otherwise. This
+    column provides a stable link between split records and the original dataset
+    for subsequent classification and filtering steps.
+
+    Args:
+        inputfile (str):
+            Path to the input file.
+
+        split_type (str, optional):
+            Method used to read and split the input file. Accepted values are:
+
+            - ``"pandas"`` for formats supported by ``pandas.read_csv``;
+            - ``"parquet"`` for Parquet files;
+            - ``"uncompressed_gzip"`` for plain-text or gzip-compressed files.
+
+            When omitted, the methods are attempted successively in the order
+            listed above.
+
+        columns (list, optional):
+            Columns to retain in the output files. If ``None``, all columns are
+            retained.
+
+            An ``index`` column is always retained when available or created when absent.
+
+        sep (str, optional):
+            Field separator used for text-based input files. For tab-separated files, 
+            relying on the default value is recommended. When specified explicitly, 
+            escaped separators such as ``"\\t"`` should be enclosed in quotes, 
+            particularly when using the command-line interface.
+
+        chunksize (int, optional):
+            Maximum number of rows written to each output file. Defaults to
+            ``100000``.
+
+        outputdir (str, optional):
+            Directory in which to write the split files. A ``split`` subdirectory
+            is added unless the supplied path already points to one. Defaults to
+            ``"./"``.
+
+    Returns:
+        Path to the directory containing the split files.
+
+    Raises:
+        KeyError:
+            If one or more columns specified in ``columns`` are absent 
+            from the input file.
+
+        ValueError:
+            If an existing split file cannot be used to resume
+            ``uncompressed_gzip`` processing because its name does not contain
+            exactly one split number.
+    """
+
 
     sep = sep.encode('utf-8').decode('unicode_escape')
 

@@ -1,19 +1,22 @@
 #!/bin/bash
 
 # Use this script to execute `island.py` across multiple machines with the command:
-# `nice parallel-ssh -h [hosts_file] -t 0 parallel_is_land.sh [args]`,
+# `nice parallel-ssh -h <hosts_file> -t 0 parallel_is_land.sh [args]`,
 # where `hosts_file` lists the available machines.
-
-# Providing the same arguments to all machines — including the list of files
-# to process — is intentional: since all machines attempt to process all files,
+#
+# All machines must have access to the same split input files and shared
+# processed output directory.
+#
+# Providing the same arguments to all machines, including the list of files
+# to process, is intentional: since all machines attempt to process all files,
 # the workflow is more robust. If the process is interrupted on one machine,
 # all files will still eventually be processed by the others.
 
 # To limit redundancy and prevent two machines from processing the same file simultaneously,
 # `island.py` checks whether a file has already been processed before proceeding. However,
-# since processing time per file is relatively high, this check does not fully eliminate
+# since processing time per file can be relatively high, this check does not fully eliminate
 # the possibility of overlap. You can monitor progress using the `display_progress()` function
-# and terminate the process once all files have been processed.
+# in `island.py` and terminate the process once all files have been processed.
 
 while [[ $# -gt 0 ]]; do
 
@@ -111,4 +114,4 @@ if [[ -z ${outputdir+x} ]]; then
 fi
 
 cd "$(dirname "$0")"
-python3 island.py "${inputdir}" --latitude_column "${latitude}" --longitude_column "${longitude}" --index_column "${index}" --control_column "${control}" --fileslist_path "${fileslist}" --delimiter "${delimiter}" --maskfile_path "${maskfile}" --outputdir_path "${outputdir}" --parallel --cpu "${cpu}"
+python3 island.py "${inputdir}" --latitude-column "${latitude}" --longitude-column "${longitude}" --index-column "${index}" --control-column "${control}" --fileslist-path "${fileslist}" --delimiter "${delimiter}" --maskfile-path "${maskfile}" --outputdir-path "${outputdir}" --parallel --cpu "${cpu}"

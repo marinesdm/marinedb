@@ -22,11 +22,11 @@ def apply(df, key, stdnan=True, nan_values=None, stdnan_additional_policy='', fl
     Missing-value placeholders and uninformative field values can optionally 
     be standardized before records are flagged or excluded.
 
-    !!! warning
+    !!! info
 
-        When ``flag=True``, records with missing values are flagged.
+        - When ``flag=True``, records with missing values are flagged.
 
-        When ``flag=False``, records with missing values are excluded.
+        - When ``flag=False``, records with missing values are excluded.
 
     Args:
         df (pandas.DataFrame):

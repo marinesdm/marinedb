@@ -142,7 +142,133 @@ def extract_marine_indices(inputdir, controlkey=None, outputfile='marine_filter'
     return outputfile
 
 @export
-def apply(inputdir, latkey, lonkey, idxkey, controlkey=None, sep='\t', fileslist=None, maskfile=None, outputdir='', store_time=True, store_stats=True, parallel=False, cpu=None, outputfile='marine_filter', cleanup=True, verbose=True, indent=''):
+def apply(inputdir, latkey, lonkey, idxkey, controlkey=None, sep='\t', fileslist=None, maskfile=None, outputdir='', store_time=True, store_stats=True, parallel=False, cpu=None, outputfile='marine_filter', overwrite_reports=False, cleanup=True, verbose=True, indent=''):
+    """Create a filter identifying records classified as marine.
+
+    Classify the coordinates contained in the split files from ``inputdir``, then
+    extract the indices of records whose final binary land-sea classification is
+    sea. The resulting filter can subsequently be applied to the original dataset
+    to retain marine occurrences.
+
+    Coordinate classification is performed by
+    [`marinedb.tools.marineloc.island.apply`](island/#island). 
+    If corresponding processed outputs already exist, they are reused. Only 
+    unprocessed input files are classified. 
+
+    !!! warning
+
+        Missing or out-of-range coordinates are treated as records to exclude.
+        They are therefore classified as land and absent from the resulting 
+        marine filter.
+
+    Args:
+        inputdir (str):
+            Directory containing the split input files to classify.
+
+        latkey (str):
+            Name of the column containing latitude values.
+
+        lonkey (str):
+            Name of the column containing longitude values.
+
+        idxkey (str):
+            Name of the column containing the record index used to associate the
+            marine filter with the original dataset.
+
+        controlkey (str, optional):
+            Name of an additional column retained in the marine filter to verify
+            record alignment when the filter is later applied to the original
+            dataset.
+
+            Using both the record index and the control value reduces the risk that
+            an index offset or ordering error selects the wrong record.
+
+        sep (str, optional):
+            Field separator used in the split, processed, and filter files.
+
+            For tab-separated files, relying on the default value is recommended.
+            When specified explicitly from the command line, escaped separators
+            such as ``"\\t"`` should be enclosed in quotes.
+
+        fileslist (str, optional):
+            Path to a text file listing the split files to classify, with one file
+            per line.
+
+            Relative file names are resolved within ``inputdir``. If omitted, all
+            files directly contained in ``inputdir`` are considered.
+
+        maskfile (str, optional):
+            Path to a custom ``.npz`` land-sea-coast mask. If omitted, the mask
+            bundled with ``marinedb`` is used.
+
+        outputdir (str, optional):
+            Directory used for the intermediate coordinate-classification files.
+            A ``processed`` subdirectory is added unless the supplied path already
+            points to one.
+
+            If omitted, the processed files are written to a ``processed``
+            subdirectory within ``inputdir``.
+
+        store_time (bool, optional):
+            Whether to record the processing time for each classified input file
+            and generate an aggregated timing report.
+
+        store_stats (bool, optional):
+            Whether to generate classification statistics for each processed input
+            file.
+
+            The statistics report includes the number of records initially assigned
+            to ocean, land, and coast by the mask, the final number classified as
+            sea or land, and the proportion initially assigned to the coastal
+            category.
+
+        parallel (bool, optional):
+            Whether to classify several input files concurrently using multiple
+            CPUs.
+
+        cpu (int, optional):
+            Maximum number of CPUs used for local parallel processing.
+
+            If ``None`` or ``-1``, all CPUs available to the current process are
+            used when ``parallel=True``. If fewer files than CPUs are available,
+            the number of workers is automatically reduced to the number of files.
+
+        outputfile (str, optional):
+            Path or name of the marine-filter file.
+
+            If only a file name is provided, the filter is written to the directory
+            containing the processed classification files. If the name does not
+            contain ``"filter"``, ``"_filter"`` is added before the file extension,
+            when present.
+
+        cleanup (bool, optional):
+            !!! danger
+                Whether to permanently remove the split input files and intermediate 
+                classification files after the marine filter has been created.
+
+            Timing and statistics reports, as well as the marine-filter file, are
+            retained.
+
+        overwrite_reports (bool, optional):
+            Whether to overwrite existing timing and classification
+            statistics reports.
+
+            !!! info
+
+                This option applies only to the reporting files. It
+                does not control coordinate classification: input files with an
+                existing processed output are always skipped.
+
+    Returns:
+        (str):
+            Path to the marine-filter file.
+
+    !!! note
+        The resulting marine filter contains the standardized columns ``index``,
+        ``mask``, ``latitude``, and ``longitude``, together with the optional
+        control column. ``mask`` retains the initial classification produced 
+        by the land-sea-coast mask, using ``0`` for ocean and ``2`` for coast.
+    """
 
     sep = sep.encode('utf-8').decode('unicode_escape')
 
@@ -160,6 +286,7 @@ def apply(inputdir, latkey, lonkey, idxkey, controlkey=None, sep='\t', fileslist
                         'cpu': cpu,
                         'store_time': store_time,
                         'store_stats': store_stats,
+                        'overwrite_reports': overwrite_reports,
                         'verbose': verbose,
                         'indent': indent
                        }

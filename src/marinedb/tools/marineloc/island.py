@@ -3,6 +3,7 @@
 
 # from: https://basemaptutorial.readthedocs.io/en/latest/utilities.html#is-land
 # from: https://github.com/toddkarin/global-land-mask/tree/master
+# Karin, Todd. Global Land Mask. October 5, 2020. https://doi.org/10.5281/zenodo.4066722
 
 # External import
 
@@ -94,20 +95,15 @@ def setup(mask_filepath=None, verbose=True, indent=''):
 
 
 def lat_to_index(lat, verbose=True, indent=''):
+    """Convert latitude values to row indices in the classification mask.
 
-    """
-    Convert latitude to its corresponding index on the mask
+    Args:
+        lat (numeric or array-like):
+            Latitude value or values in decimal degrees.
 
-    Parameters
-    ----------
-    lat : numeric
-        Latitude in degrees
-
-    Returns
-    -------
-    numeric
-        Index in the mask corresponding to the specified latitude
-
+    Returns:
+        (Numeric or array-like):
+            Corresponding row indices in the land–sea–coast mask.
     """
 
     step = (_lat[1] - _lat[0])
@@ -136,20 +132,15 @@ def lat_to_index(lat, verbose=True, indent=''):
 
 
 def lon_to_index(lon, verbose=True, indent=''):
+    """Convert longitude values to column indices in the classification mask.
 
-    """
-    Convert longitude to its corresponding index on the mask
+    Args:
+        lon (numeric or array-like):
+            Longitude value or values in decimal degrees.
 
-    Parameters
-    ----------
-    lon : numeric
-        Longitude in degrees
-
-    Returns
-    -------
-    numeric
-        Index in the mask corresponding to the specified longitude
-
+    Returns:
+        (Numeric or array-like):
+            Corresponding column indices in the land–sea–coast mask.
     """
 
     step = (_lon[1] - _lon[0])
@@ -178,29 +169,23 @@ def lon_to_index(lon, verbose=True, indent=''):
 
 @export
 def island_basemap(lat, lon):
+    """Classify coordinates as land or sea using Basemap coastlines.
 
-    """
+    This function performs the high-resolution classification used for
+    coordinates assigned to the coastal category by the initial mask.
+    Code from [Basemap documentation](https://basemaptutorial.readthedocs.io/en/latest/utilities.html#is-land).
 
-    Return a boolean array indicating whether the coordinates are on land or at sea.<br/>
-    Code from Basemap documentation.
-    See: [https://basemaptutorial.readthedocs.io/en/latest/utilities.html#is-land](https://basemaptutorial.readthedocs.io/en/latest/utilities.html#is-land)
+    Args:
+        lat (float or array-like):
+            Latitude value or values in decimal degrees.
 
-    Parameters
-    ----------
-    lat : ndarray or float
+        lon (float or array-like):
+            Longitude value or values in decimal degrees.
 
-        Latitude in degrees
-
-    lon : ndarray or float
-
-        Longitude in degrees
-
-    Returns
-    -------
-    ndarray or float
-
-        Boolean array denoting whether the corresponding point is on land.
-
+    Returns:
+        (bool or numpy.ndarray):
+            ``True`` for coordinates located on land and ``False`` for coordinates
+            located at sea.
     """
 
     x, y = _basemap(lon, lat)
@@ -215,30 +200,25 @@ def island_basemap(lat, lon):
 
 @export
 def island(lat, lon, verbose=True, indent=''):
+    """Classify coordinates as land or sea using a two-stage procedure.
 
-    """
+    The precomputed land-sea-coast mask first classifies coordinates located
+    unambiguously on land or at sea. Coordinates assigned to the coastal category
+    are then classified using higher-resolution Basemap coastlines.
 
-    Return a boolean array indicating whether the coordinates are on land or at sea.
-    Following an approach suggested by:
-    Karin, Todd. Global Land Mask. October 5, 2020. https://doi.org/10.5281/zenodo.4066722
-    See: https://github.com/toddkarin/global-land-mask/tree/master
+    Missing and out-of-range coordinates are classified as land for susbequent removal.
 
-    Parameters
-    ----------
-    lat : ndarray or float
+    Args:
+        lat (float or array-like):
+            Latitude value or values in decimal degrees.
 
-        Latitude in degrees
+        lon (float or array-like):
+            Longitude value or values in decimal degrees.
 
-    lon : ndarray or float
-
-        Longitude in degrees
-
-    Returns
-    -------
-    ndarray or float
-
-        Boolean array denoting whether the corresponding point is on land.
-
+    Returns:
+        (bool or numpy.ndarray):
+            Final binary classification, with ``True`` for land and ``False`` for
+            sea.
     """
 
     lat_i = lat_to_index(lat, verbose=verbose, indent=indent)
@@ -330,7 +310,149 @@ def process_one_file(filepath, latkey, lonkey, idxkey, controlkey=None, sep='\t'
     return str(span)+'\n'
 
 @export
-def apply(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=None, outputdir='', store_time=True, store_stats=True, overwrite=True, parallel=False, cpu=None, verbose=True, indent='', controlkey=None, cluster_mode=False):
+def apply(inputdir, latkey, lonkey, idxkey, controlkey=None, sep='\t', fileslist=None, maskfile=None, outputdir='', store_time=True, store_stats=True, overwrite_reports=False, parallel=False, cpu=None, verbose=True, indent='', cluster_mode=False) -> str:
+    """Classify records as located on land or at sea.
+
+    Process the files contained in ``inputdir`` and assign a land-sea status to
+    each record from its latitude and longitude.
+
+    Classification is performed in two stages. A precomputed land-sea-coast mask
+    first classifies records located unambiguously on land or at sea. Records
+    assigned to the coastal category are then classified more precisely using
+    the GSHHS coastlines provided through Basemap.
+
+    Processed files are written to the ``<outputdir>/processed`` directory, unless 
+    ``outputdir`` already points to a ``processed`` directory. Input files for 
+    which a processed output already exists are skipped. This allows interrupted 
+    runs to resume and limits redundant processing when computation is distributed
+    across multiple machines.
+
+    !!! warning
+
+        Missing or out-of-range coordinates are treated as records to exclude.
+        They are classified as land for subsequent removal.
+
+    Args:
+        inputdir (str):
+            Directory containing the split input files to process.
+
+        latkey (str):
+            Name of the column containing latitude values.
+
+        lonkey (str):
+            Name of the column containing longitude values.
+
+        idxkey (str):
+            Name of the column containing the record index used to associate the
+            classification results with the original dataset during subsequent
+            filtering steps.
+
+        controlkey (str, optional):
+            Name of an additional column retained in the processed files to verify
+            record alignment during final filtering.
+
+            In subsequent steps, both the record index and the control value can
+            be compared with the original dataset, reducing the risk that an index
+            offset or ordering error selects the wrong record.
+
+        sep (str, optional):
+            Field separator used in the input and output files. Defaults to a tab
+            character.
+
+            For tab-separated files, relying on the default value is recommended.
+            When specified explicitly from the command line, escaped separators
+            such as ``"\\t"`` should be enclosed in quotes.
+
+        fileslist (str, optional):
+            Path to a text file listing the input files to process, with one file
+            per line.
+
+            Relative file names are resolved within ``inputdir``. If omitted, all
+            files directly contained in ``inputdir`` are considered.
+
+            Before processing, the file order is shuffled. During distributed
+            computation, completed files are skipped, while shuffling reduces the
+            likelihood that several machines start processing the same file
+            simultaneously.
+            
+            Providing a file list allows files to be assigned manually across machines, 
+            but reduces fault tolerance if a machine stops before completing 
+            its assigned files.
+
+        maskfile (str, optional):
+            Path to a custom ``.npz`` land–sea–coast mask. If omitted, the
+            ``globe_mask_coastline.npz`` mask bundled with ``marinedb`` is used.
+
+        outputdir (str, optional):
+            Directory in which processed files are written. A ``processed``
+            subdirectory is added unless the supplied path already points to one.
+
+            If omitted, processed files are written to a ``processed`` subdirectory
+            within ``inputdir``.
+
+            For distributed computation, this directory must be shared by all
+            participating machines so that each machine can detect files already
+            processed by the others.
+
+        store_time (bool, optional):
+            Whether to record the processing time for each input file.
+
+            Individual timing files are combined into ``stats/time.txt`` 
+            after all files have been processed.
+
+        store_stats (bool, optional):
+            Whether to generate classification statistics for each input file.
+
+            Statistics are written to ``stats/statistics.txt`` and include the
+            number of records initially assigned to ocean, land, and coast by the
+            mask, the final number classified as sea or land, and the proportion
+            assigned to the coastal category.
+
+        overwrite_reports (bool, optional):
+            Whether to overwrite existing timing and statistics files.
+
+            !!! info
+
+                This option only applies to the reporting files. It does not 
+                control coordinate classification: input files with an existing 
+                processed output are always skipped.
+
+        parallel (bool, optional):
+            Whether to process several input files concurrently using multiple
+            CPUs.
+
+        cpu (int, optional):
+            Maximum number of CPUs used for local parallel processing.
+
+            If ``None`` or ``-1``, all CPUs available to the current process are
+            used when ``parallel=True``. If fewer files than ``cpu`` are available,
+            the number of workers is automatically reduced to the number of files.
+
+        cluster_mode (bool, optional):
+            Whether the function is being run as part of a distributed workflow
+            across multiple machines. When ``True``, verbose output is disabled.
+
+    Returns:
+        Path to the directory containing the processed classification files.
+
+    Raises:
+        FileNotFoundError:
+            If ``inputdir`` does not exist, or if a specified ``fileslist`` or
+            ``maskfile`` cannot be found.
+
+        TypeError:
+            If ``fileslist`` or ``maskfile`` is provided but is not a string path.
+
+    Note:
+        Processed files contain the standardized columns ``index``, ``latitude``, 
+        ``longitude``, ``mask``, and ``island``. The optional control column is 
+        also retained  when provided. Processed files follow the naming pattern 
+        ``<input_filename>_<hostname>``.
+
+        ``mask`` uses ``0`` for ocean, ``1`` for land, and ``2`` for coast.
+        ``island`` gives the final binary classification, using ``0`` or ``False``
+        for sea and ``1`` or ``True`` for land.
+    """
 
     if cluster_mode:
         verbose = False
@@ -378,12 +500,13 @@ def apply(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=N
     except:
         pass
 
+    max_cpu = len(os.sched_getaffinity(0))
     if (cpu is None) or (cpu == -1):
         if parallel:
-            cpu = len(os.sched_getaffinity(0))
+            cpu = max_cpu
         else:
             cpu = 1
-    cpu = min(cpu,len(fileslist))
+    cpu = min(cpu,len(fileslist), max_cpu)
     if cpu == 1:
         parallel = False
 
@@ -428,14 +551,14 @@ def apply(inputdir, latkey, lonkey, idxkey, sep='\t', fileslist=None, maskfile=N
 
     end = time.time()
 
-    if parallel:
-        printv('', verbose=verbose, indent=indent)
-        stats_outputdir = re.sub('processed', '', str(outputdir))
-        if store_time:
-            concat_times(outputdir, outputdir=stats_outputdir, delete=True, overwrite=overwrite, verbose=verbose, indent=indent)
-        if store_stats:
-            land_sea_statistics(outputdir, outputdir=stats_outputdir, sep=sep, overwrite=overwrite, verbose=verbose, indent=indent)
-        printv('', verbose=verbose, indent=indent)
+ #   if parallel:
+    printv('', verbose=verbose, indent=indent)
+    stats_outputdir = re.sub('processed', '', str(outputdir))
+    if store_time:
+        concat_times(outputdir, outputdir=stats_outputdir, delete=True, overwrite=overwrite_reports, verbose=verbose, indent=indent)
+    if store_stats:
+        land_sea_statistics(outputdir, outputdir=stats_outputdir, sep=sep, overwrite=overwrite_reports, verbose=verbose, indent=indent)
+    printv('', verbose=verbose, indent=indent)
 
     printv(f'TIME | substep: {round(end - start,0)}s', verbose=verbose, indent=indent)
 

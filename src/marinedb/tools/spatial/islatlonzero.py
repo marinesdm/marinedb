@@ -23,12 +23,12 @@ def apply(df, latkey, lonkey, flag=False, dropna=True, verbose=True, indent='') 
     Latitude or longitude values whose absolute value is less than or equal to
     ``1e-5`` are treated as zero.
 
-    !!! warning
+    !!! info
 
-        When ``flag=True``, records with at least one zero-valued coordinate are
+        - When ``flag=True``, records with at least one zero-valued coordinate are
         flagged.
 
-        When ``flag=False``, records with at least one zero-valued coordinate are
+        - When ``flag=False``, records with at least one zero-valued coordinate are
         excluded.
 
     Args:

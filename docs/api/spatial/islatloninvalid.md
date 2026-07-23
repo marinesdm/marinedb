@@ -1,6 +1,15 @@
 # islatloninvalid
 
-::: marinedb.tools.spatial.islatloninvalid
+## API reference
+
+<h3><code>marinedb.tools.spatial.islatloninvalid</code></h3>
+
+::: marinedb.tools.spatial.islatloninvalid.apply
+        options:
+          show_root_heading: false
+          show_root_toc_entry: false
+
+## Basic usage
 
 !!! example
     ```

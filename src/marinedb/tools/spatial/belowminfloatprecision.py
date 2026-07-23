@@ -35,11 +35,11 @@ def apply(df, key, value, flag=False, dropna=False, verbose=True, indent='') -> 
     point. A value falls below the threshold when it has fewer decimal places than
     the specified minimum.
 
-    !!! warning
+    !!! info
 
-        When ``flag=True``, records below the minimum precision are flagged.
+        - When ``flag=True``, records below the minimum precision are flagged.
 
-        When ``flag=False``, records below the minimum precision are excluded.
+        - When ``flag=False``, records below the minimum precision are excluded.
 
     Args:
         df (pandas.DataFrame):

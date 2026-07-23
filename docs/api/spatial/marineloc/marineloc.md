@@ -1,10 +1,10 @@
-# doeslateqlon
+# marineloc
 
 ## API reference
 
-<h3><code>marinedb.tools.spatial.doeslateqlon</code></h3>
+<h3><code>marinedb.tools.marineloc.marineloc</code></h3>
 
-::: marinedb.tools.spatial.doeslateqlon.apply
+::: marinedb.tools.marineloc.marineloc.apply
         options:
           show_root_heading: false
           show_root_toc_entry: false
@@ -14,9 +14,9 @@
 !!! example
     ```
     - tool:
-        - doeslateqlon:
+        - marineloc:
             latkey: 'decimalLatitude'
             lonkey: 'decimalLongitude'
-            flag: False
-            dropna: True
+            inputfile_format: 'pandas'
+            parallel: True
     ```

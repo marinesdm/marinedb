@@ -22,12 +22,12 @@ def apply(df, latkey, lonkey, flag=False, eps=1e-5, dropna=False, verbose=True, 
     Latitude and longitude are considered equal when their absolute difference is
     less than or equal to ``eps``.
 
-    !!! warning
+    !!! info
 
-        When ``flag=True``, records with equal latitude and longitude values are
+        - When ``flag=True``, records with equal latitude and longitude values are
         flagged.
 
-        When ``flag=False``, records with equal latitude and longitude values are
+        - When ``flag=False``, records with equal latitude and longitude values are
         excluded.
 
     Args:

@@ -25,10 +25,10 @@ def apply(df, key, values, flag=False, minimize_flagname=False, flagname_mapping
 
     !!! warning
 
-        When ``flag=True``, records that do not contain any specified value are
+        - When ``flag=True``, records that do not contain any specified value are
         flagged (i.e. records where the condition is met are flagged).
 
-        When ``flag=False``, records that contain at least one specified value are
+        - When ``flag=False``, records that contain at least one specified value are
         excluded (i.e. records where the condition is not met are excluded).
 
     Args:

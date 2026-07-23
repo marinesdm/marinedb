@@ -1,6 +1,15 @@
 # belowminlatlonprecision
 
-::: marinedb.tools.spatial.belowminlatlonprecision
+## API reference
+
+<h3><code>marinedb.tools.spatial.belowminlatlonprecision</code></h3>
+
+::: marinedb.tools.spatial.belowminlatlonprecision.apply
+        options:
+          show_root_heading: false
+          show_root_toc_entry: false
+
+## Basic usage
 
 !!! example
     ```

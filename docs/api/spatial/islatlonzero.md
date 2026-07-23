@@ -1,6 +1,15 @@
 # islatlonzero
 
-::: marinedb.tools.spatial.islatlonzero
+## API reference
+
+<h3><code>marinedb.tools.spatial.islatlonzero</code></h3>
+
+::: marinedb.tools.spatial.islatlonzero.apply
+        options:
+          show_root_heading: false
+          show_root_toc_entry: false
+
+## Basic usage
 
 !!! example
     ```
