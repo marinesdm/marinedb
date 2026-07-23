@@ -42,6 +42,7 @@ from marinedb.utils import writedataframe
 from marinedb.utils import standardizenan
 from marinedb.utils import getdefaultargs
 from marinedb.utils.printverbose import printv
+from marinedb.utils import getdefaultoutputfile
 from marinedb.utils import preprocessquotationmark
 
 # Global variable
@@ -120,15 +121,14 @@ def get_key(onekeydict):
 def get_keys(list_onekeydict):
     return [get_key(onekeydict) for onekeydict in list_onekeydict]
 
-def get_processing_modules(config, unique=True):
-    modules = []
-    for idx in range(len(config['processing'])):
-        filter = config['processing'][idx][get_key(config['processing'][idx])]
-        m = get_keys(filter)
-        modules += m
-    if unique:
-        modules = set(modules)
-    return list(modules)
+def get_config_schema(config, key):
+    schema = []
+    for idx_step in range(len(config[key])):
+        step_name = get_key(config[key][idx_step])
+        proc_names = get_keys(config[key][idx_step][step_name])
+        combination = list(zip([idx_step]*len(proc_names), [step_name]*len(proc_names), range(len(proc_names)), proc_names))
+        schema += combination
+    return schema
 
 def get_dtypes(config, key_type):
 
@@ -209,7 +209,7 @@ def order_postprocfunc(config):
 
 # Update the configuration file
 
-def overwrite_outputdir_stdnan_dropempty_cleanup(config, inputdir, outputdir, cleanup):
+def overwrite_outputdir_stdnan_dropempty_cleanup(config, inputfile, inputdir, outputdir, cleanup):
 
     isprint = False
 
@@ -233,15 +233,16 @@ def overwrite_outputdir_stdnan_dropempty_cleanup(config, inputdir, outputdir, cl
             # For all functions with an `outputdir` argument, substitute the argument
             # with the configuration file's `inputdir_path` or `outputdir_path value`
 
-            if funcname == 'marineloc':
-                if 'splitdir' not in funcargs_provided:
-                    config[proccat][i][colname][j][funcname]['splitdir'] = os.path.join(inputdir, 'marineloc', 'split')
-
             if 'outputdir' in funcargs_signature:
-                if funcname in ['format', 'marineloc', 'createwormsfilters']:
+                if funcname in ['format', 'createwormsfilters']:
                     print(f"INFO | '{colname}': override the `outputdir` argument in `{funcname}` with the `inputdir_path` value from the configuration file")
                     config[proccat][i][colname][j][funcname]['outputdir'] = inputdir
                     isprint = True
+                elif funcname == 'marineloc':
+                    if ('outputdir' not in funcargs_provided):
+                        print(f"INFO | '{colname}': override the `outputdir` argument in `{funcname}` with the `inputdir_path` value from the configuration file")
+                        config[proccat][i][colname][j][funcname]['outputdir'] = inputdir
+                        isprint = True
                 else:
                     print(f"INFO | '{colname}': override the `outputdir` argument in `{funcname}` with the `outputdir_path` value from the configuration file")
                     config[proccat][i][colname][j][funcname]['outputdir'] = outputdir
@@ -254,6 +255,20 @@ def overwrite_outputdir_stdnan_dropempty_cleanup(config, inputdir, outputdir, cl
                 print(f"INFO | '{colname}': override the `outputdir_isinworms` argument in `{funcname}` with the `outputdir_path` value from the configuration file")
                 config[proccat][i][colname][j][funcname]['outputdir_isinworms'] = outputdir
                 isprint = True
+
+            if funcname == 'marineloc':
+                if 'splitdir' not in funcargs_provided:
+                    config[proccat][i][colname][j][funcname]['splitdir'] = os.path.join(inputdir, 'marineloc', 'split')
+
+#                default_outputfile = getdefaultoutputfile.apply(inputfile, 'marineloc', outputdir=outputdir, add_processedby=False, verbose=False)
+#                if ('outputfile' not in funcargs_provided):
+#                    config[proccat][i][colname][j][funcname]['outputfile'] = default_outputfile
+#                else:
+#                    provided_outputfile = config[proccat][i][colname][j][funcname]['outputfile']
+#                    if (provided_outputfile is None) or (len(provided_outputfile) == 0):
+#                        config[proccat][i][colname][j][funcname]['outputfile'] = default_outputfile
+#                    else:
+#                        config[proccat][i][colname][j][funcname]['outputfile'] = os.path.join(outputdir,os.path.basename(provided_outputfile))
 
             # For all functions with a `stdnan` argument, set `stdnan` to False
             # All missing values are normalized upstream before processing
@@ -1190,7 +1205,12 @@ if __name__ == '__main__':
     # For all functions with an `outputdir` argument, substitute the argument
     # with the configuration file's `inputdir_path` or `outputdir_path` value
 
-    config = overwrite_outputdir_stdnan_dropempty_cleanup(config, config['inputdir_path'], config['outputdir_path'], cleanup)
+    config = overwrite_outputdir_stdnan_dropempty_cleanup(config, config['inputfile_path'], config['inputdir_path'], config['outputdir_path'], cleanup)
+
+    # Get the structure of the `config` processing section
+
+    processing_schema = get_config_schema(config, key="processing")
+    postprocessing_schema = get_config_schema(config, key="postprocessing")
 
     print(f"----- Start cleaning: {config['inputfile_path']} -----")
     print()
@@ -1210,19 +1230,21 @@ if __name__ == '__main__':
 
     # If specified, apply the `format` function
 
-    n_format_function = get_processing_modules(config).count('format')
+    format_call = [comb for comb in processing_schema if 'format' in comb]
+    n_format_call = len(format_call)
 
-    if n_format_function > 1:
+    if n_format_call > 1:
         raise Exception(f"`clean.py` | `format` should be specified only once in the `config` file")
 
-    if n_format_function == 1:
+    if n_format_call == 1:
 
         ispreprocessing = True
         start = time.time()
 
-        format_idx = format_function[0][0]
-        format_params = format_function[0][1]['tool'][0]['format']
-        format_params['inputfile'] = config['inputfile_path']
+        format_call = format_call[0]
+        format_column_idx, format_column, format_idx = format_call[0], format_call[1], format_call[2]
+        format_params = config['processing'][format_column_idx][format_column][format_idx]["format"]
+        format_params["inputfile"] = config["inputfile_path"]
 
         print('* dataframe')
         print('** format')
@@ -1231,7 +1253,9 @@ if __name__ == '__main__':
         config['inputfile_path'] = format.apply(**format_params)
         temp_file = config['inputfile_path']
 
-        del config['processing'][format_idx]
+        del config['processing'][format_column_idx][format_column][format_idx]
+        if len(config['processing'][format_column_idx][format_column]) == 0:
+            del config['processing'][format_column_idx]
 
         end = time.time()
         print(f'TIME | step: {round(end - start)}s [total: {round(end - start_cleaning)}s]')
@@ -1239,22 +1263,26 @@ if __name__ == '__main__':
 
     # If specified, apply the `marineloc` filter
 
-    marineloc_filter = [(idx, filter) for idx,filter in enumerate(config['processing']) if 'marineloc' in str(filter)]
+    marineloc_call = [comb for comb in processing_schema if 'marineloc' in comb]
+    print(marineloc_call) #debug
+    n_marineloc_call = len(marineloc_call)
 
-    if len(marineloc_filter) > 1:
+    if n_marineloc_call > 1:
         raise Exception(f"`clean.py` | `marineloc` should be specified only once in the `config` file")
 
-    if len(marineloc_filter) == 1:
+    if n_marineloc_call == 1:
 
         ispreprocessing = True
         start = time.time()
 
-        marineloc_idx = marineloc_filter[0][0]
-        marineloc_params = marineloc_filter[0][1]['tool'][0]['marineloc']
+        marineloc_call = marineloc_call[0]
+        marineloc_column_idx, marineloc_column, marineloc_idx = marineloc_call[0], marineloc_call[1], marineloc_call[2]
+        marineloc_params = config['processing'][marineloc_column_idx][marineloc_column][marineloc_idx]["marineloc"]
         marineloc_params['inputfile'] = config['inputfile_path']
         marineloc_params['indent'] = '   '
         if args.cpu_max is not None:
             marineloc_params['cpu'] = args.cpu_max
+        marineloc_params['outputfile'] = getdefaultoutputfile.apply(marineloc_params['inputfile'], 'marineloc', outputdir=outputdir, add_processedby=False, verbose=False)
 
         if ('latkey' in marineloc_params) and ('lonkey' in marineloc_params):
             print(f"* {marineloc_params['latkey']}, {marineloc_params['lonkey']}")
@@ -1268,7 +1296,9 @@ if __name__ == '__main__':
 
         print()
 
-        del config['processing'][marineloc_idx]
+        del config['processing'][marineloc_column_idx][marineloc_column][marineloc_idx]
+        if len(config['processing'][marineloc_column_idx][marineloc_column]) == 0:
+            del config['processing'][marineloc_column_idx]
 
         end = time.time()
         print(f'TIME | step: {round(end - start)}s [total: {round(end - start_cleaning)}s]')
@@ -1286,29 +1316,35 @@ if __name__ == '__main__':
     # generate the necessary filters using `createwormsfilters`
 
     ## Verify if `createwormsfilters` is specified
-    createwormsfilters_filter = [(idx, filter) for idx,filter in enumerate(config['processing']) if "'createwormsfilters'" in str(filter)]
-    createwormsfilters_column = get_keys([filter[1] for filter in createwormsfilters_filter])
+#    createwormsfilters_filter = [(idx, filter) for idx,filter in enumerate(config['processing']) if "'createwormsfilters'" in str(filter)]
+#    createwormsfilters_column = get_keys([filter[1] for filter in createwormsfilters_filter])
+    createwormsfilters_filter = [comb for comb in processing_schema if 'createwormsfilters' in comb] # NEW
 
     if len(createwormsfilters_filter) > 1:
+        createwormsfilters_column = [comb[1] for comb in createwormsfilters_filter] # NEW
         raise Exception(f"`clean.py` | `createwormsfilters.py` must be applied to a single column. Select either {','.join(createwormsfilters_column[:-1])} or {createwormsfilters_column[-1]}")
 
     is_createwormsfilters = (len(createwormsfilters_filter) == 1)
 
     ## Verify if `isinworms` is specified
-    isinworms_filter = [(idx, filter) for idx,filter in enumerate(config['processing']) if "'isinworms'" in str(filter)]
-    isinworms_column = get_keys([filter[1] for filter in isinworms_filter])
+#    isinworms_filter = [(idx, filter) for idx,filter in enumerate(config['processing']) if "'isinworms'" in str(filter)]
+#    isinworms_column = get_keys([filter[1] for filter in isinworms_filter])
+    isinworms_filter = [comb for comb in processing_schema if 'isinworms' in comb] # NEW
 
     if len(isinworms_filter) > 1:
+        isinworms_column = [comb[1] for comb in isinworms_filter] # NEW
         raise Exception(f"`clean.py` | `isinworms.py` must be applied to a single column. Select either {','.join(isinworms_column[:-1])} or {isinworms_column[-1]}")
 
     is_isinworms = (len(isinworms_filter) == 1)
     is_isinworms_verbatim = False
 
     ## Verify if `resolvetaxamatch` is specified
-    resolvetaxamatch_filter = [(idx, filter) for idx,filter in enumerate(config['postprocessing']) if "'resolvetaxamatch'" in str(filter)]
-    resolvetaxamatch_column = get_keys([filter[1] for filter in resolvetaxamatch_filter])
+#    resolvetaxamatch_filter = [(idx, filter) for idx,filter in enumerate(config['postprocessing']) if "'resolvetaxamatch'" in str(filter)]
+#    resolvetaxamatch_column = get_keys([filter[1] for filter in resolvetaxamatch_filter])
+    resolvetaxamatch_filter = [comb for comb in postprocessing_schema if 'resolvetaxamatch' in comb]
 
     if len(resolvetaxamatch_filter) > 1:
+        resolvetaxamatch_column = [comb[1] for comb in resolvetaxamatch_filter] # NEW
         raise Exception(f"`clean.py` | `resolvetaxamatch.py` must be applied to a single column. Select either {','.join(resolvetaxamatch_column[:-1])} or {resolvetaxamatch_column[-1]}")
 
     is_resolvetaxamatch = (len(resolvetaxamatch_filter) == 1)
@@ -1321,9 +1357,10 @@ if __name__ == '__main__':
 
     if is_resolvetaxamatch:
 
-        resolvetaxamatch_column_idx = resolvetaxamatch_filter[0][0]
-        resolvetaxamatch_column = resolvetaxamatch_column[0]
-        resolvetaxamatch_idx = get_keys(config['postprocessing'][resolvetaxamatch_column_idx][resolvetaxamatch_column]).index('resolvetaxamatch')
+        resolvetaxamatch_column_idx, resolvetaxamatch_column, resolvetaxamatch_idx = resolvetaxamatch_filter[0], resolvetaxamatch_filter[1], resolvetaxamatch_filter[2]
+#        resolvetaxamatch_column_idx = resolvetaxamatch_filter[0][0]
+#        resolvetaxamatch_column = resolvetaxamatch_column[0]
+#        resolvetaxamatch_idx = get_keys(config['postprocessing'][resolvetaxamatch_column_idx][resolvetaxamatch_column]).index('resolvetaxamatch')
         resolvetaxamatch_params = deepcopy(config['postprocessing'][resolvetaxamatch_column_idx][resolvetaxamatch_column][resolvetaxamatch_idx])
         if isinstance(resolvetaxamatch_params, str):
             config['postprocessing'][resolvetaxamatch_column_idx][resolvetaxamatch_column][resolvetaxamatch_idx] = {'resolvetaxamatch':{}}
@@ -1347,9 +1384,10 @@ if __name__ == '__main__':
         default_createwormsfilters_args = list(default_createwormsfilters_params.keys())
 
         ## Retrieve `isinworms` parameters
-        isinworms_column_idx = isinworms_filter[0][0]
-        isinworms_column = isinworms_column[0]
-        isinworms_idx = get_keys(config['processing'][isinworms_column_idx][isinworms_column]).index('isinworms')
+        isinworms_column_idx, isinworms_column, isinworms_idx = isinworms_filter[0], isinworms_filter[1], isinworms_filter[2]
+#        isinworms_column_idx = isinworms_filter[0][0]
+#        isinworms_column = isinworms_column[0]
+#        isinworms_idx = get_keys(config['processing'][isinworms_column_idx][isinworms_column]).index('isinworms')
         isinworms_params = deepcopy(config['processing'][isinworms_column_idx][isinworms_column][isinworms_idx]['isinworms'])
         isinworms_args = list(isinworms_params.keys())
 
@@ -1377,9 +1415,10 @@ if __name__ == '__main__':
         if is_createwormsfilters:
 
             ## Retrieve `createwormsfilters` parameters
-            createwormsfilters_column_idx = createwormsfilters_filter[0][0]
-            createwormsfilters_column = createwormsfilters_column[0]
-            createwormsfilters_idx = get_keys(config['processing'][createwormsfilters_column_idx][createwormsfilters_column]).index('createwormsfilters')
+            createwormsfilters_column_idx, createwormsfilters_column, createwormsfilters_idx = createwormsfilters_filter[0], createwormsfilters_filter[1], createwormsfilters_filter[2]
+#            createwormsfilters_column_idx = createwormsfilters_filter[0][0]
+#            createwormsfilters_column = createwormsfilters_column[0]
+#            createwormsfilters_idx = get_keys(config['processing'][createwormsfilters_column_idx][createwormsfilters_column]).index('createwormsfilters')
             createwormsfilters_params = deepcopy(config['processing'][createwormsfilters_column_idx][createwormsfilters_column][createwormsfilters_idx]['createwormsfilters'])
             createwormsfilters_params['colname'] = createwormsfilters_column
             createwormsfilters_params['store'] = True
