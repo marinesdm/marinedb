@@ -52,25 +52,6 @@ def isyearmismatch(datestr, yearstr, datekey, yearkey):
 
     # STEP N°1: Does `datestr` contain 4-character substrings, i.e, year-like substrings?
 
-#    yearmatchiter = re.finditer(r'(^|(?<=[^0-9]))([1-2][0-9]{3})(?=[^0-9]|$)', datestr)
-#    cut = [0]
-#    for match in yearmatchiter:
-#        if len(cut) != 1:
-#            # assumption: if one 4-character substring is a year,
-#            # then all 4-character substrings are years
-#            # remove them from the string to prevent false matches
-#            # as only month and day remain to be checked
-#            cut += [match.start(), match.end()]
-#        if (yearstr in match.group()) and (int(match.group()) <= YEAR_NOW):
-#            # year match
-#            cut += [match.start(), match.end()]
-#    cut.append(len(datestr))
-#
-#    if len(cut) > 2:
-#        mismatch = ' '.join([datestr[i:j] for i,j in zip(cut[0::2],cut[1::2])])
-#    else:
-#        mismatch = datestr
-
     mismatch = datestr
 
     yearmatch = list(re.finditer(r'(^|(?<=[^0-9]))([1-2][0-9]{3})(?=[^0-9]|$)', datestr))
@@ -102,9 +83,6 @@ def isyearmismatch(datestr, yearstr, datekey, yearkey):
                 index = found.index(True)
                 mismatch = mismatch[:yearmatch[index].start(2)] + mismatch[yearmatch[index].end(2):]
             mismatch = mismatch.strip()
-
-#        else:
-#            return datestr, f'{datekey.upper()}_{yearkey.upper()}_MISMATCH'
 
     if mismatch == datestr:
 

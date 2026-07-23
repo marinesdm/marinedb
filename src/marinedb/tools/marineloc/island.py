@@ -503,6 +503,7 @@ def apply(inputdir, latkey, lonkey, idxkey, controlkey=None, sep='\t', fileslist
         os.mkdir(outputdir)
     except:
         pass
+    printv(f"INFO | Processed files will be stored in '{outputdir}'", verbose=verbose, indent=indent)
 
     max_cpu = len(os.sched_getaffinity(0))
     if (cpu is None) or (cpu == -1):

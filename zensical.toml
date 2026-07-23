@@ -42,6 +42,7 @@ nav = [
   ]},
     { "Temporal" = [
     { "Overview" = "api/temporal/index.md"},
+    { "Data standardization and reconstruction"= "api/temporal/parsedate.md"},
   ]},
   { "Taxonomic" = [
     { "Overview" = "api/taxonomic/index.md"},

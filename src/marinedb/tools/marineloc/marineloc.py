@@ -197,7 +197,8 @@ def apply(inputfile, inputfile_format, latkey='', lonkey='', idxkey='', controlk
             Timing and classification-statistics reports are retained.
 
     Returns:
-        Path to the final tabular file containing marine records.
+        (str):
+            Path to the final tabular file containing marine records.
 
     Raises:
         ValueError:

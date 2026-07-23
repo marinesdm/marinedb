@@ -347,7 +347,92 @@ def assemble_date(df, datekey, datekeyout, yearkey=None, monthkey=None, daykey=N
 
 @export
 def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, format=None, java_exception='ignore', inplace=False, stdnan=True, parallel=False, cpu=None, drop_empty=False, verbose=True, indent=''):
+    """Parse and standardize occurrence dates.
 
+    Standardize values from ``datekey`` to ISO 8601 format using the GBIF date
+    parser and discard time-of-day information.
+
+    When a date is missing or cannot be parsed, the function attempts to
+    reconstruct it from the available year, month, and day columns. Reconstruction
+    is performed only when the available components form a valid date and do not
+    clearly conflict with an existing but unparsable date value. 
+    Otherwise, the standardized date remains missing.
+
+    Issues encountered during parsing, validation, or reconstruction are recorded
+    in ``issue_parsedate``.
+
+    Args:
+        df (pandas.DataFrame):
+            Input DataFrame.
+
+        datekey (str):
+            Name of the column containing the date values to standardize.
+
+        yearkey (str, optional):
+            Name of the column containing year values used to reconstruct dates
+            that are missing or cannot be parsed.
+
+            ``yearkey`` is required when ``monthkey`` is provided.
+
+        monthkey (str, optional):
+            Name of the column containing month values used during date
+            reconstruction.
+
+            ``monthkey`` is required when ``daykey`` is provided.
+
+        daykey (str, optional):
+            Name of the column containing day values used during date
+            reconstruction.
+
+        java_exception (str, optional):
+            Strategy used to handle exceptions returned by the Java-based GBIF
+            date parser. Accepted values are ``"ignore"``, ``"warn"``, and ``"raise"``.
+
+            ``"ignore"`` records the exception in ``issue_parsedate``. ``"warn"``
+            additionally prints a warning, while ``"raise"`` interrupts processing.
+        
+        inplace (bool, optional):
+            Whether to replace ``datekey`` with the standardized values. If
+            ``False``, the standardized dates are written to a new processed
+            column.
+
+        parallel (bool, optional):
+            Whether to parse dates concurrently using multiple CPUs.
+
+        cpu (int, optional):
+            Maximum number of CPUs used for parallel processing.
+
+            If ``None`` and ``parallel=True``, all CPUs available to the current
+            process are used. This argument is ignored when ``parallel=False``.
+
+        drop_empty (bool, optional):
+            Whether to remove ``issue_parsedate`` when it contains no issue for any
+            record.
+
+    Returns:
+        pandas.DataFrame:
+            Processed DataFrame with standardized dates and, unless removed,
+            the ``issue_parsedate`` annotation column.
+
+    Raises:
+        Exception:
+            If ``monthkey`` is provided without ``yearkey``, or if ``daykey`` is
+            provided without ``monthkey``.
+
+        Exception:
+            If the GBIF parser unexpectedly returns neither a standardized date nor
+            an issue message for one or more non-missing input values.
+
+    Note:
+        Date reconstruction follows the ISO 8601 hierarchy ``YYYY``, ``YYYY-MM``, or
+        ``YYYY-MM-DD`` according to the available valid components. A valid year
+        is required for reconstruction, a month is used only with a year, and a day
+        only with both a year and a month.
+
+        Successfully reconstructed dates are annotated with
+        ``<DATE_COLUMN>_ASSEMBLED`` in ``issue_parsedate``. Parsing and consistency
+        issues are also recorded in this column when detected.
+    """
     if (yearkey is None) and (monthkey is not None):
         raise Exception(f'`parsedate.py` | `monthkey`={monthkey} but `yearkey` is None')
     if (monthkey is None) and (daykey is not None):
