@@ -387,8 +387,9 @@ def apply(inputdir, latkey, lonkey, idxkey, controlkey=None, sep='\t', fileslist
             Directory in which processed files are written. A ``processed``
             subdirectory is added unless the supplied path already points to one.
 
-            If omitted, processed files are written to a ``processed`` subdirectory
-            within ``inputdir``.
+            If omitted and ``inputdir`` points to a ``split`` directory, processed
+            files are written to a sibling ``processed`` directory. Otherwise, they
+            are written to a ``processed`` subdirectory within ``inputdir``.
 
             For distributed computation, this directory must be shared by all
             participating machines so that each machine can detect files already
@@ -489,11 +490,14 @@ def apply(inputdir, latkey, lonkey, idxkey, controlkey=None, sep='\t', fileslist
             temp = file.read().splitlines()
         fileslist = [join(inputdir,file) if (os.path.dirname(file) == '') else file for file in temp]
 
-    if len(outputdir) == 0:
-        outputdir = inputdir
+    if (outputdir is None) or (len(outputdir) == 0):
+        outputdir = resolvepath.apply(inputdir)
+        if os.path.basename(os.path.normpath(outputdir)) == 'split':
+            outputdir = os.path.dirname(os.path.normpath(outputdir))
     else:
         outputdir = resolvepath.apply(outputdir)
-    if 'processed' not in outputdir.split('/'):
+
+    if os.path.basename(os.path.normpath(outputdir)) != 'processed':
         outputdir = join(outputdir,'processed')
     try:
         os.mkdir(outputdir)
@@ -1000,15 +1004,15 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Identify marine coordinates', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('inputdir_path', type=str, help='directory path containing files to be processed')
-    parser.add_argument('--fileslist-path', type=str, help='path to the file that lists the files to be processed', default=None)
-    parser.add_argument('--latitude-column', type=str, help='latitude column name', required=True)
-    parser.add_argument('--longitude-column', type=str, help='longitude column name', required=True)
-    parser.add_argument('--index-column', type=str, help='index column name', required=True)
-    parser.add_argument('--control-column', type=str, help='control column name', default=None)
+    parser.add_argument('--fileslist-path', '--fileslist', type=str, help='path to the file that lists the files to be processed', default=None)
+    parser.add_argument('--latitude-column', '--latitude', type=str, help='latitude column name', required=True)
+    parser.add_argument('--longitude-column', '--longitude', type=str, help='longitude column name', required=True)
+    parser.add_argument('--index-column', '--index', type=str, help='index column name', required=True)
+    parser.add_argument('--control-column', '--control', type=str, help='control column name', default=None)
     parser.add_argument('--delimiter', type=str, help='delimiter used in the input files', default='\t')
     # Warning: delimiter must be enclosed in quotation marks
-    parser.add_argument('--maskfile-path', type=str, help='path to the .npz file containing the land/sea/coast mask', default=None)
-    parser.add_argument('--outputdir-path', type=str, help='path to the directory where the output files will be stored', default='./')
+    parser.add_argument('--maskfile-path', '--mask', type=str, help='path to the .npz file containing the land/sea/coast mask', default=None)
+    parser.add_argument('--outputdir-path', '--outputdir', type=str, help='path to the directory where the output files will be stored', default=None)
     parser.add_argument('--parallel', action=argparse.BooleanOptionalAction, help='whether to parallelize on multiple CPUs', default=False)
     parser.add_argument('--cpu', type=int, help='number of CPUs to be used', default=None)
     parser.add_argument('--store-time', action=argparse.BooleanOptionalAction, help='whether to store the processing times', default=True)
@@ -1017,13 +1021,13 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     inputdir = args.inputdir_path
-    fileslist_path = args.fileslist_path
+    fileslist = args.fileslist_path
     sep = args.delimiter
     latkey = args.latitude_column
     lonkey = args.longitude_column
     idxkey = args.index_column
     controlkey = args.control_column
-    mask_filepath = args.maskfile_path
+    maskfile = args.maskfile_path
     outputdir = args.outputdir_path
     parallel = args.parallel
     cpu = args.cpu
@@ -1031,10 +1035,10 @@ if __name__ == '__main__':
     store_stats = args.store_stats
     cluster_mode = args.cluster_mode
 
-    if (fileslist_path is not None) and (len(fileslist_path) == 0):
-        fileslist_path = None
+    if (fileslist is not None) and (len(fileslist) == 0):
+        fileslist = None
 
-    if (mask_filepath is not None) and (len(mask_filepath) == 0):
+    if (maskfile is not None) and (len(maskfile) == 0):
         maskfile = None
 
     if (cpu is None) or (cpu == -1):
@@ -1046,12 +1050,12 @@ if __name__ == '__main__':
         controlkey = None
 
     params = {
-              'fileslist': fileslist_path,
+              'fileslist': fileslist,
               'latkey': latkey,
               'lonkey': lonkey,
               'idxkey': idxkey,
               'sep': sep,
-              'maskfile': mask_filepath,
+              'maskfile': maskfile,
               'outputdir': outputdir,
               'parallel': parallel,
               'cpu': cpu,
