@@ -120,6 +120,16 @@ def get_key(onekeydict):
 def get_keys(list_onekeydict):
     return [get_key(onekeydict) for onekeydict in list_onekeydict]
 
+def get_processing_modules(config, unique=True):
+    modules = []
+    for idx in range(len(config['processing'])):
+        filter = config['processing'][idx][get_key(config['processing'][idx])]
+        m = get_keys(filter)
+        modules += m
+    if unique:
+        modules = set(modules)
+    return list(modules)
+
 def get_dtypes(config, key_type):
 
     config_variables = config['variables']
@@ -138,8 +148,6 @@ def get_dtypes(config, key_type):
                     dtypes_mapping[colname_old] = coltype
                 else:
                     dtypes_mapping[colname_new] = coltype
-#            else:
-#                dtypes_mapping[colname_old] = 'string'
 
     return dtypes_mapping
 
@@ -226,8 +234,8 @@ def overwrite_outputdir_stdnan_dropempty_cleanup(config, inputdir, outputdir, cl
             # with the configuration file's `inputdir_path` or `outputdir_path value`
 
             if funcname == 'marineloc':
-                if 'uncompressed_chunks_dir' not in funcargs_provided:
-                    config[proccat][i][colname][j][funcname]['uncompressed_chunks_dir'] = os.path.join(inputdir, 'marineloc', 'split')
+                if 'splitdir' not in funcargs_provided:
+                    config[proccat][i][colname][j][funcname]['splitdir'] = os.path.join(inputdir, 'marineloc', 'split')
 
             if 'outputdir' in funcargs_signature:
                 if funcname in ['format', 'marineloc', 'createwormsfilters']:
@@ -1202,12 +1210,12 @@ if __name__ == '__main__':
 
     # If specified, apply the `format` function
 
-    format_function = [(idx, filter) for idx,filter in enumerate(config['processing']) if 'format' in str(filter)]
+    n_format_function = get_processing_modules(config).count('format')
 
-    if len(format_function) > 1:
+    if n_format_function > 1:
         raise Exception(f"`clean.py` | `format` should be specified only once in the `config` file")
 
-    if len(format_function) == 1:
+    if n_format_function == 1:
 
         ispreprocessing = True
         start = time.time()
