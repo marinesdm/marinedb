@@ -80,6 +80,80 @@ def isdatevalid(df, yearkey, monthkey, daykey, flag=False):
 
 @export
 def apply(df, datekey=None, yearkey=None, monthkey=None, daykey=None, flag=False, dropna=False, verbose=True, indent=''):
+    """Detect or exclude invalid occurrence dates.
+
+    Validate either a standardized date column or separate year, month, and day
+    columns. The function detects incorrectly formatted values, nonexistent
+    calendar dates, and hierarchical inconsistencies between separate date
+    components.
+
+    When both ``datekey`` and all three component columns are provided, validation
+    is performed from the year, month, and day columns and ``datekey`` is ignored.
+
+    Args:
+        df (pandas.DataFrame):
+            Input DataFrame.
+
+        datekey (str, optional):
+            Name of the column containing dates to validate.
+
+            Non-missing values must follow one of the forms ``YYYY``, ``YYYY-MM``,
+            or ``YYYY-MM-DD``.
+
+        yearkey (str, optional):
+            Name of the column containing year values.
+
+            To validate separate date components, ``yearkey``, ``monthkey``, and
+            ``daykey`` must all be provided.
+
+        monthkey (str, optional):
+            Name of the column containing month values.
+
+            To validate separate date components, ``yearkey``, ``monthkey``, and
+            ``daykey`` must all be provided.
+
+        daykey (str, optional):
+            Name of the column containing day values.
+
+            To validate separate date components, ``yearkey``, ``monthkey``, and
+            ``daykey`` must all be provided.
+
+        flag (bool, optional):
+            Whether to annotate or exclude invalid records.
+
+            If ``True``, all records are retained and a Boolean flag column is
+            created. If ``False``, invalid records are removed.
+
+        dropna (bool, optional):
+            Whether to treat missing dates as invalid.
+
+            When separate components are validated, a missing year followed by a
+            month or a missing month followed by a day is always considered
+            invalid because it breaks temporal hierarchy.
+
+    Returns:
+        (pandas.DataFrame):
+            Processed DataFrame with invalid records flagged or excluded.
+
+    Raises:
+        ValueError:
+            If neither ``datekey`` nor all of ``yearkey``, ``monthkey``, and
+            ``daykey`` are provided.
+
+    Note:
+        - Year-only and year–month values are accepted when their formats and
+        available components are valid. Complete dates are checked against the
+        calendar, including leap years.
+
+        - When ``flag=True``, the generated column is named
+        ``flag_<DATE_COLUMN>_isdateinvalid`` when validating ``datekey``, or
+        ``flag_<YEAR_COLUMN>_<MONTH_COLUMN>_<DAY_COLUMN>_isdateinvalid`` when
+        validating separate components.
+
+        - Invalid formats trigger a warning recommending the temporal curation
+        workflow, which standardizes date values and checks their validity 
+        during processing.
+    """
 
     isdate = (datekey is not None)
     isdatecomponents = (yearkey is not None) and (monthkey is not None) and (daykey is not None)
@@ -125,9 +199,6 @@ def apply(df, datekey=None, yearkey=None, monthkey=None, daykey=None, flag=False
         ## Year
         subset = (~ismissing)
         isformatvalid = df.loc[subset, yearkey].astype('str').str.fullmatch(r'[0-9]{4}(\.0*)?').astype('bool')
-#        notonlynumbers = df.loc[subset,yearkey].str.contains(r'[^.0-9]|\.0*[^0]', regex=True)
-#        notfloatingpoint = (df.loc[subset,yearkey].str.count(r'\.') > 1)
-#        isformatinvalid = (notonlynumbers | notfloatingpoint)
         isdateinvalid.loc[subset & (~isformatvalid)] = True
         if (~isformatvalid).any():
             example = df.loc[subset & (~isformatvalid), yearkey].iloc[0]

@@ -36,17 +36,6 @@ def apply(inputfile, modulename, outputdir=None, add_processedby=True, verbose=T
 
     if (outputdir is None) or (len(outputdir) == 0):
         outputdir = os.path.dirname(inputfile)
-#        start = inputfile_split[0]
-#    else:
-#        start = os.path.basename(inputfile_split[0])
-#        start = os.path.join(outputdir, start)
-
-#    if len(inputfile_split) > 2:
-#        raise ValueError(f"`getdefaultoutputfile.py` | `inputfile` must contain only one dot ('.') in its name ({inputfile})")
-#    elif len(inputfile_split) == 2:
-#        end = '.' + inputfile_split[1]
-#    else:
-#        end = ''
 
     if ('processedby' in name) or (not add_processedby):
 #        outputfile = start + f'_{modulename}' + end

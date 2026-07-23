@@ -116,7 +116,7 @@ When enabled, parameter and progress messages are suppressed. The default is
 
 !!! Example
     ```bash
-    python split_pandas_parquet.py /path/to/split/directory  
+    python island.py /path/to/split/directory  
         --latitude-column lat 
         --longitude-column lon 
         --index-column index 

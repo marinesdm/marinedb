@@ -83,13 +83,119 @@ def apply_strategy(df, key, index, strategy):
 
 @export
 def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_number=1, maxinterval_level='years', inplace=False, flag=True, drop_empty=False, verbose=True, indent=''):
+    """Process occurrence-date intervals.
 
-    # maxinterval_number = -1 : process all date intervals regardless of width
-    # strategy in ['start', 'end', 'overlap'] : a different strategy could be implemented (e.g. take the median date)
-    # drop_interval = True : drop date intervals
-    # drop_interval = False : process date intervals
-    # inplace = True/False: in place or not
-    # flag = True/False: whether or not to keep the date interval flag column
+    Identify ISO 8601 date intervals in ``datekey`` and either replace them with
+    missing values or collapse them to a single temporal value.
+
+    Intervals can be collapsed by retaining their start date, retaining their end
+    date, or preserving only the date components shared by both bounds. For the
+    start and end strategies, processing can be restricted to intervals whose
+    duration does not exceed a user-defined threshold. Intervals exceeding this
+    limit are replaced with missing values.
+
+    Args:
+        df (pandas.DataFrame):
+            Input DataFrame.
+
+        datekey (str):
+            Name of the column containing the dates or date intervals to process.
+
+            Values must follow the ISO 8601 forms ``YYYY``, ``YYYY-MM``, or
+            ``YYYY-MM-DD``. Intervals must contain two bounds of equal precision
+            separated by ``"/"``.
+
+        drop_interval (bool, optional):
+            Whether to replace all date intervals with missing values instead of
+            collapsing them.
+
+            When ``True``, ``strategy``, ``maxinterval_number``,
+            ``maxinterval_level``, and ``flag`` are ignored.
+
+        strategy (str, optional):
+            Strategy used to collapse date intervals. Accepted values are:
+
+            - ``"start"`` to retain the interval start;
+            - ``"end"`` to retain the interval end;
+            - ``"overlap"`` to retain only the date components shared by both
+            bounds.
+
+            For example, an interval whose bounds fall within the same year but
+            different months is reduced to that year with ``"overlap"``.
+
+            The interval-width limit is ignored when ``strategy="overlap"``.
+
+        maxinterval_number (int, optional):
+            Maximum interval width allowed with the ``"start"`` and ``"end"``
+            strategies.
+
+            Intervals exceeding this limit are replaced with missing values. Use
+            ``-1`` to process intervals regardless of their width. A value of
+            ``0`` is treated as ``1``.
+
+        maxinterval_level (str, optional):
+            Unit used with ``maxinterval_number``. Accepted values are
+            ``"days"``, ``"months"``, and ``"years"``.
+
+            This argument is ignored when ``strategy="overlap"`` or
+            ``maxinterval_number=-1``.
+
+        inplace (bool, optional):
+            Whether to replace ``datekey`` with the processed values. If
+            ``False``, the results are written to a new processed column.
+
+        flag (bool, optional):
+            Whether to retain the date-interval flag and interval-width columns.
+
+            The flag column identifies records whose original date was an
+            interval. Interval width is expressed in days.
+
+            This argument is ignored when ``drop_interval=True``.
+
+        drop_empty (bool, optional):
+            Whether to remove generated annotation columns when they contain no
+            values.
+
+    Returns:
+        (pandas.DataFrame):
+            Processed DataFrame containing the resulting dates and any retained
+            interval annotations.
+
+    Raises:
+        ValueError:
+            If ``strategy`` is not ``"start"``, ``"end"``, or ``"overlap"``.
+
+        ValueError:
+            If ``maxinterval_number`` is less than ``-1``.
+
+        ValueError:
+            If ``maxinterval_level`` is not ``"days"``, ``"months"``, or
+            ``"years"``.
+
+        ValueError:
+            If non-missing values in ``datekey`` do not follow the expected ISO
+            8601 date or date-interval format.
+
+        ValueError:
+            If the two bounds of an interval do not have the same temporal
+            precision.
+
+    Note:
+        - Partial interval bounds are converted internally to complete dates when
+        calculating interval widths. Missing months and days are interpreted as
+        January and the first day of the month, respectively.
+
+        - Detected intervals are annotated in
+        ``flag_<DATE_COLUMN>_isdateinterval``. When retained, their widths are
+        stored in
+        ``<DATE_COLUMN>_intervalwidth_generatedby_processdateinterval``.
+
+        - Intervals that cannot be processed or exceed the selected limit are
+        replaced with missing values and annotated in
+        ``issue_processdateinterval``.
+    """
+
+    # a different strategy could be implemented (e.g. take the median date)
 
     # Verifications
 
