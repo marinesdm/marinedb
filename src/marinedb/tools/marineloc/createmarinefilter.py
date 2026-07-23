@@ -33,7 +33,7 @@ def write(df, txt_filename, sep='\t', init=False):
 
     return True
 
-def extract_marine_locations(inputdir, latkey, lonkey, idxkey, controlkey=None, sep='\t', fileslist=None, maskfile=None, outputdir='', store_time=True, store_stats=True, parallel=False, cpu=None, verbose=True, indent=''):
+def extract_marine_locations(inputdir, latkey, lonkey, idxkey, controlkey=None, sep='\t', fileslist=None, maskfile=None, outputdir='', store_time=True, store_stats=True, overwrite_reports=False, parallel=False, cpu=None, verbose=True, indent=''):
 
     sep = sep.encode('utf-8').decode('unicode_escape')
 
@@ -46,6 +46,7 @@ def extract_marine_locations(inputdir, latkey, lonkey, idxkey, controlkey=None, 
               'sep': sep,
               'maskfile': maskfile,
               'outputdir': outputdir,
+              'overwrite_reports': overwrite_reports,
               'parallel': parallel,
               'cpu': cpu,
               'store_time': store_time,
