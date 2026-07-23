@@ -6,6 +6,7 @@
 import os
 import glob
 import pandas as pd
+from pathlib import Path
 
 # Internal import
 
@@ -219,16 +220,6 @@ def apply(inputfile, inputfile_format, latkey='', lonkey='', idxkey='', controlk
 
     sep = sep.encode('utf-8').decode('unicode_escape')
 
-    if len(outputdir) == 0:
-        outputdir = './marineloc'
-    if 'marineloc' not in outputdir.split('/'):
-        outputdir = os.path.join(outputdir, 'marineloc')
-
-    try:
-        os.mkdir(outputdir)
-    except FileExistsError:
-        pass
-
     if (len(filterfile) == 0) or ((len(filterfile) != 0) and (not os.path.isfile(filterfile))):
 
         if len(latkey) == 0:
@@ -288,6 +279,17 @@ def apply(inputfile, inputfile_format, latkey='', lonkey='', idxkey='', controlk
                     raise ValueError('`marineloc.py` | `idxkey` must be specified when `inputfile` has already been split into multiple files')
 
             printv('', verbose=verbose, indent=indent)
+
+        if (outputdir is None) or (len(outputdir) == 0):
+            outputdir = './marineloc'
+
+        try:
+            os.mkdir(outputdir)
+        except FileExistsError:
+            pass
+
+        if (not any(Path(outputdir).iterdir())) and ('marineloc' not in outputdir.split('/')):
+            outputdir = os.path.join(outputdir, 'marineloc')
 
         # Generate a mask differentiating land, sea, and coast
 
