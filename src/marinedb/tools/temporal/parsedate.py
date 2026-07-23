@@ -405,12 +405,8 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, format=None, ja
             If ``None`` and ``parallel=True``, all CPUs available to the current
             process are used. This argument is ignored when ``parallel=False``.
 
-        drop_empty (bool, optional):
-            Whether to remove ``issue_parsedate`` when it contains no issue for any
-            record.
-
     Returns:
-        pandas.DataFrame:
+        (pandas.DataFrame):
             Processed DataFrame with standardized dates and, unless removed,
             the ``issue_parsedate`` annotation column.
 
@@ -424,15 +420,20 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, format=None, ja
             an issue message for one or more non-missing input values.
 
     Note:
-        Date reconstruction follows the ISO 8601 hierarchy ``YYYY``, ``YYYY-MM``, or
+        - Date reconstruction follows the ISO 8601 hierarchy ``YYYY``, ``YYYY-MM``, or
         ``YYYY-MM-DD`` according to the available valid components. A valid year
         is required for reconstruction, a month is used only with a year, and a day
         only with both a year and a month.
 
-        Successfully reconstructed dates are annotated with
+        - Successfully reconstructed dates are annotated with
         ``<DATE_COLUMN>_ASSEMBLED`` in ``issue_parsedate``. Parsing and consistency
         issues are also recorded in this column when detected.
     """
+
+#    drop_empty (bool, optional):
+#        Whether to remove ``issue_parsedate`` when it contains no issue for any
+#        record.
+
     if (yearkey is None) and (monthkey is not None):
         raise Exception(f'`parsedate.py` | `monthkey`={monthkey} but `yearkey` is None')
     if (monthkey is None) and (daykey is not None):
