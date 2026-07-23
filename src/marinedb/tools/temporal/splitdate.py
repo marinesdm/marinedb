@@ -147,7 +147,152 @@ def call_processdateinterval(df, datekey, drop_interval, strategy='overlap', max
     return df, datekeyin
 
 @export
-def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', drop_interval=False, drop_mismatch=True, drop_empty=False, inplace=False, flag=True, strategy='overlap', maxinterval_number=1, maxinterval_level='years', verbose=True, indent=''):
+def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', drop_interval=False, drop_mismatch=True, drop_empty=False, inplace_components=False, inplace_date=False, flag=True, strategy='overlap', maxinterval_number=1, maxinterval_level='years', verbose=True, indent=''):
+    """Extract and reconcile year, month, and day components from dates.
+
+    Extract temporal components from ``datekey`` and compare them with the values
+    stored in any year, month, or day columns already present in the input data.
+    Existing component columns are first standardized and validated, including
+    checks for invalid values, invalid calendar dates, and hierarchical
+    inconsistencies.
+
+    When extracted components disagree with existing values, the function either
+    removes the inconsistent components or gives precedence to the values extracted
+    from ``datekey``. Detected inconsistencies are recorded in an issue column.
+
+    Date intervals are processed before component extraction. If
+    ``processdateinterval`` has already been applied and its interval flag is
+    available, the existing results are reused. Otherwise, interval processing is
+    performed using ``drop_interval``, ``strategy``, ``maxinterval_number``, and
+    ``maxinterval_level``.
+
+    Args:
+        df (pandas.DataFrame):
+            Input DataFrame.
+
+        datekey (str):
+            Name of the column containing the standardized dates or date intervals
+            from which temporal components are extracted.
+
+        yearkey (str, optional):
+            Name of an existing year column to compare with the year extracted from
+            ``datekey``.
+
+            If omitted, a new ``year_generatedby_splitdate`` column is created.
+            ``yearkey`` is required when ``monthkey`` is provided.
+
+        monthkey (str, optional):
+            Name of an existing month column to compare with the month extracted
+            from ``datekey``.
+
+            If omitted, a new ``month_generatedby_splitdate`` column is created.
+            ``monthkey`` is required when ``daykey`` is provided.
+
+        daykey (str, optional):
+            Name of an existing day column to compare with the day extracted from
+            ``datekey``.
+
+            If omitted, a new ``day_generatedby_splitdate`` column is created.
+
+        split (str, optional):
+            Scope of date-component extraction. Accepted values are: 
+
+            - ``"all"`` to extract components from all dates
+            - ``"interval"`` to extract components only for records whose original
+              date is an interval.
+
+        drop_interval (bool, optional):
+            Whether to replace date intervals with missing values instead of
+            collapsing them.
+
+            If ``True``, the corresponding year, month, and day values are also set
+            to missing.
+
+            If ``False``, intervals are first collapsed according to ``strategy``.
+
+        drop_mismatch (bool, optional):
+            Strategy used when components extracted from ``datekey`` disagree with
+            corresponding values in existing year, month, or day columns.
+
+            If ``True``, inconsistent components are removed from both the processed
+            date and component columns. Dependent components are also removed to
+            preserve temporal hierarchy: a year mismatch removes year, month, and
+            day; a month mismatch removes month and day; and a day mismatch removes
+            only the day.
+
+            If ``False``, the values extracted from ``datekey`` are retained and
+            written to the processed component columns, giving precedence to the
+            date field.
+
+        inplace_components (bool, optional):
+            Whether to overwrite existing year, month, and day columns.
+
+            If ``False``, the processed values are written to new component columns.
+
+        inplace_date (bool, optional):
+            Whether to overwrite the date column when mismatches with existing
+            year, month, or day values are resolved.
+
+            This argument has an effect only when ``drop_mismatch=True``.
+
+        flag (bool, optional):
+            Whether to retain the date-interval flag and interval-width columns
+            generated during interval processing.
+
+        strategy (str, optional):
+            Strategy used to collapse date intervals before component extraction when
+            interval processing is required. Accepted values are ``"start"``, ``"end"``, 
+            and ``"overlap"``.
+
+        maxinterval_number (int, optional):
+            Maximum interval width allowed with the ``"start"`` and ``"end"``
+            strategies.
+
+            Intervals exceeding this limit are replaced with missing values. Use
+            ``-1`` to process intervals regardless of their width.
+
+        maxinterval_level (str, optional):
+            Unit used with ``maxinterval_number``. Accepted values are
+            ``"days"``, ``"months"``, and ``"years"``.
+
+    Returns:
+        (pandas.DataFrame):
+            Processed DataFrame containing the extracted temporal components,
+            reconciled date values, and any retained issue or interval-annotation
+            columns.
+
+    Raises:
+        ValueError:
+            If ``split`` is not ``"all"`` or ``"interval"``.
+
+        Exception:
+            If ``monthkey`` is provided without ``yearkey``, or if ``daykey`` is
+            provided without ``monthkey``.
+
+        Exception:
+            If a generated year, month, or day column name conflicts with an
+            existing column.
+
+    Note:
+        - Temporal hierarchy is preserved in the output: a month is retained only
+        when a year is available, and a day only when both a year and a month are
+        available.
+
+        - When ``split="all"``, detected inconsistencies are recorded in
+        ``issue_splitdate``. When ``split="interval"``, they are recorded in
+        ``issue_splitdateinterval``.
+
+        - Giving precedence to ``datekey`` when ``drop_mismatch=False`` is a
+        design choice and does not imply that the date field is inherently
+        more reliable than the separate component fields.
+    """
+
+#    drop_empty (bool, optional):
+#        Whether to remove generated output or issue columns when they contain
+#        only missing values.
+#
+#        Empty component columns are removed only when they were generated by
+#        the function rather than supplied as existing columns.
 
     # Verifications
 
@@ -165,9 +310,9 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', dr
     yearmodulename = 'splitdate'
     monthmodulename = 'splitdate'
     daymodulename = 'splitdate'
-    yearinplace = inplace
-    monthinplace = inplace
-    dayinplace = inplace
+    yearinplace = inplace_components
+    monthinplace = inplace_components
+    dayinplace = inplace_components
 
     if (yearkey is None):
         yearkey = 'year_generatedby_splitdate'
@@ -213,8 +358,8 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', dr
     df, datekey = call_processdateinterval(df, datekey, **processdateinterval_params, verbose=verbose, indent=indent)
 
     if drop_mismatch:
-        df, datekey, datekeyout = getcolumnname.apply(df, datekey, 'splitdate', inplace=inplace, minimize_columns=False)
-        if not inplace:
+        df, datekey, datekeyout = getcolumnname.apply(df, datekey, 'splitdate', inplace=inplace_date, minimize_columns=False)
+        if not inplace_date:
             df[datekeyout] = df[datekey].copy()
 
     printv(f'* Split into year/month/day when known', verbose=verbose, indent=indent)
@@ -239,8 +384,8 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', dr
         process = pd.Series([True]*len(df), index=df.index)
 
     # Prepare the columns for storing results
-    # inplace=True: replace `yearkey`/`monthkey`/`daykey` if the columns already exist
-    # inplace=False: create new columns to avoid overwriting data in existing columns
+    # inplace_components=True: replace `yearkey`/`monthkey`/`daykey` if the columns already exist
+    # inplace_components=False: create new columns to avoid overwriting data in existing columns
 
     isyear = (yearkey in columns)
     ismonth = (monthkey in columns)
@@ -292,7 +437,7 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', dr
 
     if isday or ismonth or isyear:
 
-        if inplace:
+        if inplace_components:
 
             print_columns = np.array([f"`{daykey.split('_processedby_')[0]}`", f"`{monthkey.split('_processedby_')[0]}`", f"`{yearkey.split('_processedby_')[0]}`"])[[isday, ismonth, isyear]]
             if split == 'all':
@@ -313,7 +458,7 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', dr
     df[monthkeyout] = df[monthkeyout].astype('string')
     df[daykeyout] = df[daykeyout].astype('string')
 
-    isoutputcolumnsgenerated = (not inplace) or ((not isday) and (not ismonth) and (not isyear))
+    isoutputcolumnsgenerated = (not inplace_components) or ((not isday) and (not ismonth) and (not isyear))
     drop_empty = (drop_empty and isoutputcolumnsgenerated)
 
     printv(f"INFO | daykey='{daykeyout}', monthkey='{monthkeyout}', yearkey='{yearkeyout}'", verbose=verbose, indent=indent)
@@ -392,7 +537,8 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', dr
     df[monthkeyout] = df[monthkeyout].astype('string')
     df[daykeyout] = df[daykeyout].astype('string')
 
-    # Replace mismatched year, month, or day values with NaN
+    # Identify mismatches between the extracted components and the existing
+    # year, month, and day values
 
     if isyear:
         ismissing = (pd.isnull(df[yearkeyout]) | pd.isnull(year))
@@ -421,6 +567,10 @@ def apply(df, datekey, yearkey=None, monthkey=None, daykey=None, split='all', dr
         df = modifyissuecolumn.apply(df, issuekey, f'{basedaykey}_MISMATCH', subset=isdaymismatch)
 
     if drop_mismatch:
+
+        # Remove mismatched components from both the processed date and the
+        # component output columns while preserving temporal hierarchy
+
         if isyear:
             df.loc[isyearmismatch,[yearkeyout,monthkeyout,daykeyout]] = pd.NA
             df.loc[isyearmismatch,datekeyout] = pd.NA
