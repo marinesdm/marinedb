@@ -334,4 +334,5 @@ if __name__ == '__main__':
     _ = apply(args.inputfile, split_type=args.split_type, columns=args.columns, sep=args.delimiter, chunksize=args.chunksize, outputdir=args.outputdir)
 
     end = time.time()
+    print()
     print(f'TIME: {round(end - start,0)}s')
