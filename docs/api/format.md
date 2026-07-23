@@ -35,7 +35,16 @@ Input datasets should meet the following requirements:
   available, as `marinedb` can reconstruct complete dates from those
   components.
 
-::: marinedb.tools.format
+## API reference
+
+<h3><code>marinedb.tools.format</code></h3>
+
+::: marinedb.tools.format.apply
+        options:
+          show_root_heading: false
+          show_root_toc_entry: false
+
+## Basic usage
 
 !!! example
     ```
