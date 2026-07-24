@@ -54,7 +54,7 @@ def apply(df, key, values, flag=False, minimize_flagname=False, flagname_mapping
 
             By default, the flag column is named
             ``flag_<key>_notisin_<values>``. When ``flagname_mapping`` is provided,
-            searched values used as keys are replaced by their corresponding
+            searched values used as mapping keys are replaced by their corresponding
             mapping values in the flag column name.
 
             This argument is ignored when ``flag=False`` or

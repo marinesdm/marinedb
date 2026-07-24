@@ -2,7 +2,13 @@
 
 ## API reference
 
-<h3><code>marinedb.tools.marineloc.marineloc</code></h3>
+<h3>
+  <code>marinedb.tools.marineloc.marineloc</code> 
+  <a href="{{ source_base_url }}/src/marinedb/tools/marineloc/marineloc.py?ref_type=heads" 
+     target="_blank" 
+     rel="noopener noreferrer"
+     style="font-weight:normal;font-size:0.8em;">[source]</a>
+</h3> 
 
 ::: marinedb.tools.marineloc.marineloc.apply
         options:

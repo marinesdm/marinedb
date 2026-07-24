@@ -58,14 +58,15 @@ def apply(df, key, values, flag=False, minimize_flagname=False, flagname_mapping
             provided as a dictionary or as the path to a JSON file.
 
             By default, the flag column is named ``flag_<key>_contains_<values>``. 
-            When ``flagname_mapping`` is provided, searched values used as keys are replaced 
-            by their corresponding mapping values in the flag column name.
+            When ``flagname_mapping`` is provided, searched values used as mapping 
+            keys are replaced by their corresponding mapping values in the flag 
+            column name.
 
             This argument is ignored when ``flag=False`` or
             ``minimize_flagname=False``.  When ``minimize_flagname=True`` 
             and no mapping is provided, one is automatically created 
             or updated in ``outputdir/<key>_doesnotcontain_mapping.json``.
-            See Note 2 below.
+            See Note below.
 
         dropna (bool, optional):
             Defines how missing values in ``key`` are handled.

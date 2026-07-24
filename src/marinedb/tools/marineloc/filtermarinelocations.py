@@ -447,11 +447,11 @@ def apply(inputfile, filterfile, inputfile_format='uncompressed_gzip', controlke
             the marine filter for one or more selected indices.
 
     Note:
-        when ``inputfile_format`` is ``"pandas"`` or ``"uncompressed_gzip"`, records 
+        - When ``inputfile_format`` is ``"pandas"`` or ``"uncompressed_gzip"``, records 
         containing a different number of fields from the header are skipped and 
         reported during processing.
 
-        The order and full content of retained records are taken from
+        - The order and full content of retained records are taken from
         ``inputfile``. The marine filter is used only to identify the records to
         retain and, when requested, to provide the ``mask`` column.
     """

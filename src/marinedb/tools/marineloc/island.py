@@ -380,8 +380,11 @@ def apply(inputdir, latkey, lonkey, idxkey, controlkey=None, sep='\t', fileslist
             its assigned files.
 
         maskfile (str, optional):
-            Path to a custom ``.npz`` land–sea–coast mask. If omitted, the
+            Path to a custom ``.npz`` land-sea-coast mask. If omitted, the
             ``globe_mask_coastline.npz`` mask bundled with ``marinedb`` is used.
+
+            The mask must contain the arrays ``lat``, ``lon``, and ``mask``, where
+            ``mask`` uses ``0`` for ocean, ``1`` for land, and ``2`` for coast.
 
         outputdir (str, optional):
             Directory in which processed files are written. A ``processed``

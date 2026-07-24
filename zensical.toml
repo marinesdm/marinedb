@@ -77,7 +77,6 @@ nav = [
     { "Worms"= "api/taxonomic/isinworms.md"},
   ]},
   { "Resources" = "api/resources.md" },
-  { "Demo" = "api/docstring-demo.md"}
 ]}
 ]
 
@@ -103,3 +102,7 @@ line_length = 60
 
 [project.markdown_extensions.pymdownx.arithmatex]
 generic = true
+
+[project.markdown_extensions.zensical.extensions.macros]
+include_yaml = ["data/variables.yml"]
+on_undefined = "strict"
