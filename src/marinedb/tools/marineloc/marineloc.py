@@ -39,7 +39,7 @@ def apply(inputfile, inputfile_format, latkey='', lonkey='', idxkey='', controlk
 
     For a standard run from the original occurrence file, users generally need to
     specify ``inputfile``, ``inputfile_format``, ``latkey``, ``lonkey``, and must 
-    set ``sep`` when the file is not tab-delimited. ``controlkey`` can optionally be  
+    set ``sep`` when the file is not tab-delimited. ``controlkey`` can optionally be 
     provided to verify record alignment. Local parallel classification can be enabled 
     with ``parallel=True`` and controlled with ``cpu``.
 

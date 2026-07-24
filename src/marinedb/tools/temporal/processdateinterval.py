@@ -183,7 +183,9 @@ def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_numb
     Note:
         - Partial interval bounds are converted internally to complete dates when
         calculating interval widths. Missing months and days are interpreted as
-        January and the first day of the month, respectively.
+        January and the first day of the month, respectively. **This internal completion 
+        does not modify the processed date values, which retain their original 
+        temporal resolution**.
 
         - Detected intervals are annotated in
         ``flag_<DATE_COLUMN>_isdateinterval``. When retained, their widths are
