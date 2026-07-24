@@ -1257,6 +1257,8 @@ if __name__ == '__main__':
         if len(config['processing'][format_column_idx][format_column]) == 0:
             del config['processing'][format_column_idx]
 
+        processing_schema = get_config_schema(config, key="processing")
+
         end = time.time()
         print(f'TIME | step: {round(end - start)}s [total: {round(end - start_cleaning)}s]')
         print()
@@ -1266,7 +1268,7 @@ if __name__ == '__main__':
     marineloc_call = [comb for comb in processing_schema if 'marineloc' in comb]
     print(marineloc_call) #debug
     n_marineloc_call = len(marineloc_call)
-
+    print(config['processing']) # debug
     if n_marineloc_call > 1:
         raise Exception(f"`clean.py` | `marineloc` should be specified only once in the `config` file")
 
@@ -1299,6 +1301,8 @@ if __name__ == '__main__':
         del config['processing'][marineloc_column_idx][marineloc_column][marineloc_idx]
         if len(config['processing'][marineloc_column_idx][marineloc_column]) == 0:
             del config['processing'][marineloc_column_idx]
+
+        processing_schema = get_config_schema(config, key="processing")
 
         end = time.time()
         print(f'TIME | step: {round(end - start)}s [total: {round(end - start_cleaning)}s]')
