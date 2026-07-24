@@ -88,7 +88,10 @@ def apply(inputfile, dataset_name, outputfile=None, outputdir=None, overwrite=Tr
         temp = os.path.basename(inputfile).split('.')
         outputfile = temp[0] + '_processedby_format'
         if len(temp) == 2:
-            outputfile += f'.{temp[1]}'
+            if dataset_name == 'jedi':
+                outputfile += '.txt'
+            else:
+                outputfile += f'.{temp[1]}'
 
     if outputdir is None:
         if len(os.path.dirname(outputfile)) != 0:
