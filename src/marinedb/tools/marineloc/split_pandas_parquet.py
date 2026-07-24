@@ -254,7 +254,8 @@ def apply(inputfile, split_type='', columns=None, sep='\t', chunksize=CHUNKSIZE,
             ``"./"``.
 
     Returns:
-        Path to the directory containing the split files.
+        (str):
+            Path to the directory containing the split files.
 
     Raises:
         KeyError:
@@ -273,7 +274,7 @@ def apply(inputfile, split_type='', columns=None, sep='\t', chunksize=CHUNKSIZE,
     if 'split' not in outputdir.split('/')[-2:]:
         outputdir = os.path.join(outputdir, 'split')
     try:
-        os.mkdir(outputdir)
+        os.mkdirs(outputdir)
     except FileExistsError:
         pass
 
