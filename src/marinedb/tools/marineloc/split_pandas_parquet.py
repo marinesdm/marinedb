@@ -274,7 +274,7 @@ def apply(inputfile, split_type='', columns=None, sep='\t', chunksize=CHUNKSIZE,
     if 'split' not in outputdir.split('/')[-2:]:
         outputdir = os.path.join(outputdir, 'split')
     try:
-        os.mkdirs(outputdir)
+        os.makedirs(outputdir)
     except FileExistsError:
         pass
 
