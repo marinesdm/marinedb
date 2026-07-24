@@ -1266,9 +1266,8 @@ if __name__ == '__main__':
     # If specified, apply the `marineloc` filter
 
     marineloc_call = [comb for comb in processing_schema if 'marineloc' in comb]
-    print(marineloc_call) #debug
     n_marineloc_call = len(marineloc_call)
-    print(config['processing']) # debug
+
     if n_marineloc_call > 1:
         raise Exception(f"`clean.py` | `marineloc` should be specified only once in the `config` file")
 
@@ -1329,6 +1328,8 @@ if __name__ == '__main__':
         raise Exception(f"`clean.py` | `createwormsfilters.py` must be applied to a single column. Select either {','.join(createwormsfilters_column[:-1])} or {createwormsfilters_column[-1]}")
 
     is_createwormsfilters = (len(createwormsfilters_filter) == 1)
+    if is_createwormsfilters:
+        createwormsfilters_filter = createwormsfilters_filter[0]
 
     ## Verify if `isinworms` is specified
 #    isinworms_filter = [(idx, filter) for idx,filter in enumerate(config['processing']) if "'isinworms'" in str(filter)]
@@ -1340,6 +1341,9 @@ if __name__ == '__main__':
         raise Exception(f"`clean.py` | `isinworms.py` must be applied to a single column. Select either {','.join(isinworms_column[:-1])} or {isinworms_column[-1]}")
 
     is_isinworms = (len(isinworms_filter) == 1)
+    if is_isinworms:
+        isinworms_filter = isinworms_filter[0]
+
     is_isinworms_verbatim = False
 
     ## Verify if `resolvetaxamatch` is specified
@@ -1352,6 +1356,8 @@ if __name__ == '__main__':
         raise Exception(f"`clean.py` | `resolvetaxamatch.py` must be applied to a single column. Select either {','.join(resolvetaxamatch_column[:-1])} or {resolvetaxamatch_column[-1]}")
 
     is_resolvetaxamatch = (len(resolvetaxamatch_filter) == 1)
+    if is_resolvetaxamatch:
+        resolvetaxamatch_filter = resolvetaxamatch_filter[0]
 
     ## Ensure that if `createworms` is specified, `isinworms` is specified as well
     if is_createwormsfilters and not is_isinworms:
