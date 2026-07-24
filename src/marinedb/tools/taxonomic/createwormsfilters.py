@@ -88,18 +88,6 @@ clients = {}
 
 def setup(wormscall=WORMSCALL):
 
-#    global cl
-#    global scinames
-#    global aphiaID
-#
-#    cl = Client('https://www.marinespecies.org/aphia.php?p=soap&wsdl=1', timeout=300)
-#
-#    scinames = cl.factory.create('scientificnames')
-#    scinames['_arrayType'] = 'string[]'
-#
-#    aphiaID = cl.factory.create('aphiaids')
-#    aphiaID['_arrayType'] = 'int[]'
-
     global CONTROL_COLUMN
 
     CONTROL_COLUMN = ('kingdom' if ('kingdom' in wormscall) else 'rank')
@@ -110,20 +98,6 @@ def get_client(query_mode):
 
     if query_mode not in clients:
         clients[query_mode] = Client(WORMS_WSDL, timeout=300)
-
-#    if query_mode == "sciname":
-#
-#        global scinames
-#
-#        scinames = cl.factory.create('scientificnames')
-#        scinames['_arrayType'] = 'string[]'
-#
-#    if query_mode == "aphiaid":
-#
-#        global aphiaID
-#
-#        aphiaID = cl.factory.create('aphiaids')
-#        aphiaID['_arrayType'] = 'int[]'
 
     return clients[query_mode]
 
@@ -843,25 +817,10 @@ def match50_WoRMSBySciname(wormsscinames, wormscall, marine_only=False, keep_fos
     if isinstance(wormsscinames,str):
         wormsscinames = [wormsscinames]
 
-#    cl = get_client("sciname")
-#    scinames = cl.factory.create('scientificnames')
-#    scinames['_arrayType'] = 'string[]'
-
-#    if keep_fossil:
-#        extant_only = "false"
-#    else:
-#        extant_only = "true"
-
     extant_only_flag = "false" if keep_fossil else "true"
-
-#    if marine_only:
-#        marine_only = "true"
-#    else:
-#        marine_only = "false"
 
     marine_only_flag = "true" if marine_only else "false"
 
-#    scinames['scientificname'] = wormsscinames
     worms_results = connect_matchAphiaRecordsByNames(wormsscinames, marine_only=marine_only_flag, extant_only=extant_only_flag)
     assert len(worms_results) == len(wormsscinames)
 
@@ -1124,8 +1083,8 @@ def match_WoRMSBySciname(raw_scinames, wormscall=WORMSCALL, identification_level
             ## Keep only one (by default, the first one)
 
             duplicated_wormsNaN = duplicated_wormsmatch[(~isduplicated_match) & isduplicated_NaN]
-            ispartialmatch = (~duplicated_wormsNaN['status'].isna()) # NEW
-            duplicated_wormsNaN = pd.concat([duplicated_wormsNaN[ispartialmatch], duplicated_wormsNaN[~ispartialmatch]],axis=0) # NEW
+            ispartialmatch = (~duplicated_wormsNaN['status'].isna())
+            duplicated_wormsNaN = pd.concat([duplicated_wormsNaN[ispartialmatch], duplicated_wormsNaN[~ispartialmatch]],axis=0)
 
             deduplicate_NaN = set(duplicated_wormsNaN.index) - set(duplicated_wormsNaN.drop_duplicates(subset=['rawsciname'],keep='first').index)
             deduplicate_NaN = list(set(duplicated_wormsmatch.index) - deduplicate_NaN)
@@ -1222,12 +1181,6 @@ def match50_WoRMSByAcceptedSciname(valid_aphiaID, wormscall, species_only=True):
 
     if isinstance(valid_aphiaID, int):
         valid_aphiaID = [valid_aphiaID]
-
-#    cl = get_client("aphiaid")
-#
-#    aphiaID = cl.factory.create('aphiaids')
-#    aphiaID['_arrayType'] = 'int[]'
-#    aphiaID['aphiaids'] = valid_aphiaID
 
     worms_results = connect_getAphiaRecordsByIDs(valid_aphiaID)
 
@@ -1490,7 +1443,7 @@ def parallel_WoRMSmatch(wormsfunc, data, wormscall, cpu, max_attempt=3, verbose=
     params['wormscall'] = wormscall
     params['outputdir'] = outputdir
     params['outputfile'] = outputfile
-    params['resume'] = True
+    params['resume'] = True # worker-level recovery is always enabled during parallel processing
     params['resume_mode'] = resume_mode
     params['verbose'] = False
     params['parallel'] = True
@@ -1588,7 +1541,7 @@ def parallel_WoRMSmatch(wormsfunc, data, wormscall, cpu, max_attempt=3, verbose=
 #                       future.result() #DEBUG
                        id, count = retry_WoRMSmatch(wormsfunc, future, tasks, executor, **params)
 
-                       if count > max_attempt:
+                       if count >= max_attempt:
 
                            cpu -= 1
 
@@ -1760,8 +1713,6 @@ def process_partialmatch(wormsfilter, wormsfuncname, parallel, wormscall=WORMSCA
     # attempt WoRMS matching again (WoRMS API bug)
 
     doesmatch = (~pd.isnull(wormsfilter['status']))
-#    doesmatch = (wormsfilter['match_type'] !+ 'nomatch')
-#    isquarantineddeleted = wormsfilter['status'].isin(['match_quarantine','match_deleted'])
     isquarantineddeleted = wormsfilter['match_type'].isin(['match_quarantine','match_deleted'])
     doeswormsmatchfailed = doesmatch & (~isquarantineddeleted) & pd.isnull(wormsfilter[CONTROL_COLUMN])
     doeswormsmatchfailed = doeswormsmatchfailed[doeswormsmatchfailed].index
@@ -1942,9 +1893,6 @@ def process_subspecies(worms_acceptedfilter, parallel, wormscall=WORMSCALL, verb
 @export
 def create_WoRMSrecognizedfilter(unique_rawscinames, wormscall=WORMSCALL, min_length=3, doublecheck=True, marine_only=False, keep_fossil=True, store=True, outputdir='./', outputfile='worms_matchfilter.txt', overwrite=False, resume=True, resume_mode='soft', parallel=True, cpu=2, max_attempt=3, store_parallel=True, overwrite_parallel=False, resume_parallel=True, verbose=True, indent=''):
 
-#    if 'cl' not in globals():
-#        setup(wormscall=wormscall)
-
     if parallel:
 
         if (store != store_parallel):
@@ -2022,9 +1970,6 @@ def create_WoRMSrecognizedfilter(unique_rawscinames, wormscall=WORMSCALL, min_le
 def create_WoRMSacceptedfilter(unaccepted_aphiaID, wormscall=WORMSCALL, species_only=True, store=True, outputdir='./', outputfile='worms_acceptedfilter.txt', overwrite=False, resume=True, resume_mode='soft', parallel=True, cpu=2, max_attempt=3, store_parallel=True, overwrite_parallel=False, resume_parallel=True, verbose=True, indent=''):
 
     cl = get_client(query_mode="aphiaid")
-
-#    if 'cl' not in globals():
-#        setup(wormscall=wormscall)
 
     if parallel:
 
@@ -2144,11 +2089,14 @@ def create_WoRMSacceptedfilter(unaccepted_aphiaID, wormscall=WORMSCALL, species_
     return worms_acceptedfilter
 
 @export
-def apply(inputfile, colname,  skip_uniques_rebuild=False, wormscall=WORMSCALL, min_length=3, doublecheck=True, store=True, outputdir='./', overwrite=False, resume=True, resume_mode='soft', parallel=True, max_attempt=10, store_parallel=True, overwrite_parallel=False, resume_parallel=True, verbose=True, indent=''):
+def apply(inputfile, colname,  skip_uniques_rebuild=False, wormscall=WORMSCALL, min_length=3, doublecheck=True, store=True, outputdir='./', overwrite=False, resume=True, resume_mode='soft', parallel=True, max_attempt=10, verbose=True, indent=''):
+# store_parallel=True, overwrite_parallel=False, resume_parallel=True,
 
     # Parameters
 
     ## Global variables
+
+    wormscall = wormscall.copy()
 
     wormscall_required_keys = [
                                'scientificname',
@@ -2181,11 +2129,11 @@ def apply(inputfile, colname,  skip_uniques_rebuild=False, wormscall=WORMSCALL, 
 
         cpu = 2
 
-        if (store != store_parallel):
-            raise ValueError(f'`createwormsfilters.py` | parallel={parallel} and store={store} but store_parallel={store_parallel}')
-
-        if (overwrite != overwrite_parallel):
-            raise ValueError(f'`createwormsfilters.py` | parallel={parallel} and overwrite={overwrite} but overwrite_parallel={overwrite_parallel}')
+#        if (store != store_parallel):
+#            raise ValueError(f'`createwormsfilters.py` | parallel={parallel} and store={store} but store_parallel={store_parallel}')
+#
+#        if (overwrite != overwrite_parallel):
+#            raise ValueError(f'`createwormsfilters.py` | parallel={parallel} and overwrite={overwrite} but overwrite_parallel={overwrite_parallel}')
 
     if (resume_mode != 'soft') and (resume_mode != 'hard'):
         raise ValueError(f"`createwormsfilters.py` | `resume_mode` must be 'soft' or 'hard'")
@@ -2207,9 +2155,9 @@ def apply(inputfile, colname,  skip_uniques_rebuild=False, wormscall=WORMSCALL, 
     params_parallel = {
                        'cpu': cpu,
                        'max_attempt': max_attempt,
-                       'resume_parallel': resume_parallel,
-                       'store_parallel': store_parallel,
-                       'overwrite_parallel': overwrite_parallel
+                       'resume_parallel': resume, # resume_parallel
+                       'store_parallel': store, # store_parallel
+                       'overwrite_parallel': overwrite, # overwrite_parallel
                       }
 
     identification_level = 'species'
