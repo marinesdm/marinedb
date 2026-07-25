@@ -2264,7 +2264,8 @@ def flag(df, flag_nomatch, flag_uncertain, verbose=True, indent=''):
     return df
 
 @export
-def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, worms_dtypes=None, matchfilter=None, acceptedfilter=None, interactive_mode=False, check_ambiguity=True, uncertainty_level=1, fuzzy=True, fixed_allowedMismatch=False, fixed_allowedMismatch_withNaN=1, fixed_allowedMismatch_withoutNaN=2, verbatimcolumn=None, verbatimauthorshiponly=None, keep_fossil=False, min_length=3, doublecheck=True, inplace=False, resume=True, resume_mode='soft', store_createwormsfilters=True, overwrite_createwormsfilters=False, outputdir_createwormsfilters='./', outputdir_isinworms='./', outputfile='', parallel=True, max_attempt=3, store_parallel_createwormsfilters=True, overwrite_parallel_createwormsfilters=False, resume_parallel=True, drop_conditions=None, flag_nomatch=False, flag_uncertain=False, verbose=True, indent='', store_isinworms=True, overwrite_isinworms=False):
+def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, worms_dtypes=None, matchfilter=None, acceptedfilter=None, interactive_mode=False, check_ambiguity=True, uncertainty_level=1, fuzzy=True, fixed_allowedMismatch=False, fixed_allowedMismatch_withNaN=1, fixed_allowedMismatch_withoutNaN=2, verbatimcolumn=None, verbatimauthorshiponly=None, keep_fossil=False, min_length=3, doublecheck=True, inplace=False, resume=True, resume_mode='soft', store_createwormsfilters=True, overwrite_createwormsfilters=False, outputdir_createwormsfilters='./', outputdir_isinworms='./', outputfile='', parallel=True, max_attempt=3, resume_parallel=True, drop_conditions=None, flag_nomatch=False, flag_uncertain=False, verbose=True, indent='', store_isinworms=True, overwrite_isinworms=False):
+# store_parallel_createwormsfilters=True, overwrite_parallel_createwormsfilters=False
 
     Nobs = len(df)
 
@@ -2317,11 +2318,11 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
 
     ## Arguments
 
-    if parallel and (store_createwormsfilters != store_parallel_createwormsfilters):
-        raise ValueError(f'`isinworms.py` | parallel={parallel} and store_createwormsfilters={store_createwormsfilters} but store_parallel_createwormsfilters={store_parallel_createwormsfilters}')
-
-    if parallel and (overwrite_createwormsfilters != overwrite_parallel_createwormsfilters):
-        raise ValueError(f'`isinworms.py` | parallel={parallel} and overwrite={overwrite_createwormsfilters} but overwrite_parallel={overwrite_parallel_createwormsfilters}')
+#    if parallel and (store_createwormsfilters != store_parallel_createwormsfilters):
+#        raise ValueError(f'`isinworms.py` | parallel={parallel} and store_createwormsfilters={store_createwormsfilters} but store_parallel_createwormsfilters={store_parallel_createwormsfilters}')
+#
+#    if parallel and (overwrite_createwormsfilters != overwrite_parallel_createwormsfilters):
+#        raise ValueError(f'`isinworms.py` | parallel={parallel} and overwrite={overwrite_createwormsfilters} but overwrite_parallel={overwrite_parallel_createwormsfilters}')
 
     if parallel and interactive_mode:
         parallel = False
@@ -2367,21 +2368,20 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
                        'parallel': parallel,
                        'max_attempt': max_attempt,
                        'resume_parallel': resume_parallel,
-                       'store_parallel': store_parallel_createwormsfilters,
-                       'overwrite_parallel': overwrite_parallel_createwormsfilters
+                       'store_parallel': store_createwormsfilters, # store_parallel_createwormsfilters
+                       'overwrite_parallel': overwrite_createwormsfilters # overwrite_parallel_createwormsfilters
                       }
 
     taxonomy_columns_mapping = {}
-    rank_verbatim_overlap = [] # NEW
-    print('columns before:', df.columns)
+    rank_verbatim_overlap = []
+
     for key,rank in RANK_MAPPING.items():
         df, rankin, rankout = getcolumnname.apply(df, rank, 'isinworms', inplace)
         RANK_MAPPING_RENAMED[key] = rankin
         taxonomy_columns_mapping[rankin] = rankout
-        if (verbatimcolumn is not None) and (rank in verbatimcolumn) and inplace: # NEW
+        if (verbatimcolumn is not None) and (rank in verbatimcolumn) and inplace:
             rank_verbatim_overlap.append(rank)
             df[rank] = df[rankout]
-    print('columns after:',df.columns)
 
     taxonomy_columns = [RANK_MAPPING_RENAMED[r] for r in worms_ranks]
     worms_metadata = list(set(WORMSCALL) - set(RANK_MAPPING_RENAMED.keys()))

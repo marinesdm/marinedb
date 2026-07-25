@@ -194,7 +194,7 @@ def apply(inputfile, isinworms_params, review_level=1, taxamatch_key = 'taxamatc
 
             # Select mismatch cases to be reviewed (based on review_level criteria)
 
-            chunk = chunk.loc[chunk[matchtype_key].isin(classif_matchtype),:]
+            chunk = chunk.loc[chunk[matchtype_key].isin(classif_matchtype), columns_data+[taxamatch_key]] # NEW
             chunk = chunk.astype('string')
             chunk = chunk.fillna('_MISSING_')
 
@@ -357,7 +357,8 @@ def apply(inputfile, isinworms_params, review_level=1, taxamatch_key = 'taxamatc
 
             if len(indices) != 0:
 
-                chunk.loc[indices, columns_data] = chunk.loc[indices, columns_data].astype('string').fillna('_MISSING_')
+                chunk.loc[indices, columns_data] = chunk.loc[indices, columns_data].astype('string')
+                chunk.loc[indices, columns_data] = chunk.loc[indices, columns_data].fillna('_MISSING_')
                 chunkByClassification = chunk.loc[indices, columns_data].groupby(columns_data)
 
                 chunk_classifications = set(chunkByClassification.groups.keys())
