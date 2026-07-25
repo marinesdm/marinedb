@@ -1414,12 +1414,12 @@ if __name__ == '__main__':
         isinworms_createwormsfilters_params['outputdir'] = isinworms_params['outputdir_createwormsfilters']
         if 'overwrite_createwormsfilters' in isinworms_args:
             isinworms_createwormsfilters_params['overwrite'] = isinworms_params['overwrite_createwormsfilters']
-        if 'overwrite_parallel_createwormsfilters' in isinworms_args:
-            isinworms_createwormsfilters_params['overwrite_parallel'] = isinworms_params['overwrite_parallel_createwormsfilters']
+#        if 'overwrite_parallel_createwormsfilters' in isinworms_args:
+#            isinworms_createwormsfilters_params['overwrite_parallel'] = isinworms_params['overwrite_parallel_createwormsfilters']
         if 'store_createwormsfilters' in isinworms_args:
             isinworms_createwormsfilters_params['store'] = isinworms_params['store_createwormsfilters']
-        if 'store_parallel_createwormsfilters' in isinworms_args:
-            isinworms_createwormsfilters_params['store_parallel'] = isinworms_params['store_parallel_createwormsfilters']
+#        if 'store_parallel_createwormsfilters' in isinworms_args:
+#            isinworms_createwormsfilters_params['store_parallel'] = isinworms_params['store_parallel_createwormsfilters']
         isinworms_createwormsfilters_args = list(isinworms_createwormsfilters_params.keys())
 
         if is_createwormsfilters:
@@ -1432,7 +1432,7 @@ if __name__ == '__main__':
             createwormsfilters_params = deepcopy(config['processing'][createwormsfilters_column_idx][createwormsfilters_column][createwormsfilters_idx]['createwormsfilters'])
             createwormsfilters_params['colname'] = createwormsfilters_column
             createwormsfilters_params['store'] = True
-            createwormsfilters_params['store_parallel'] = True
+#            createwormsfilters_params['store_parallel'] = True
             createwormsfilters_params['inputfile'] = config['inputfile_path']
             createwormsfilters_params['indent'] = '   '
             createwormsfilters_args = list(createwormsfilters_params.keys())
@@ -1469,7 +1469,7 @@ if __name__ == '__main__':
             ## Use parameters from `createwormsfilters` to complete the `isinworms` configuration
             for arg, val in createwormsfilters_params.items():
                 if arg not in exclude_args:
-                    if arg in ['overwrite', 'overwrite_parallel', 'outputdir', 'store', 'store_parallel']:
+                    if arg in ['overwrite', 'outputdir', 'store']: # 'store_parallel' 'overwrite_parallel'
                          isinworms_params[f'{arg}_createwormsfilters'] = createwormsfilters_params[arg]
                     else:
                         try:
