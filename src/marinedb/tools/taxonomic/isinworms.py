@@ -634,13 +634,13 @@ def evaluateTaxaCandidatesByAuthorship(verbatim, candidates, verbatimauthorshipo
 
     wormsspecies = wormsspecies_match
 
-    if len(wormsspecies) == 0:
+    if (not verbatimauthorshiponly) and (len(wormsspecies) == 0):
         # no match between `wormsspecies` components and `verbatim` components
         # assumption : `verbatim` only contains information on the authorship
         ismore = True
         verbatim_authorship = verbatim
 
-    else:
+    elif (not verbatimauthorshiponly) and (len(wormsspecies) > 0):
 
         ## Search for the species name in `verbatim`, taking into account mid-string variations
         # e.g. Atrina pectinata & Atrina (Servatrina) pectinata
@@ -753,7 +753,7 @@ def evaluateTaxaCandidatesByAuthorship(verbatim, candidates, verbatimauthorshipo
 
                     # more than one "sensu": unexpected
 
-                    printv(f"WARNING | More than one 'sensu' in {candidates['authorship'].tolist()}. Exiting `evaluateTaxaCandidatesByAuthorship`", verbose=verbose, indent=indent)
+                    printv(f"WARNING | More than one 'sensu' in {candidates['authority'].tolist()}. Exiting `evaluateTaxaCandidatesByAuthorship`", verbose=verbose, indent=indent)
                     ismore = True
                     issue = 'AUTHORSHIP_MULTIPLE_SENSU'
 
@@ -1121,8 +1121,8 @@ def compareHigherRanksExact(ranks1, ranks2):
 
     diff = (ranks1.fillna('') != ranks2.fillna('')) # compute differences
 
-    isnan = (ranks1.isna()!=ranks2.isna()) # if both are null, it is considered a match
-                                           # if only one is null, it is considered a mismatch
+    isnan = (ranks1.isna() != ranks2.isna()) # if both are null, it is considered a match
+                                             # if only one is null, it is considered a mismatch
 
     match = pd.DataFrame(diff[~isnan].sum(axis=1).astype(int), columns=['Nmismatch'])
 
@@ -1174,7 +1174,7 @@ def resolveTaxaMatch(data_classif, worms_classif, check_ambiguity=True, uncertai
 
     is_match_ambiguous = False
     ambiguity_msg_list = []
-    authorship_issue_msg = ''
+    authorship_issue_msg_set = set()
     additional_issue_msg = ''
 
     isverbatim = (verbatimcolumn is not None)
@@ -1299,7 +1299,8 @@ def resolveTaxaMatch(data_classif, worms_classif, check_ambiguity=True, uncertai
         if is_unique_higher_rank_match:
 
             doesmatch = 'match'
-            match_idx = np.where(match['match'])[0][0]
+#            match_idx = np.where(match['match'])[0][0]
+            match_idx = match.index[match['match']][0]
             classif = pd.DataFrame([[doesmatch,'classification_singleMatch'] + worms_classif.loc[match_idx,wormscolumns].to_numpy().flatten().tolist()], columns=colnames)
             if (not check_ambiguity) or (not isverbatim) or candidates['authority'].isna().any():
                 processed = True
@@ -1361,25 +1362,30 @@ def resolveTaxaMatch(data_classif, worms_classif, check_ambiguity=True, uncertai
                         processed = results['processed']
                         authorship_issue_msg = results['issue']
 
+                        if authorship_issue_msg:
+                            authorship_issue_msg_set.add(authorship_issue_msg)
+
                     if processed:
 
                         # Keep the candidate whose authorship best matches the verbatim authorship, if any
 
-                        doesmatch = classif[0]
+ #                       doesmatch = classif[0]
                         classif = pd.DataFrame([classif], columns=colnames)
                         classif['classif_matchtype_generatedby_isinworms'] = 'classification_' + classif['classif_matchtype_generatedby_isinworms']
-
                         classif_matchtype = classif.loc[0,'classif_matchtype_generatedby_isinworms']
                         if (uncertainty_level >= 2) and (classif_matchtype == 'classification_authorship_noMatchIsMore'):
                             classif['taxamatch_generatedby_isinworms'] = 'uncertain'
+                        doesmatch = classif.loc[0,'taxamatch_generatedby_isinworms']
 
                         if check_ambiguity:
 
                             if not is_unique_higher_rank_match:
 
                                 if match_idx is None:
+                                    # no match
                                     check_ambiguity = False
                                 else:
+                                    # match
                                     candidates = worms_classif.loc[match_index,:]
                                     ambiguity_msg_list.append('AUTHORSHIP')
 
@@ -1402,40 +1408,49 @@ def resolveTaxaMatch(data_classif, worms_classif, check_ambiguity=True, uncertai
             # STEP N°4: Is one of the candidates the best match for higher taxonomic ranks?
 
 
-            if (not processed) or (isverbatim and check_ambiguity):
+#            if (not processed) or (isverbatim and check_ambiguity):
+            if (not processed) or check_ambiguity:
 
                 match_temp = match.loc[candidates.index,:]
                 match_temp = match_temp[(match_temp['mismatch_level'] == match_temp['mismatch_level'].min())]
                 match_temp = match_temp[(match_temp['Nmismatch'] == match_temp['Nmismatch'].min())]
                 candidates = candidates.loc[match_temp.index,:]
 
-                if isverbatim and check_ambiguity:
+                if processed and check_ambiguity:
 
-                    # Are the best candidates based on raw data also
-                    # the best candidates based on higher rank matches?
-
-                    if processed:
-
-                        # i.e processed in the previous step
-
-                        is_match_ambiguous = (match_idx not in candidates.index)
-
-                    if (not processed):
-
-                        # i.e not processed in the previous step
-
-                        match_bestclassif = match.copy()
-                        match_bestclassif = match_bestclassif[(match_bestclassif['mismatch_level'] == match_bestclassif['mismatch_level'].min())]
-                        match_bestclassif = match_bestclassif[(match_bestclassif['Nmismatch'] == match_bestclassif['Nmismatch'].min())]
-
-                        index_intersection = set(match_bestclassif.index).intersection(candidates.index)
-                        is_match_ambiguous = (len(index_intersection) != len(candidates))
+                    is_match_ambiguous = (match_idx not in candidates.index)
 
                     if is_match_ambiguous:
                         ambiguity_msg_list.append('HIGHER_RANKS')
+                        check_ambiguity = False
 
-                if (not isverbatim) and check_ambiguity:
-                    ambiguity_msg_list.append('HIGHER_RANKS')
+#                if isverbatim and check_ambiguity:
+#
+#                    # Are the best candidates based on authorship also
+#                    # the best candidates based on higher rank matches?
+#
+#                    if processed:
+#
+#                        # i.e processed in the previous step
+#
+#                        is_match_ambiguous = (match_idx not in candidates.index)
+#
+#                    if (not processed):
+#
+#                        # i.e not processed in the previous step
+#
+#                        match_bestclassif = match.copy()
+#                        match_bestclassif = match_bestclassif[(match_bestclassif['mismatch_level'] == match_bestclassif['mismatch_level'].min())]
+#                        match_bestclassif = match_bestclassif[(match_bestclassif['Nmismatch'] == match_bestclassif['Nmismatch'].min())]
+#
+#                        index_intersection = set(match_bestclassif.index).intersection(candidates.index)
+#                        is_match_ambiguous = (len(index_intersection) != len(candidates))
+#
+#                    if is_match_ambiguous:
+#                        ambiguity_msg_list.append('HIGHER_RANKS')
+#
+#                if (not isverbatim) and check_ambiguity:
+#                    ambiguity_msg_list.append('HIGHER_RANKS')
 
                 if (not processed) and (len(candidates) == 1):
 
@@ -1446,19 +1461,27 @@ def resolveTaxaMatch(data_classif, worms_classif, check_ambiguity=True, uncertai
                     classif = pd.DataFrame([[doesmatch,'classification_bestMatch'] + worms_classif.loc[match_idx,wormscolumns].to_numpy().flatten().tolist()], columns=colnames)
                     processed = True
 
+                    if check_ambiguity:
+                        ambiguity_msg_list.append('HIGHER_RANKS')                   
+
 
             # STEP N°5: Does one of the candidates best match the species name?
 
 
-            if (not processed) or (check_ambiguity and (not is_match_ambiguous)):
+ #           if (not processed) or (check_ambiguity and (not is_match_ambiguous)):
+            if (not processed) or check_ambiguity:
+
+#                species_name_ambiguous = False
 
                 # structure : Genus (Subgenus) species [subspecies]
                 # ex : Mycale (Carmia) toxifera
                 pattern_with_subgenus = r'^[A-Z][a-z-]+\s+\([A-Z][a-z-]+\)\s+[a-z-]+(\s+[a-z-]+)?$'
+
                 # structure : Genus species [subspecies]
                 # ex : Melampus striatus
                 pattern_without_subgenus = r'^[A-Z][a-z-]+\s+[a-z-]+(\s+[a-z-]+)?$'
                 # other formats (e.g. var., f., etc.) are not supported and will be ignored
+
                 n_with = candidates[RANK_MAPPING_RENAMED['scientificname']].str.fullmatch(pattern_with_subgenus).sum()
                 n_without = candidates[RANK_MAPPING_RENAMED['scientificname']].str.fullmatch(pattern_without_subgenus).sum()
                 n_total = len(candidates)
@@ -1468,7 +1491,12 @@ def resolveTaxaMatch(data_classif, worms_classif, check_ambiguity=True, uncertai
 
                     condition1 = (match.loc[match_idx,'Nspeciesmatch'] != match.loc[match_index[0],'Nspeciesmatch'])
                     condition2 = ((match.loc[match_index[0],'speciesratio'] - match.loc[match_idx,'speciesratio']) >= 1e-2)
+ #                   species_name_ambiguous = (condition1 | condition2)
                     is_match_ambiguous = (condition1 | condition2)
+
+                    if is_match_ambiguous:
+                        ambiguity_msg_list.append('SPECIES_NAME')
+                        check_ambiguity = False
 
                 if (not processed) and is_candidates_structure_consistent:
 
@@ -1478,11 +1506,11 @@ def resolveTaxaMatch(data_classif, worms_classif, check_ambiguity=True, uncertai
                     match_temp = match_temp[(max_speciesratio - match_temp['speciesratio']) < 1e-2]
                     candidates = candidates.loc[match_temp.index,:]
 
-                    if check_ambiguity and (not is_match_ambiguous):
-                        idx = candidates.index[0]
-                        condition1 = (match.loc[idx,'Nspeciesmatch'] != match.loc[match_index[0],'Nspeciesmatch'])
-                        condition2 = ((match.loc[match_index[0],'speciesratio'] - match.loc[idx,'speciesratio'])>=1e-2)
-                        is_match_ambiguous = (condition1 | condition2)
+#                    if check_ambiguity and (not is_match_ambiguous):
+#                        idx = candidates.index[0]
+#                        condition1 = (match.loc[idx,'Nspeciesmatch'] != match.loc[match_index[0],'Nspeciesmatch'])
+#                        condition2 = ((match.loc[match_index[0],'speciesratio'] - match.loc[idx,'speciesratio'])>=1e-2)
+#                        species_name_ambiguous = (condition1 | condition2)
 
                     if (len(candidates) == 1):
 
@@ -1493,8 +1521,9 @@ def resolveTaxaMatch(data_classif, worms_classif, check_ambiguity=True, uncertai
                         classif = pd.DataFrame([[doesmatch,'classification_bestSpeciesName'] + worms_classif.loc[match_idx,wormscolumns].to_numpy().flatten().tolist()], columns=colnames)
                         processed = True
 
-                if check_ambiguity and is_match_ambiguous:
-                    ambiguity_msg_list.append('SPECIES_NAME')
+#                if check_ambiguity and species_name_ambiguous:
+#                    is_match_ambiguous = True
+#                    ambiguity_msg_list.append('SPECIES_NAME')
 
 
             # STEP N°6: Do all candidates have the same classification and "accepted" status?
@@ -1581,17 +1610,22 @@ def resolveTaxaMatch(data_classif, worms_classif, check_ambiguity=True, uncertai
                             processed = results['processed']
                             authorship_issue_msg = results['issue']
 
+                            if authorship_issue_msg:
+                                authorship_issue_msg_set.add(authorship_issue_msg)
+
                         if processed:
 
                             # Keep the candidate whose authorship best matches the verbatim authorship, if any
 
-                            doesmatch = classif[0]
+#                            doesmatch = classif[0]
                             classif = pd.DataFrame([classif], columns=colnames)
                             classif['classif_matchtype_generatedby_isinworms'] = 'noclassification_' + classif['classif_matchtype_generatedby_isinworms']
 
                             classif_matchtype = classif.loc[0,'classif_matchtype_generatedby_isinworms']
                             if (uncertainty_level == 3) and (classif_matchtype == 'noclassification_authorship_noMatchIsMore'):
                                 classif['taxamatch_generatedby_isinworms'] = 'uncertain'
+
+                            doesmatch = classif.loc[0,'taxamatch_generatedby_isinworms']
 
                         else:
                             index += 1
@@ -1619,7 +1653,7 @@ def resolveTaxaMatch(data_classif, worms_classif, check_ambiguity=True, uncertai
     classif['isBrackish'] = classif['isBrackish'].astype('Float64').astype('Int64')
     classif['isExtinct'] = classif['isExtinct'].astype('Float64').astype('Int64')
 
-    if doesmatch == 'uncertain':
+    if (doesmatch == 'uncertain') and (len(candidates) > 0):
 
         candidates['isMarine'] = candidates['isMarine'].astype('Float64').astype('Int64')
         candidates['isBrackish'] = candidates['isBrackish'].astype('Float64').astype('Int64')
@@ -1664,7 +1698,7 @@ def resolveTaxaMatch(data_classif, worms_classif, check_ambiguity=True, uncertai
                  classif_matchtype = classif.loc[0, colnames[1]] + '_fossil'
                  classif = pd.DataFrame([[doesmatch,classif_matchtype] + [pd.NA]*len(wormscolumns)], columns=colnames)
 
-        if doesmatch == 'uncertain':
+        if (doesmatch == 'uncertain') and (len(candidates) > 0):
 
             candidates['isExtinct'] = candidates['isExtinct'].astype('Float64').astype('Int64')
 
@@ -1688,6 +1722,7 @@ def resolveTaxaMatch(data_classif, worms_classif, check_ambiguity=True, uncertai
     # Populate the `issue_isinworms` column
 
     ambiguity_msg = ('AMBIGUOUS_' + '_'.join(ambiguity_msg_list) + '_MATCH' if is_match_ambiguous else '')
+    authorship_issue_msg = ';'.join(list(authorship_issue_msg_set))
 
     if ambiguity_msg or authorship_issue_msg or additional_issue_msg:
         classif['issue_isinworms'] = ';'.join([authorship_issue_msg, ambiguity_msg, additional_issue_msg]).strip(';')
@@ -2264,8 +2299,352 @@ def flag(df, flag_nomatch, flag_uncertain, verbose=True, indent=''):
     return df
 
 @export
-def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, worms_dtypes=None, matchfilter=None, acceptedfilter=None, interactive_mode=False, check_ambiguity=True, uncertainty_level=1, fuzzy=True, fixed_allowedMismatch=False, fixed_allowedMismatch_withNaN=1, fixed_allowedMismatch_withoutNaN=2, verbatimcolumn=None, verbatimauthorshiponly=None, keep_fossil=False, min_length=3, doublecheck=True, inplace=False, resume=True, resume_mode='soft', store_createwormsfilters=True, overwrite_createwormsfilters=False, outputdir_createwormsfilters='./', outputdir_isinworms='./', outputfile='', parallel=True, max_attempt=3, resume_parallel=True, drop_conditions=None, flag_nomatch=False, flag_uncertain=False, verbose=True, indent='', store_isinworms=True, overwrite_isinworms=False):
-# store_parallel_createwormsfilters=True, overwrite_parallel_createwormsfilters=False
+def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, worms_dtypes=None, matchfilter=None, acceptedfilter=None, interactive_mode=False, check_ambiguity=True, uncertainty_level=1, fuzzy=True, fixed_allowedMismatch=False, fixed_allowedMismatch_withNaN=1, fixed_allowedMismatch_withoutNaN=2, verbatimcolumn=None, verbatimauthorshiponly=None, keep_fossil=False, min_length=3, doublecheck=True, inplace=False, resume=True, resume_mode='soft', store_createwormsfilters=True, overwrite_createwormsfilters=False, outputdir_createwormsfilters='./', outputdir_isinworms='./', outputfile='', parallel=True, max_attempt=3, drop_conditions=None, flag_nomatch=False, flag_uncertain=False, verbose=True, indent='', store_isinworms=True, overwrite_isinworms=False):
+# store_parallel_createwormsfilters=True, overwrite_parallel_createwormsfilters=False, resume_parallel=True
+    """Harmonize taxonomic classifications with WoRMS.
+
+    Match scientific names against the World Register of Marine Species
+    (WoRMS) and resolve candidate matches using the higher-rank
+    classification and, when available, taxonomic authorship.
+
+    WoRMS filters are generated automatically when they are not supplied.
+    Existing filters may also be completed when they do not contain all
+    scientific names required by the current data. Candidate matches are
+    resolved to accepted species-level classifications whenever possible.
+
+    Processing is performed on unique combinations of scientific name,
+    higher-rank classification, and any requested verbatim fields. The
+    resulting decisions are then propagated to all records sharing the same
+    combination. Records are classified as `match`, `nomatch`, or
+    `uncertain` before the selected exclusion or annotation rules are
+    applied.
+
+    Args:
+        df (pandas.DataFrame):
+            Input dataframe. It must contain the scientific-name column and all
+            higher-rank taxonomic columns specified by `rank_mapping`.
+
+        rank_mapping (dict[str, str] or None, optional):
+            Mapping from the fixed WoRMS rank names to the corresponding
+            columns in `df`. The dictionary must contain exactly the keys
+            `scientificname`, `genus`, `family`, `order`, `cls`, `phylum`,
+            and `kingdom`. These keys must not be modified; only their
+            associated column names should be adapted. All mapped columns
+            must exist in `df`.
+
+        worms_dtypes (dict[str, str] or None, optional):
+            Data types to apply to retained WoRMS fields. Supplied values
+            update the default WoRMS data-type mapping. 
+
+        matchfilter (pandas.DataFrame or None, optional):
+            Candidate WoRMS matches associated with the unique scientific-name 
+            values extracted from the input data. The `group` column contains the 
+            corresponding input value, and the remaining columns contain the 
+            requested WoRMS fields. Multiple rows may share the same `group` when 
+            WoRMS returns several candidates, while names with no WoRMS match are
+            retained with missing taxonomic information. 
+            
+            When provided, the filter is checked for the fields required by the 
+            current run and completed for scientific names not already 
+            represented. If the required fields are missing, the filter is rebuilt 
+            from scratch. Defaults to `None`, in which case it is generated 
+            automatically.
+
+        acceptedfilter (pandas.DataFrame or None, optional):
+            Filter linking unaccepted or infraspecific WoRMS candidates to
+            their accepted species-level counterparts, when resolvable. The 
+            `group` column contains the AphiaID used to retrieve the corresponding 
+            replacement classification. When no accepted counterpart can be resolved, 
+            the available recognized classification is retained.
+    
+            When provided, the filter is checked for the fields required by the
+            current run and completed for AphiaIDs not already represented. If the
+            required fields are missing, the filter is rebuilt from scratch.
+            Defaults to `None`, in which case it is generated automatically. 
+
+        check_ambiguity (bool, optional):
+            Whether to detect disagreement between the candidate favored by
+            higher-rank classification, authorship, or scientific-name
+            similarity. Detected ambiguities do not change the selected match;
+            they are recorded in `issue_isinworms` for subsequent inspection.
+
+        uncertainty_level ({1, 2, 3}, optional):
+            Level controlling which apparent mismatches that may result from
+            limitations of the matching procedure are classified as `uncertain` 
+            rather than `nomatch`.
+
+            Level `1`, the strictest level, includes cases where higher-rank
+            matching fails despite agreement at the species and kingdom
+            levels, provided that no authorship mismatch is detected.
+
+            Level `2` additionally treats an authorship mismatch as uncertain
+            when higher-rank classifications are consistent and authority
+            processing appears not to have accounted for the complete
+            authority string.
+
+            Level `3` further extends this treatment to cases combining
+            higher-rank and authorship mismatches under the same apparent
+            limitation in authority-string processing.
+
+            Independently of this level, unresolved candidate matches and 
+            uncertain marine status are classified as `uncertain`. A resolved
+            match is classified as `uncertain` when its marine status cannot be
+            determined. An unresolved candidate set is classified as `nomatch`
+            only when all candidates are explicitly non-marine and non-brackish.
+
+        fuzzy (bool, optional):
+            Whether to use approximate matching rather than exact matching
+            when comparing higher taxonomic ranks. Fuzzy matching uses the
+            Levenshtein similarity ratio with an internal threshold of `0.7`.
+
+        fixed_allowedMismatch (bool, optional):
+            Whether to replace the default missing-data-dependent tolerance for
+            higher-rank mismatches with fixed tolerances. 
+            
+            When `False`, two mismatches are allowed with zero or one missing rank 
+            comparison, one mismatch with two missing comparisons, no mismatches with
+            three to five missing comparisons, and no match is possible when all six 
+            higher-rank comparisons are missing.
+
+            When `True`, the tolerances are instead controlled by
+            `fixed_allowedMismatch_withoutNaN` and
+            `fixed_allowedMismatch_withNaN`.
+
+        fixed_allowedMismatch_withNaN (int, optional):
+            Maximum number of higher-rank mismatches allowed when one or more, but
+            not all, rank comparisons contain missing information. Used only when
+            `fixed_allowedMismatch=True`. A match remains impossible when all six
+            comparisons are missing.
+
+        fixed_allowedMismatch_withoutNaN (int, optional):
+            Maximum number of higher-rank mismatches allowed when none of the
+            rank comparisons contain missing information. Used only when
+            `fixed_allowedMismatch=True`. 
+
+        verbatimcolumn (str, list[str], or None, optional):
+            Column or ordered sequence of columns from which taxonomic
+            authorship may be obtained. Each available column is evaluated in
+            order until one permits a decision. Remaining columns are not
+            examined. Values may contain either a complete scientific name with
+            authorship or authorship alone, as specified by
+            `verbatimauthorshiponly`. Defaults to `None`, in which case
+            authorship is not used.
+
+        verbatimauthorshiponly (bool, list[bool], or None, optional):
+            Whether each corresponding `verbatimcolumn` contains authorship
+            alone. When `True`, the complete value is interpreted as an
+            authority string. When `False`, authorship is extracted from a
+            value that may also contain the scientific name. A single value is
+            accepted for a single verbatim column. Otherwise, its length must
+            equal that of `verbatimcolumn`. Defaults to `None`, equivalent to
+            `False` for every verbatim column.
+
+        keep_fossil (bool, optional):
+            Whether to retain taxa explicitly identified as extinct by WoRMS.
+            When `False`, a resolved match is classified as `nomatch` if the
+            selected taxon is explicitly fossil. An uncertain candidate set is
+            classified as `nomatch` only when all candidates are explicitly
+            fossil. Missing extinction status does not trigger exclusion.
+
+        inplace (bool, optional):
+            Whether to replace the original taxonomic columns. Modified
+            taxonomic columns are renamed with a `_processedby_isinworms` suffix 
+            in both modes. When `False`, the original columns are retained and 
+            separate harmonized columns are created. WoRMS metadata not originally 
+            present in the data are written to `_generatedby_isinworms` columns. 
+
+        flag_nomatch (bool, optional):
+            Whether to retain and flag records classified as `nomatch`. When
+            `False`, these records are excluded. When `True`, they are retained
+            and included in a dynamically named flag column. 
+
+        flag_uncertain (bool, optional):
+            Whether to retain and flag records classified as `uncertain`. When
+            `False`, these records are excluded. When `True`, they are retained
+            and included in a dynamically named flag column. 
+
+        interactive_mode (bool, optional):
+            Whether to resolve eligible uncertain cases interactively. The
+            input classification and available WoRMS candidates are displayed,
+            and the user can select a candidate or indicate that none is
+            suitable. The resulting decision is marked by appending `_userSelected` to
+            `classif_matchtype_generatedby_isinworms`.
+            
+            Decisions are made for unique taxonomic combinations
+            and propagated to the corresponding records. Parallel processing
+            is disabled automatically in this mode. This option is primarily
+            intended for use through `resolvetaxamatch`.
+
+        wormscall (list[str] or None, optional):
+            WoRMS fields to retain in the output. Fields required internally
+            for taxonomic matching are added automatically when missing.
+            Internally added fields that were not requested are generally
+            removed after processing. The values should be consistent with
+            those used to create any supplied WoRMS filters.            
+
+        min_length (int, optional):
+            During WoRMS-filter creation or completion, minimum number of characters 
+            required in each of the first two words of a candidate scientific name 
+            generated for WoRMS queries. This criterion helps discard junk words that 
+            may remain after heavily irregular input strings are preprocessed. 
+
+        doublecheck (bool, optional):
+            During WoRMS-filter creation or completion, whether to additionally query 
+            the first two words of a preprocessed scientific name when a candidate 
+            contains more than two words. This may improve matching for infraspecific 
+            or otherwise extended names but increases the number of WoRMS queries. 
+
+        resume (bool, optional):
+            During WoRMS-filter creation or completion, whether to reuse existing 
+            persistent outputs from `createwormsfilters` and process only values that 
+            have not yet been completed. A filter is reused only if it contains all 
+            fields required by the current run. Otherwise, that filter is rebuilt
+            from scratch. 
+
+            During parallel processing, this option also controls whether an
+            existing combined parallel filter is reused. Leftover worker-level
+            progress files, however, are always reused when present, independently of 
+            `resume`. These files are normally removed after successful completion and 
+            therefore generally indicate that a previous run was interrupted. To force 
+            a complete restart, remove any remaining intermediate files from the 
+            `createwormsfilters` output directory before rerunning the module.
+
+        resume_mode ({"soft", "hard"}, optional):
+            Strategy used when reusing existing WoRMS filters. Both modes reuse
+            compatible results and query only values that have not already been
+            processed.
+
+            In `"soft"` mode, all groups contained in an existing filter are
+            retained, including groups absent from the current data. In
+            `"hard"` mode, only groups also found in the current data are
+            retained.
+
+            In both modes, a newly written filter contains only the WoRMS
+            fields required by the current run. Consequently, with
+            `overwrite_createwormsfilters=True`, fields present only in the
+            previous filter are removed. In `"hard"` mode, rows associated
+            with names absent from the current data are also removed. 
+
+        store_createwormsfilters (bool, optional):
+            During WoRMS-filter creation or completion, whether to retain the 
+            unique-name list and WoRMS filters generated by `createwormsfilters`. 
+            When `False`, intermediate progress files may still be written because 
+            they are required for recovery from interrupted runs in parallel mode.
+
+        overwrite_createwormsfilters (bool, optional):
+            During WoRMS-filter creation or completion, whether to overwrite existing 
+            persistent `createwormsfilters` outputs. When `False` and a target file 
+            already exists, it is preserved and the new result is written to a 
+            timestamped filename derived from the original filename. Results are not 
+            appended to existing WoRMS filter files. 
+
+        parallel (bool, optional):
+            During WoRMS-filter creation or completion, whether to parallelize
+            queries. At most two workers are used to limit the load placed
+            on the WoRMS service. This option is disabled automatically when
+            `interactive_mode=True`. 
+
+        max_attempt (int, optional):
+            During WoRMS-filter creation or completion, maximum number of attempts 
+            allowed for each parallel data slice. When a worker fails, its complete
+            slice is resubmitted. If the maximum number of attempts is reached,
+            the slice is skipped and processing continues with the remaining
+            slices. 
+
+        outputfile (str or path-like, optional):
+            File in which to store associations between unique original
+            taxonomic combinations and their taxonomic matching decisions and
+            harmonized classifications. This is a taxonomic decision-history file. 
+            The complete processed occurrence dataset is not stored. When empty, 
+            `marinedata_processedby_isinworms.txt` is created in `outputdir_isinworms`.
+
+        outputdir_createwormsfilters (str or path-like, optional):
+            Directory used for the unique-name lists, WoRMS filters, and
+            progress files generated by `createwormsfilters`.             
+
+        store_isinworms (bool, optional):
+            Whether to store the taxonomic decision history linking original 
+            taxonomic combinations to their harmonized classifications. This history 
+            preserves automated decisions for later inspection. When `isinworms` is 
+            called through `resolvetaxamatch`, it also preserves manual decisions 
+            and supports recovery from interrupted interactive review.
+
+        outputdir_isinworms (str or path-like, optional):
+            Directory used for the persistent `isinworms` decision history
+            when `outputfile` does not include a directory. 
+
+        overwrite_isinworms (bool, optional):
+            Whether to replace the existing `isinworms` decision-history file.
+            When `False`, newly processed taxonomic combinations are appended
+            to the existing file. The existing header determines the stored
+            columns and their order. Fields requested in the current run but
+            absent from that header are therefore not stored. 
+
+    Returns:
+        (pandas.DataFrame):
+            The curated data. Depending on `inplace`, the result contains
+            replaced or additional taxonomic columns with the
+            `_processedby_isinworms` suffix. Requested WoRMS metadata not
+            originally present are stored in `_generatedby_isinworms`
+            columns.
+
+            The result also contains:
+
+            - `taxamatch_generatedby_isinworms`, with values `match`,
+            `nomatch`, or `uncertain`;
+            - `classif_matchtype_generatedby_isinworms`, describing how the
+            taxonomic decision was reached;
+            - `issue_isinworms`, recording detected ambiguities and other
+            matching issues.
+
+            When failed or uncertain records are retained, an additional
+            dynamically named flag column is created. For example, flagging
+            both categories may create
+            `flag_taxamatch_generatedby_isinworms_isin_nomatch-uncertain`.
+
+    Raises:
+        KeyError:
+            If a supplied WoRMS filter does not contain the fields required
+            by the current run.
+        Exception:
+            If the mapped taxonomic columns are absent from `df`.
+        Exception:
+            If `rank_mapping` does not contain exactly the required WoRMS rank
+            keys.
+        Exception:
+            If fossil exclusion is requested without retrieving `isExtinct`.
+        Exception:
+            If `verbatimcolumn` and `verbatimauthorshiponly` have different 
+            lengths.
+        Exception:
+            If authorship matching is requested without retrieving `authority`.
+
+    Notes:
+        - Taxonomic harmonization is performed on unique combinations of
+        scientific name, higher-rank classification, and requested verbatim
+        fields rather than independently for every occurrence. Because WoRMS
+        queries and candidate resolution are comparatively slow, this avoids
+        repeating identical work and substantially reduces processing time.
+        The resulting classification is subsequently propagated to every
+        record sharing the same combination.
+
+        - Higher-rank comparison considers genus, family, order, class, phylum,
+        and kingdom. By default, the tolerated number of mismatches decreases
+        as missing information increases. Values missing from both compared 
+        classifications are treated as concordant. A rank missing from only one 
+        classification is treated as a mismatch.
+
+        - Taxa explicitly flagged by WoRMS as neither marine nor brackish are
+        classified as `nomatch`. When neither environmental flag is positive
+        but at least one is unavailable, marine status is classified as
+        `uncertain`. Unresolved cycles encountered while resolving an
+        unaccepted or infraspecific taxon to an accepted species are also
+        classified as `uncertain`.
+
+        - By default, `nomatch` and `uncertain` records are excluded because
+        `flag_nomatch=False` and `flag_uncertain=False`. Enabling either option
+        retains and flags the corresponding records instead.
+    """
 
     Nobs = len(df)
 
@@ -2314,7 +2693,7 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
     if matchfilter is not None:
         matchfilter[list(matchfilter.keys())] = matchfilter[list(matchfilter.keys())].astype(WORMS_DTYPES)
     if acceptedfilter is not None:
-        acceptedfilter[list(matchfilter.keys())] = acceptedfilter[list(matchfilter.keys())].astype(WORMS_DTYPES)
+        acceptedfilter[list(acceptedfilter.keys())] = acceptedfilter[list(acceptedfilter.keys())].astype(WORMS_DTYPES)
 
     ## Arguments
 
@@ -2367,7 +2746,7 @@ def apply(df, *ignored_args, stdnan=True, wormscall=None, rank_mapping=None, wor
     params_parallel = {
                        'parallel': parallel,
                        'max_attempt': max_attempt,
-                       'resume_parallel': resume_parallel,
+                       'resume_parallel': resume,
                        'store_parallel': store_createwormsfilters, # store_parallel_createwormsfilters
                        'overwrite_parallel': overwrite_createwormsfilters # overwrite_parallel_createwormsfilters
                       }
