@@ -19,6 +19,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from functools import partial
+from matplotlib import colors
 import matplotlib.pyplot as plt
 from matplotlib.path import Path
 from multiprocessing import Pool
