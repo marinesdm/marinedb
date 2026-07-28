@@ -57,8 +57,8 @@ def select_locations(df, latkey, lonkey, speciesidkey, nloc_per_species, species
     if verbose_level > 2:
         verbose_level = 2
 
-    if max_resolution > 15:
-        raise ValueError(f'`datasets.py` | `max_resolution` must be lower or equal to 15. See: https://h3geo.org/docs/core-library/restable/')
+    if not 0 <= max_resolution <= 15:
+        raise ValueError(f'`taxasubset.py` | `max_resolution` must be between 0 and 15. See: https://h3geo.org/docs/core-library/restable/')
 
     if export_process:
         printv(f'WARNING | Setting `export_process` to True will significantly slow down processing, and multiple images will be saved per species', verbose=verbose, indent=indent)
@@ -488,10 +488,174 @@ def plot_H3_sampling(df, sampling_map, sampled_cells, adjacent_cells, previous_s
 
 @export
 def apply(inputfile, limit, latkey, lonkey, sep='\t', speciesidkey=None, specieskey=None, genuskey=None, familykey=None, orderkey=None, classkey=None, phylumkey=None, kingdomkey=None, resolution=8, cleanup=False, dtypesfile=None, outputdir='./', outputfile=None, export_process=False, export_type='gif', verbose=True, verbose_level=2, indent=''):
+    """Spatially subsample overrepresented taxa.
+
+    Limits the number of records associated with each taxon to a
+    user-defined maximum while promoting broad spatial coverage. Taxa are
+    evaluated using a species identifier supplied through `speciesidkey` or
+    constructed from the available taxonomic classification columns.
+
+    Taxa represented by fewer than `limit` records are retained unchanged.
+    For taxa meeting or exceeding this threshold, occurrence coordinates are
+    discretized with the H3 hierarchical hexagonal grid. Discrete locations
+    are selected progressively from coarse to fine resolutions, with
+    selection probabilities weighted by cell area and neighboring cells
+    temporarily excluded to promote spatial dispersion.
+
+    After the discrete locations have been selected, records are sampled
+    across them as evenly as possible, subject to the number of observations
+    available in each cell. All original columns are retained.
+
+    !!! Warning
+
+        The function assumes that species identifiers and geographic
+        coordinates have already been cleaned. It should be applied only to
+        datasets without missing or invalid values in the identifier,
+        latitude, and longitude columns.
+
+    Args:
+        inputfile (str):
+            Path to the input tabular file.
+
+        limit (int):
+            Maximum number of records to retain per taxon. Taxa represented
+            by fewer than this number of records are retained unchanged.
+            Taxa meeting or exceeding the threshold are submitted to the
+            spatial subsampling procedure.
+
+        latkey (str):
+            Name of the column containing decimal latitude values.
+
+        lonkey (str):
+            Name of the column containing decimal longitude values.
+
+        sep (str, optional):
+            Field delimiter used in the input and output files. 
+
+        speciesidkey (str, optional):
+            Name of the column containing the species identifier used to
+            group records. When omitted, species identifiers are constructed
+            from the available taxonomic classification columns.
+
+            When `taxasubset` is used after `isinworms` in the integrated
+            workflow, this argument is supplied automatically and corresponds
+            to the WoRMS `AphiaID`. 
+
+        specieskey (str, optional):
+            Name of the species column used, together with the available
+            higher-rank columns, to construct species identifiers when
+            `speciesidkey` is not provided.
+
+        genuskey (str, optional):
+            Name of the genus column used to construct species identifiers
+            when needed. 
+
+        familykey (str, optional):
+            Name of the family column used to construct species identifiers
+            when needed. 
+
+        orderkey (str, optional):
+            Name of the order column used to construct species identifiers
+            when needed. 
+
+        classkey (str, optional):
+            Name of the class column used to construct species identifiers
+            when needed.
+
+        phylumkey (str, optional):
+            Name of the phylum column used to construct species identifiers
+            when needed. 
+
+        kingdomkey (str, optional):
+            Name of the kingdom column used to construct species identifiers
+            when needed. 
+
+        resolution (int, optional):
+            Maximum H3 resolution used to discretize occurrence locations.
+            Sampling begins at resolution `0` and progresses toward this
+            maximum resolution as additional discrete locations are needed.
+            Valid H3 resolutions range from `0` to `15`. 
+            
+            The default  `resolution` of `8` corresponds to cells of 
+            approximately 0.74 km², with a maximum within-cell distance of 
+            approximately 1.06 km. 
+
+        cleanup (bool, optional):
+            Whether to remove the input file after successful processing
+            when it differs from the output file. 
+
+        dtypesfile (str, optional):
+            Path to a JSON file defining column data types when reading the
+            input file. 
+
+        outputdir (str, optional):
+            Directory in which to write the processed dataset and, when
+            requested, sampling visualizations. 
+
+        outputfile (str, optional):
+            Path or name of the output file. When omitted, or when identical
+            to `inputfile`, a default filename is generated using the
+            `taxasubset` processing suffix. 
+
+        export_process (bool, optional):
+            Whether to export a visualization of each discrete-location
+            selection step for every taxon submitted to spatial
+            subsampling. Exports are written under
+            `sampling/location` within the output directory unless that
+            directory already contains a `sampling` component. 
+
+        export_type ({"gif", "image", "both"}, optional):
+            Format used to export the location-selection process. `"image"`
+            retains one image for each sampling step, `"gif"` combines the
+            images into an animation and removes the individual images, and
+            `"both"` retains both outputs. 
+
+    Returns:
+        (str):
+            Path to the processed output file. When insufficient memory is
+            available, processing is aborted and `inputfile` is returned
+            unchanged.
+
+    Raises:
+        ValueError:
+            If `export_process=True` and `export_type` is not `"gif"`,
+            `"image"`, or `"both"`.
+        ValueError:
+            If `max_resolution` is outside the supported H3 range from `0` to `15`.          
+
+    Notes:
+
+        H3 discretization is applied only to taxa meeting or exceeding
+        `limit`. Taxa represented by fewer than `limit` records are retained 
+        unchanged.
+
+        For overrepresented taxa, discrete locations are selected from coarse 
+        to fine H3 resolutions until enough locations have been selected. At 
+        each step, candidate cells are sampled with probabilities proportional 
+        to their area, and neighboring cells are temporarily excluded to reduce
+        spatial clustering. 
+
+        Records are subsequently allocated as evenly as possible across the
+        selected cells. When some cells contain fewer records than their
+        provisional allocation, the remaining quota is redistributed among
+        cells with additional available records.
+
+        The procedure normally retains exactly `limit` records for each
+        subsampled taxon. In exceptional cases involving H3 grid-edge
+        effects, fewer records may be retained.
+
+        Sampling within cells is random and no fixed random seed is currently
+        exposed. Results are therefore not guaranteed to be reproducible
+        across runs.
+
+        Distributed processing is not currently implemented for this step.
+        The full input dataset must fit in memory; otherwise, processing is
+        aborted and the input file is left unchanged.
+    """
 
     if export_process:
         if export_type not in {'gif', 'both', 'image'}:
-            raise ValueError(f"`taxasubset.py` | Invalid export_type '{export_type}'. Valid values are: 'gbif', 'both', 'image'.")
+            raise ValueError(f"`taxasubset.py` | Invalid export_type '{export_type}'. Valid values are: 'gif', 'both', 'image'.")
 
     if dtypesfile is not None:
         with open(dtypesfile,'r') as f:
