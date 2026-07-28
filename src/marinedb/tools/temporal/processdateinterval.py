@@ -215,6 +215,7 @@ def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_numb
 
     if (strategy == 'overlap'):
         printv(f"INFO | Since strategy='{strategy}', maxinterval_number={maxinterval_number} and maxinterval_level='{maxinterval_level}' will be ignored", verbose=verbose, indent=indent)
+        maxinterval_number = -1
 
     if drop_interval:
         flag = False
@@ -308,7 +309,8 @@ def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_numb
             # assign a missing value to the date for later deletion
             # Else, process date intervals
 
-            ismissing = (pd.isnull(df['start']) & (~pd.isnull(df['end']))) | (pd.isnull(df['end']) & (~pd.isnull(df['start'])))
+#            ismissing = (pd.isnull(df['start']) & (~pd.isnull(df['end']))) | (pd.isnull(df['end']) & (~pd.isnull(df['start'])))
+            ismissing = df[flagname] & (pd.isnull(df['start']) | pd.isnull(df['end']))
             df.loc[ismissing,datekeyout] = pd.NA
             df.loc[ismissing,'issue_processdateinterval'] = f'{basedatekey.upper()}_INTERVAL_PROCESSING_FAILED'
 
