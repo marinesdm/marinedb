@@ -1128,8 +1128,12 @@ if __name__ == '__main__':
 
     # Output file
 
-    outputfile_isequalto_inputfile = (os.path.basename(config['inputfile_path']) == os.path.basename(config['outputfile_path']))
-    if ('outputfile_path' not in config.keys()) or (len(config['outputfile_path']) == 0) or outputfile_isequalto_inputfile:
+    outputfile_path = config.get('outputfile_path')
+
+    is_outputfile = (outputfile_path is not None) and (len(outputfile_path) > 0)
+    outputfile_equals_inputfile = is_outputfile and (os.path.basename(config['inputfile_path']) == os.path.basename(outputfile_path))
+
+    if (not is_outputfile) or (len(outputfile_path) == 0) or outputfile_equals_inputfile:
 
          filename = os.path.basename(config['inputfile_path'])
          name, ext = os.path.splitext(filename)
