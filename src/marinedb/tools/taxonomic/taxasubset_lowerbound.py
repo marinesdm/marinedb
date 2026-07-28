@@ -294,6 +294,130 @@ def lowerbound_subset_distributed(inputfile, sep='\t', limit=50, speciesidkey=No
 
 @export
 def apply(inputfile, sep='\t', limit=50, flag=False, dropna=False, force_distributed=False, speciesidkey=None, specieskey=None, genuskey=None, familykey=None, orderkey=None, classkey=None, phylumkey=None, kingdomkey=None, dtypesfile=None, outputdir='./', outputfile=None, verbose=True, indent=''):
+    """Flag sufficiently represented taxa or remove underrepresented taxa.
+
+    Counts the number of records associated with each taxon and identifies
+    taxa represented by fewer than a user-defined minimum number of
+    occurrences. Taxa represented by at least `limit` records satisfy the
+    minimum-occurrence criterion.
+
+    Taxa are evaluated using a species identifier. This identifier may 
+    be supplied through `speciesidkey` or constructed from the available 
+    taxonomic classification columns when no identifier is provided. 
+    
+    Processing is performed in memory when sufficient memory is available 
+    and otherwise uses a distributed implementation.
+
+    !!! warning
+
+        - When `flag=True`, records belonging to taxa represented by at least
+        `limit` occurrences are flagged.
+
+        - When `flag=False`, records belonging to taxa represented by fewer
+        than `limit` occurrences are excluded.
+
+    Args:
+        inputfile (str):
+            Path to the input tabular file.
+
+        sep (str, optional):
+            Field delimiter used in the input and output files.
+
+        speciesidkey (str, optional):
+            Name of the column containing the species identifier used to group
+            records and count occurrences. When omitted, species identifiers 
+            are generated from the available taxonomic classification columns. 
+            
+            When `taxasubset` is used after `isinworms` in the integrated 
+            workflow, the species identifier is supplied automatically and 
+            corresponds to the WoRMS `AphiaID`.
+
+        specieskey (str, optional):
+            Name of the species column used, together with the available
+            higher-rank columns, to construct species identifiers when `speciesidkey` 
+            is not provided. 
+
+        genuskey (str, optional):
+            Name of the genus column used to construct species identifiers
+            when needed. 
+
+        familykey (str, optional):
+            Name of the family column used to construct species identifiers
+            when needed. 
+
+        orderkey (str, optional):
+            Name of the order column used to construct species identifiers
+            when needed. 
+
+        classkey (str, optional):
+            Name of the class column used to construct species identifiers
+            when needed. 
+
+        phylumkey (str, optional):
+            Name of the phylum column used to construct species identifiers
+            when needed. 
+
+        kingdomkey (str, optional):
+            Name of the kingdom column used to construct species identifiers
+            when needed. 
+
+        limit (int, optional):
+            Minimum number of occurrences required for a taxon to be
+            flagged or retained as sufficiently represented. Taxa with
+            fewer occurrences are considered underrepresented. 
+
+        flag (bool, optional):
+            Whether to add a Boolean flag instead of excluding records.
+            When `True`, all records are retained and
+            `flag_taxasubset_isabove_<limit>` is `True` for records belonging
+            to taxa represented by at least `limit` occurrences, `False` for
+            underrepresented taxa, and missing when the taxon identifier is
+            missing. When `False`, records belonging to underrepresented
+            taxa are excluded. 
+
+        dropna (bool, optional):
+            Whether to also exclude records with a missing taxon identifier
+            when `flag=False`. Missing identifiers are retained when
+            `False`. This parameter has no effect when `flag=True`. Defaults
+            to `False`.
+
+        force_distributed (bool, optional):
+            Whether to use distributed processing regardless of the
+            available memory.            
+            
+        dtypesfile (str, optional):
+            Path to a JSON file defining column data types. When a flag
+            column is created, its Boolean type is added to this file.
+
+        outputdir (str, optional):
+            Directory in which to write the output file. 
+
+        outputfile (str, optional):
+            Path or name of the output file. In distributed mode, a default
+            output filename is generated from the input filename when this
+            argument is omitted. In in-memory mode, an output filename must be
+            provided.
+
+    Returns:
+        (tuple[str, str]):
+            Path to the processed output file and the name of the species
+            identifier column used for occurrence counting.
+
+    Raises:
+        ValueError:
+            If no output file is specified when in-memory processing is used.
+        Exception:
+            If distributed processing is required but the output directory
+            does not provide enough free disk space.
+
+    Notes:
+        Occurrence counts are calculated from non-missing species
+        identifiers. Records with missing identifiers are therefore not
+        assigned to an occurrence-count category.
+
+        When the output path differs from the input path, the input file is
+        deleted after successful processing.
+    """
 
     # Filter taxa with less than `limit` occurrences in the dataset
 

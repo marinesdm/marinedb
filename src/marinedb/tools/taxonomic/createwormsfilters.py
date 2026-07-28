@@ -11,6 +11,7 @@ import yaml
 import time
 import glob
 import http
+import random
 import argparse
 import pandas as pd
 from tqdm import tqdm
@@ -2091,6 +2092,155 @@ def create_WoRMSacceptedfilter(unaccepted_aphiaID, wormscall=WORMSCALL, species_
 @export
 def apply(inputfile, colname,  skip_uniques_rebuild=False, wormscall=WORMSCALL, min_length=3, doublecheck=True, store=True, outputdir='./', overwrite=False, resume=True, resume_mode='soft', parallel=True, max_attempt=10, verbose=True, indent=''):
 # store_parallel=True, overwrite_parallel=False, resume_parallel=True,
+    """
+    Create WoRMS-based taxonomic filters from unique scientific names.
+
+    Unique scientific-name values are extracted from a tab-separated text
+    file and transformed into one or more candidate strings suitable for 
+    querying the World Register of Marine Species (WoRMS). The original 
+    value is also queried when it differs from the generated candidates. 
+    Input values may include taxonomic authorship and do not need to have 
+    been cleaned beforehand.
+
+    The function first retrieves candidate WoRMS matches associated with 
+    each unique input value, if any. It then retrieves the accepted 
+    species-level counterparts of candidates that are unaccepted or identified 
+    below species rank, when such counterparts can be resolved.
+    
+    Args:
+        inputfile (str):
+            Path to the tab-separated text file containing the taxonomic
+            data.
+
+        colname (str):
+            Name of the column containing scientific names. Values may
+            include taxonomic authorship and do not need to have 
+            been cleaned beforehand.
+
+        skip_uniques_rebuild (bool, optional):
+            Whether to trust and return an existing cached list of unique 
+            scientific names without checking it against the current
+            input file. Enable this option only when the cached list is 
+            known to correspond to the current file and column.
+
+        wormscall (list of str, optional):
+            WoRMS fields to retain in the generated filters. Fields required
+            internally by the downstream taxonomic-matching workflow are
+            added automatically when missing. Most automatically added
+            fields are removed later if they were not explicitly requested.
+
+        min_length (int, optional):
+            Minimum number of characters required in each of the first two
+            words of a candidate scientific name submitted to WoRMS. This 
+            criterion helps discard short junk words that may remain when 
+            heavily irregular input strings are preprocessed. 
+
+        doublecheck (bool, optional):
+            Whether to additionally query the first two words of a
+            preprocessed scientific name when the candidate contains more
+            than two words. This may improve the matching of infraspecific
+            or otherwise extended names, but increases the number of WoRMS
+            queries.
+
+        store (bool, optional):
+            Whether to store the generated unique-name list and final WoRMS
+            filters. When `False`, intermediate progress files may still be
+            written because they are required for recovery from interrupted 
+            runs in parallel mode.
+
+        outputdir (str, optional):
+            Directory in which outputs are written. A `createwormsfilters` 
+            subdirectory is created automatically unless the supplied path 
+            already contains a directory with that name. 
+
+        overwrite (bool, optional):
+            Whether to overwrite existing persistent output files. When
+            `False` and a target file already exists, the existing file is
+            preserved and the new result is written to a timestamped
+            filename derived from the original filename. Results are never
+            appended to an existing file. 
+
+        resume (bool, optional):
+            Whether to reuse existing persistent outputs and process only
+            values that have not yet been completed. An existing filter is 
+            reused only if it contains all WoRMS fields required by the 
+            current run; otherwise, the corresponding filter is rebuilt from 
+            scratch.
+            
+            During parallel processing, leftover intermediate progress files 
+            are always reused to support recovery from interrupted runs. 
+
+        resume_mode ({"soft", "hard"}, optional):
+            Strategy used when reusing an existing WoRMS filter. Both modes
+            reuse existing results for previously processed values and
+            query only the remaining values.
+
+            In `"soft"` mode, all groups contained in the existing filter
+            are retained, including groups that are no longer present in the
+            current input. In `"hard"` mode, only groups also found in the
+            current input are retained. 
+
+            In both modes, the new filter contains only the WoRMS fields 
+            requested by the current run. Consequently, with `overwrite=True`, 
+            fields present only in the previous filter are removed. In `"hard"` 
+            mode, rows associated with names absent from the current input are 
+            also removed.
+            
+        parallel (bool, optional):
+            Whether to parallelize WoRMS matching. At most two worker
+            processes are used to limit the load placed on the WoRMS
+            service.
+
+        max_attempt (int, optional):
+            Maximum number of attempts allowed for each parallel data slice.
+            When a worker fails, its complete slice is resubmitted. If the
+            maximum number of attempts is reached, the slice is skipped and
+            processing continues with the remaining slices. 
+
+    Returns:
+        (tuple[pandas.DataFrame, pandas.DataFrame]):
+            A tuple containing:
+
+            - `worms_matchfilter`: Candidate WoRMS matches associated with
+              the unique scientific-name values extracted from the input 
+              file. The `group` column contains the corresponding input value, 
+              and the remaining columns contain the requested WoRMS fields.
+              Multiple rows may share the same `group` when WoRMS returns
+              several candidates, while names with no WoRMS match are
+              retained with missing taxonomic information.
+            - `worms_acceptedfilter`: Accepted or species-level counterparts 
+              of candidates that are unaccepted or identified below species 
+              rank. The `group` column contains the AphiaID from which the 
+              replacement classification was resolved. When no accepted 
+              counterpart can be resolved, the available recognized 
+              classification is retained.
+
+    Raises:
+        ValueError:
+            If `resume_mode` is neither `"soft"` nor `"hard"`.
+        Exception:
+            If no scientific name is found in the input file or selected
+            column.
+
+    Notes:
+        - The function queries WoRMS using unique scientific-name values rather
+        than individual occurrence records. Because WoRMS queries are
+        comparatively slow, this avoids repeatedly querying the service for
+        identical names and substantially reduces processing time. The
+        resulting filters are subsequently linked to the complete taxonomic
+        information of the original records by `isinworms`.
+
+        - Scientific names are submitted to WoRMS in batches of up to 50, 
+        following the WoRMS service limit.
+
+        - During parallel processing, intermediate worker and progress files
+        are written and automatically reused when present, even if
+        `resume=False`. These files are normally removed after successful
+        completion and therefore generally indicate that a previous run was
+        interrupted. To force a complete restart, remove any remaining
+        intermediate files from the `createwormsfilters` output directory
+        before rerunning the module.
+    """
 
     # Parameters
 

@@ -74,7 +74,15 @@ nav = [
   ]},
   { "Taxonomic" = [
     { "Overview" = "api/taxonomic/index.md"},
-    { "Worms"= "api/taxonomic/isinworms.md"},
+    { "1. WoRMS filter creation"= "api/taxonomic/createwormsfilters.md"},
+    { "2. Taxonomic harmonization"= "api/taxonomic/isinworms.md"},
+    { "3. Manual taxonomic resolution" = "api/taxonomic/resolvetaxamatch.md"},
+    { "Non-alphabetic taxon names" = "api/taxonomic/lettersonly.md" },
+    { "Basis of record" = [
+      { "Standardization" = "api/taxonomic/mapbasisofrecord.md" },
+      { "Filtering" = "api/taxonomic/basisofrecordisin.md" },
+    ]},
+    { "Taxon representation" = "api/taxonomic/taxasubset.md" },
   ]},
   { "Resources" = "api/resources.md" },
 ]}
