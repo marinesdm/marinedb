@@ -1,4 +1,4 @@
-# Taxonomic tools
+# Taxonomic data curation
 
 This section documents the `marinedb` modules dedicated to taxonomic
 harmonization, basis-of-record processing, taxonomic filtering, and
@@ -68,7 +68,7 @@ Users can therefore rely on `basisofrecordisin` alone when both standardization
 and filtering are needed, or call `mapbasisofrecord` separately when only 
 standardization is required.
 
-## Additional taxonomic filters
+## Additional taxonomic tools
 
 `lettersonly` checks whether taxonomic values contain only letters, spaces, or
 hyphens. It provides a broad character-based filter for workflows in which
@@ -83,6 +83,22 @@ may include authorship dates or other punctuation.
 It controls the number of records associated with each taxon. It can annotate 
 or exclude underrepresented taxa and spatially subsample overrepresented ones 
 using the H3 hierarchical hexagonal grid.
+
+For simpler use cases requiring only direct WoRMS matching of scientific
+names, the **standalone** `worms_match_by_sciname.py` script submits names directly 
+in batches to the WoRMS `AphiaRecordsByMatchNames` endpoint and stores the
+returned taxonomic and environmental information.
+
+For downstream analyses requiring identifier-based taxonomic classifications,
+the **standalone** `worms_classification_by_aphiaid.py` script retrieves the WoRMS 
+classification of matched taxa through the WoRMS `AphiaClassificationByAphiaID` 
+endpoint and extracts AphiaIDs for the principal taxonomic ranks.
+
+!!! note
+
+    `worms_match_by_sciname.py` and `worms_classification_by_aphiaid.py` are
+    standalone scripts and can not be integrated into the configuration-driven
+    `marinedb` workflow. They must be run independently from the command line.
 
 ## Tools
 
@@ -101,6 +117,11 @@ using the H3 hierarchical hexagonal grid.
   characters.
 - [`taxasubset`](taxasubset.md): annotate or exclude underrepresented taxa and
   spatially subsample overrepresented taxa.
+- [`worms_match_by_sciname.py`](createwormsfilters.md#lightweight-worms-querying): 
+  query WoRMS directly from scientific names using a standalone script
+- [`worms_classification_by_aphiaid.py`](isinworms.md#aphiaid-based-classifications): 
+  retrieve identifier-based WoRMS classifications from matched AphiaIDs using
+  a standalone script
 
 ## Choosing an approach
 

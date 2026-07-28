@@ -207,3 +207,62 @@ incomplete. In that case, the filter-creation arguments defined under
             flag_uncertain: False
             store_isinworms: False
     ```
+
+## AphiaID-based classifications
+
+`isinworms` returns the taxonomic classification of each matched species as 
+taxon names. The WoRMS `AphiaRecordsByMatchNames` endpoint used by `isinworms` 
+can only provide the AphiaID of the matched species and the AphiaID of its 
+direct parent.
+
+For users who need a more model-ready, identifier-based taxonomic
+representation, the standalone `worms_classification_by_aphiaid.py` script can
+be run independently. It relies on the WoRMS `AphiaClassificationByAphiaID` endpoint
+to retrieve the AphiaIDs associated with the kingdom, phylum, class, order,
+family, genus, and species ranks. The resulting file can then be joined back
+to the curated dataset.
+
+```bash
+python worms_classification_by_aphiaid.py INPUTFILE [OPTIONS]
+```
+
+### Outputs
+
+The script creates two files next to the input file:
+
+- `<INPUTFILE>_worms_classification.<EXT>`, containing one row per unique input
+AphiaID and separate `<rank>_AphiaID` columns
+- `aphiaid_taxon_mapping.json`, mapping every AphiaID encountered in the
+retrieved classification trees to its taxonomic rank and taxon name
+
+The tabular output can be joined back to the curated dataset using the 
+`input_AphiaID` column. The JSON mapping retains the corresponding textual 
+taxonomic information while allowing the main dataset to use AphiaIDs only.
+
+Taxonomic levels outside the principal ranks listed above are not included as
+columns in the tabular output. Any unrecognized rank labels encountered during
+retrieval are reported in the command-line output.
+
+### Arguments
+
+``INPUTFILE``
+
+Path to a tab-separated file containing a column of WoRMS AphiaIDs.
+
+### Options
+
+``--aphiaid-column``
+
+Name of the column containing the AphiaIDs. Defaults to `AphiaID`.
+
+``--max-attempt`` 
+
+Maximum number of attempts made for each WoRMS request. Defaults to `10`.
+
+``--pause-duration``
+
+Number of seconds to wait between failed request attempts. Defaults to `20`.
+
+``--timeout``
+
+Maximum number of seconds allowed for each request. Defaults to `30`.

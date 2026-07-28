@@ -71,6 +71,18 @@ to be configured separately within individual operations.
     python clean.py config_gbif.yaml --parallel --cpu-max 22 --cleanup
     ```
 
+### Outputs
+
+In addition to the curated dataset, `clean.py` creates:
+
+- `marinedb_dtypes.json`, describing the data types of the final columns.
+- `marinedb_stats.txt`, recording row counts before and after each main
+  curation step for each [partition of 100,000 rows](#large-datasets).
+- `marinedb_times.txt`, recording the processing time in seconds and the row
+  counts before and after the main curation stage for each partition. It does 
+  not include preparatory operations such as `format`, `createwormsfilters`, 
+  or `marineloc`, nor operations from the `postprocessing` section.
+
 ## Configuration-driven workflows
 
 A curation workflow is defined in a YAML configuration file and executed by
@@ -654,8 +666,8 @@ incompatible settings.
 ## Large datasets
 
 To accommodate large-scale datasets, the main `clean.py` workflow processes data 
-iteratively in blocks rather than requiring the complete dataset to remain in memory. 
-It also supports parallel execution.
+iteratively in blocks 100,000 rows, rather than requiring the complete dataset to 
+remain in memory. It also supports parallel execution.
 
 Some individual modules implement their own parallel or distributed processing strategies. 
 Their memory requirements and scalability limitations are documented on the corresponding 
@@ -665,3 +677,28 @@ Not every operation is currently distributed. In particular, spatial
 subsampling of overrepresented taxa requires the complete input dataset to fit
 in memory. When the available memory is insufficient, that operation is
 aborted and its input is returned unchanged.
+
+## Software maturity and issue reporting
+
+The modular design of `marinedb` allows many combinations of modules,
+parameters, execution orders, and dataset structures. Only a limited subset of
+these combinations has been tested so far.
+
+As the package is applied to new datasets and workflows, previously undetected
+errors, incompatible settings, or unexpected interactions between modules may
+therefore emerge. This is particularly likely during the early stages of the
+package's development.
+
+Users are encouraged to report reproducible problems, unclear behavior, or
+documentation gaps through the issue tracker. Reports should preferably
+include:
+
+- the `marinedb` latest commit used
+- the Python version and operating environment
+- the relevant section of the YAML configuration
+- the complete error message or traceback
+- a minimal example or description of the input data needed to reproduce the
+  problem
+- the expected and observed behavior
+
+Users may also contact the maintainer directly.
