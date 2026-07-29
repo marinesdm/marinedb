@@ -65,9 +65,9 @@ nav = [
   ]},
     { "Temporal" = [
     { "Overview" = "api/temporal/index.md"},
-    { "1. Data standardization"= "api/temporal/parsedate.md"},
-    { "2. Data-interval processing"= "api/temporal/processdateinterval.md"},
-    { "3. Data-component extraction"= "api/temporal/splitdate.md"},
+    { "1. Date standardization"= "api/temporal/parsedate.md"},
+    { "2. Date-interval processing"= "api/temporal/processdateinterval.md"},
+    { "3. Date-component extraction"= "api/temporal/splitdate.md"},
     { "Integrated temporal data curation"= "api/temporal/temporal.md"},
     { "Invalid date"= "api/temporal/isdateinvalid.md"},
     { "Unlikely date"= "api/temporal/isdateunlikely.md"},
