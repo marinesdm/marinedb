@@ -38,6 +38,7 @@ __all__ = ['contains',
            'parsedate',
            'processdateinterval',
            'splitdate',
+           'convertdatetype',
            'temporal',
            'isdateinvalid',
            'isdateunlikely']
