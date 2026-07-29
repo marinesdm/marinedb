@@ -22,10 +22,12 @@ The documentation includes:
 **Python 3.12 is strongly recommended**.
 
 1. Clone the repository using SSH:
-```bash
-git clone git@gitlab-research.centralesupelec.fr:smartbiodiv/sdm-data.git
-```
+
+    ```bash
+    git clone git@gitlab-research.centralesupelec.fr:smartbiodiv/sdm-data.git
+    ```
     or HTTPS:
+
     ```bash
     git clone https://gitlab-research.centralesupelec.fr/smartbiodiv/sdm-data.git
     ```
