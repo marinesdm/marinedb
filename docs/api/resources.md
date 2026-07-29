@@ -133,7 +133,7 @@ therefore cannot be positioned unambiguously in a single rank hierarchy.
 ## Utility functions
 
 Several generic helper functions are available in 
-<code>marinedb/tools/data</code>
+<code>marinedb/utils</code>
 <a href="{{ source_base_url }}/src/marinedb/utils?ref_type=heads"
    target="_blank"
    rel="noopener noreferrer"

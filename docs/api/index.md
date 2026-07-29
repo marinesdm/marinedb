@@ -661,8 +661,8 @@ Modules may generally be listed in the desired processing order, but several ope
 follow fixed execution constraints. 
 
 Dataset-specific preparation defined by the user in `format.py` is always performed first. 
-When enabled, land-based record removal and `createwormsfilters` are then executed early 
-in the workflow to improve processing efficiency.
+When enabled, land-based record removal and `createwormsfilters` are executed next to 
+improve processing efficiency.
 
 Operations that depend on completed taxonomic harmonization must be placed in
 postprocessing. These currently include `resolvetaxamatch` and `taxasubset`.
@@ -689,7 +689,7 @@ incompatible settings.
 ## Large datasets
 
 To accommodate large-scale datasets, the main `clean.py` workflow processes data 
-iteratively in blocks 100,000 rows, rather than requiring the complete dataset to 
+iteratively in blocks of 100,000 rows, rather than requiring the complete dataset to 
 remain in memory. It also supports parallel execution.
 
 Some individual modules implement their own parallel or distributed processing strategies. 
