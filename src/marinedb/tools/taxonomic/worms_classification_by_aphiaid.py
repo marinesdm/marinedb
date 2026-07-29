@@ -176,12 +176,12 @@ def classification_to_wide_row(input_aphia_id, classification, unknown_ranks=Non
 
     return row, unknown_ranks
 
-def save(rows, taxon_dict, output_file_txt, output_file_json, verbose=True, init=''):
+def save(rows, taxon_dict, output_file_txt, output_file_json, verbose=True, indent=''):
 
     out = pd.DataFrame(rows)
 
-    printv(f"[INFO] Storing in {output_file_txt}", verbose=verbose, init=init)
-    printv(f"[INFO] Storing in {output_file_json}", verbose=verbose, init=init)
+    printv(f"[INFO] Storing in {output_file_txt}", verbose=verbose, indent=indent)
+    printv(f"[INFO] Storing in {output_file_json}", verbose=verbose, indent=indent)
 
     out.to_csv(output_file_txt, sep="\t", index=False)
 
@@ -197,13 +197,16 @@ def main(file, aphiaid_column, max_attempt=10, pause_duration=20, timeout=30):
     output_file_txt = name + "_worms_classification" + ext
     output_file_json = os.path.join(input_dir,"aphiaid_taxon_mapping.json")
 
-    df = pd.read_csv(file, sep="\t")
+    with open(file, 'r') as f:
+        header = f.readline().strip().split('\t')
 
-    if aphiaid_column not in df.columns:
+    if aphiaid_column not in header:
         raise ValueError(
-            f"Column {args.aphiaid_column!r} not found in {args.file}. "
-            f"Available columns: {list(df.columns)}"
+            f"Column {aphiaid_column!r} not found in {file}. "
+            f"Available columns: {header}"
         )
+
+    df = pd.read_csv(file, sep="\t", usecols=[aphiaid_column])
 
     aphia_ids = df[aphiaid_column].dropna().astype(int).drop_duplicates().tolist()
 
