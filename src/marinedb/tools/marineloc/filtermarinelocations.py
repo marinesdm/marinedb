@@ -505,6 +505,7 @@ def apply(inputfile, filterfile, inputfile_format='uncompressed_gzip', controlke
 
     if cleanup:
 
+        printv('', verbose=verbose, indent=indent)
         printv('* Cleaning up intermediate files', verbose=verbose, indent=indent)
         printv('', verbose=verbose, indent=indent)
 
