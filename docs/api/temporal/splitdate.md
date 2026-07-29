@@ -52,3 +52,24 @@ the corresponding column are subsequently renamed in the `variables` section.
     An option to retain these conversion issues will be added in a future
     release. Until then, users who do not want to run the full temporal workflow
     but need these issues should run `convertdatetype` before `splitdate`.
+
+## Basic usage
+
+!!! example
+    ```
+    - tool:
+        - splitdate:
+            datekey: 'eventDate'
+            yearkey: 'year'
+            monthkey: 'month'
+            daykey: 'day'
+            split: 'all'
+            strategy: 'start'
+            maxinterval_number: 3
+            maxinterval_level: 'months'
+            drop_interval: false
+            drop_mismatch: true
+            inplace_date: false
+            inplace_components: False
+            flag: true
+    ```

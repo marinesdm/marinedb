@@ -33,3 +33,16 @@ corresponding column is subsequently renamed in the `variables` section.
 | `<DATE>_INTERVAL_EXCEEDS_LIMIT` | The duration of the parsed date interval exceeds the configured maximum interval width. |
 
 In both case, the date is replaced with a missing value in the output.
+
+## Basic usage
+
+!!! example
+    ```
+    - tool:
+       - processdateinterval:
+            datekey: 'eventDate'
+            drop_interval: false
+            strategy: 'overlap'
+            inplace: false
+            flag: true
+    ```

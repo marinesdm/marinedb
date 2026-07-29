@@ -131,3 +131,18 @@ prevented.
 | `<DATE>_ASSEMBLED` | The original date could not be retained directly, but a replacement date was reconstructed from valid and sufficiently consistent temporal components and formatted according to ISO 8601. |
 
 For example, a date reconstructed for `eventDate` is annotated with `EVENTDATE_ASSEMBLED`.
+
+## Basic usage
+
+!!! example
+    ```
+    - tool:
+       - parsedate:
+            datekey: 'eventDate'
+            yearkey: 'year'
+            monthkey: 'month'
+            daykey: 'day'
+            inplace: true
+            stdnan: true
+            parallel: true
+    ```

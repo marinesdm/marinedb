@@ -384,9 +384,15 @@ produced.
     removed inconsistent parts of the date value.
 
 
-Users do not need to reproduce these generated names when writing the configuration file. 
-They can continue to refer to the original column name, and `marinedb` automatically resolves 
-the most recent version available at each point in the workflow.
+Users do not need to reproduce these processed-column names when writing the configuration file. 
+For columns derived from an original input column, they can continue to refer to the original name, 
+and `marinedb` automatically resolves the most recent version available at each point in the workflow. 
+
+This automatic resolution also applies in the `variables` section.
+
+Columns created by an operation do not have an original input-column name to
+resolve. Generated columns must therefore be referenced explicitly using their
+full `<column>_generatedby_<operation>` name.
 
 !!! example
 
@@ -410,7 +416,10 @@ the most recent version available at each point in the workflow.
 
 Columns generated as the workflow progresses are immediately available to subsequent 
 processing steps. A later operation can therefore target a generated column explicitly 
-when needed.
+when needed. 
+
+Because generated columns cannot be resolved from an original input-column name, 
+they must be targeted using their full generated name.
 
 !!! example
 
@@ -443,7 +452,11 @@ used to:
 The `variables` section is evaluated after the main processing workflow, so it 
 can select both original and newly generated columns.
 
-When `variables` is left empty, all columns are retained.
+Columns generated during processing are automatically added to the final
+selection and do not need to be listed explicitly in `variables`, unless they
+must be renamed or assigned a specific output type. 
+
+When `variables` is left empty, all original and generated columns are retained.
 
 #### Retaining a column
 
@@ -459,6 +472,11 @@ A column can be retained without modification by listing its name.
         - eventDate
         - AphiaID_generatedby_isinworms
     ```
+
+    `AphiaID_generatedby_isinworms` could be omitted from this list because
+    columns generated during processing are retained automatically. It is listed 
+    here only to illustrate that generated columns may also be referenced 
+    explicitly in `variables`.
 
 #### Renaming a column
 
@@ -478,6 +496,11 @@ A column can be renamed using a key-value mapping.
 
     Here, `AphiaID_generatedby_isinworms` is retained in the final dataset
     under the name `AphiaID`.
+
+    Note that `decimalLatitude`, `decimalLongitude` and `eventDate` are 
+    automatically resolved to their most recent processed versions, whereas 
+    `AphiaID_generatedby_isinworms` must be referenced by its full
+    generated name.
 
 #### Renaming a column and assigning a type
 
