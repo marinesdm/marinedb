@@ -1,56 +1,86 @@
-# Data Pipeline for SDM
+# marinedb
 
-Code for retrieving all the data needed to train a Species Distribution Model (SDM).
+`marinedb` is a modular Python package for curating large marine biodiversity
+occurrence datasets for downstream ecological analyses, with a particular focus on 
+Species Distribution Models (SDMs). The package provides taxonomic, temporal, spatial, 
+and occurrence-data cleaning tools.
 
-## How to use
+## Documentation
 
-#### 1. Download data from the GBIF website (see [here](https://www.gbif.org/occurrence/search))  
-   
-**Filters**   
-```
-Has coordinate = True   
-Has geospatial issue = False   
-Basis of record = Observation ; Machine observation ; Human observation ; Material sample ; Occurrence      
-```
-**Output** Text file with a `.csv` extension (delimiter : tabulation)  
-   
-#### 2. Use `split_data.sh` if the file is too large, or to speed up the process  
-   
-**Command**
-```
-bash split_data.sh -n prefix_new_files gbif_file.csv nb_lines_per_new_file   
-```
-**Output** *N* new files with 3 columns: `index` | `decimalLatitude` | `decimalLongitude`      
+Full documentation is available at: https://smartbiodiv.pages.centralesupelec.fr/sdm-data.
 
-#### 3. Use `get_mask.py` to create the land/sea/coast mask required for the next step   
-   Requirements: `globe_combined_mask_compressed.npz`   
-   
-**Command**   
-```
-python get_mask.py
-```
-**Output** `globe_mask_coastline.npz` (0:land, 1:sea, 2:coast)     
-   
-#### 4. Use `parallel_is_land.sh` (or `is_land.py`) to identify locations in the ocean
-   Requirements: All files to be processed must be in the `./gbif_files/` folder.  
-   
-**Command**
-```
-parallel-ssh -h hosts_file -t 0 parallel_is_land.sh
-```
-**Output** *N* new files stored in `processed/` with 5 columns: `id_land` (True/False) | `latitude` | `longitude` | `mask` (0,1,2) | `index`
-       
-## Data
+The documentation includes: 
 
-- GLOBE dataset
-- GSHHS dataset
-- GBIF database
+- installation and workflow configuration
+- module-specific reference pages
+- examples
 
-## References
+## Installation
 
-Karin, Todd. Global Land Mask. October 5, 2020. https://doi.org/10.5281/zenodo.4066722 (see [here](https://github.com/toddkarin/global-land-mask/tree/master))   
-   
-Basemap documentation (see [here](https://basemaptutorial.readthedocs.io/en/latest/utilities.html#is-land))
+`marinedb` is primarily developed for Linux environments. Windows users can run it through the Windows Subsystem for Linux. 
 
-## Project status
-Work in progress.
+**Python 3.12 is strongly recommended**.
+
+1. Clone the repository using SSH:
+```bash
+git clone git@gitlab-research.centralesupelec.fr:smartbiodiv/sdm-data.git
+```
+or HTTPS:
+```bash
+https://gitlab-research.centralesupelec.fr/smartbiodiv/sdm-data.git
+```
+
+2. Move to the repository root:
+```bash
+cd /path/to/sdm-data
+```
+
+3. Install the package in editable mode:
+```bash
+pip install -e .
+```
+
+## Getting started
+
+Curation workflows are defined in a YAML configuration file and executed with
+`clean.py`.
+
+```bash
+python clean.py CONFIG_FILE [OPTIONS]
+```
+
+For example:
+```
+python clean.py configuration/config_jedi.yaml --parallel --cleanup
+```
+
+See the [workflow overview](https://smartbiodiv.pages.centralesupelec.fr/sdm-data/api/) for instructions on building and running a complete workflow.
+
+## Main capabilities
+
+- taxonomic harmonization against WoRMS
+- temporal parsing, validation, and standardization
+- geographic-coordinate validation and marine-location filtering
+- basis-of-record standardization and selection
+- configurable filtering and annotation
+- taxon-level record selection and spatial subsampling
+- block-wise and optional parallel processing of large datasets
+
+## Software maturity
+
+`marinedb` is highly modular, and only a small fraction of the possible
+combinations of modules, parameters, execution orders, and input-data
+structures has been tested so far.
+
+During the early stages of the package's use, previously undetected errors may
+therefore appear when it is applied to new datasets or configurations. Users
+are encouraged to report unexpected behavior by opening an issue or contacting
+the maintainer.
+
+## License
+
+This project is licensed under the [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/).
+
+## Citation
+
+Citation information will be provided with the first archived release.
