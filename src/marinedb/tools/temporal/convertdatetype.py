@@ -10,6 +10,7 @@ import pandas as pd
 from marinedb.utils.allexport import export
 from marinedb.utils.printverbose import printv
 
+from marinedb.tools import getcolumnname
 from marinedb.tools import modifyissuecolumn
 from marinedb.tools.temporal import isdateinvalid
 
@@ -153,6 +154,15 @@ def isdatevalid(df, yearkey, monthkey, daykey):
 
 @export
 def apply(df, datekey=None, yearkey=None, monthkey=None, daykey=None, format='ISO8601', drop_inconsistent=False, drop_ambiguous=False, drop_empty=False, verbose=True, indent=''):
+
+    if datekey is not None:
+     df, datekey, _ = getcolumnname.apply(df, datekey, '', inplace=True)
+    if yearkey is not None:
+     df, yearkey, _ = getcolumnname.apply(df, yearkey, '', inplace=True)
+    if monthkey is not None:
+     df, monthkey, _ = getcolumnname.apply(df, monthkey, '', inplace=True)
+    if daykey is not None:
+     df, daykey, _ = getcolumnname.apply(df, daykey, '', inplace=True)
 
     if (datekey is not None) and (datekey not in df.columns):
         printv(f"INFO | Since '{datekey}' was not found in the columns, it will be ignored", verbose=verbose, indent=indent)
