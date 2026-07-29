@@ -79,6 +79,7 @@ SUPPORTED_PROCFUNCTIONS = ['marineloc',
                            'processdateinterval',
                            'splitdate',
                            'temporal',
+                           'convertdatetype',
                            'isdateinvalid',
                            'isdateunlikely'
                            ]
@@ -241,6 +242,7 @@ def overwrite_outputdir_stdnan_dropempty_cleanup(config, inputfile, inputdir, ou
                 elif funcname == 'marineloc':
                     if ('outputdir' not in funcargs_provided):
                         print(f"INFO | '{colname}': override the `outputdir` argument in `{funcname}` with the `inputdir_path` value from the configuration file")
+#                        config[proccat][i][colname][j][funcname]['outputdir'] = os.path.join(inputdir, 'marineloc')
                         config[proccat][i][colname][j][funcname]['outputdir'] = inputdir
                         isprint = True
                 else:
@@ -849,7 +851,7 @@ def process_one_dataframe(df, config, config_variables_updated, isvariable, outp
         printv(f'>>>>>> {nlines} lines done | TIME : {round(end-start)}s', verbose=verbose)
         printv('', verbose=verbose)
 
-    if cpu_idx is not None: # NEW
+    if cpu_idx is not None:
         span = round((end - start))
         outputdir = os.path.join(outputdir, 'time')
         if not os.path.isdir(outputdir):
@@ -1909,8 +1911,6 @@ if __name__ == '__main__':
 
         ## Select and rename columns
 
-        # AJOUTER UN PRINT !
-
         print(f'--- Selecting and renaming columns ---')
         print()
 
@@ -2081,6 +2081,14 @@ if __name__ == '__main__':
     # Store dtypes
 
     if ('dtypes_outputfile' in locals()) and (dtypes_outputfile is not None):
+
+        with open(outputfile,'r') as data:
+            header = data.readline().strip('\n').split('\t')
+
+        print('dtypes_outputfile before:', dtypes_mapping) # debug
+        dtypes_mapping = {k:v for k,v in dtypes_mapping.items() if k in header}
+        print('dtypes_outputfile after:', dtypes_mapping) # debug
+
         with open(dtypes_outputfile, 'w') as f:
             json.dump(dtypes_mapping, f, indent=4)
 
