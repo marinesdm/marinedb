@@ -3,10 +3,11 @@
 
 # External import
 
+import re
 import os
 import glob
 import pandas as pd
-from pathlib import Path
+#from pathlib import Path
 
 # Internal import
 
@@ -219,6 +220,33 @@ def apply(inputfile, inputfile_format, latkey='', lonkey='', idxkey='', controlk
     """
 
     sep = sep.encode('utf-8').decode('unicode_escape')
+    print("outputdir 1:", outputdir) # debug
+
+    # Output directory
+
+    if (outputdir is None) or (len(outputdir) == 0):
+        outputdir = os.path.join(os.path.dirname(inputfile), 'marineloc')
+
+    os.makedirs(outputdir, exist_ok=True)
+
+    basename = os.path.splitext(os.path.basename(inputfile))[0]
+    pattern = re.compile(rf"^{re.escape(basename)}_split\d{{5}}_.+")
+
+    any_file_processed = any(
+        os.path.isfile(os.path.join(outputdir, filename))
+        and pattern.match(filename)
+        for filename in os.listdir(outputdir)
+    )
+
+    outputdir_parts = os.path.normpath(outputdir).split(os.sep)
+
+    if (not any_file_processed) and ('marineloc' not in outputdir_parts):
+        outputdir = os.path.join(outputdir, 'marineloc')
+        os.makedirs(outputdir, exist_ok=True)
+
+    print("outputdir 2:", outputdir) # debug
+
+    # Split the file into CHUNKSIZE-line chunks
 
     if (len(filterfile) == 0) or ((len(filterfile) != 0) and (not os.path.isfile(filterfile))):
 
@@ -227,17 +255,22 @@ def apply(inputfile, inputfile_format, latkey='', lonkey='', idxkey='', controlk
         if len(lonkey) == 0:
             raise ValueError(f'`marineloc.py` | `lonkey` must be specified when no `filterfile` is provided')
 
-        # Split the file into CHUNKSIZE-line chunks
+        is_splitdirname = (splitdir is None) or (len(splitdir) != 0)
+        if not is_splitdirname:
+#            splitdir = os.path.join(os.path.dirname(inputfile), 'marineloc')
+            splitdir = outputdir
 
-        issplitdirname = (len(splitdir) != 0)
-        if not issplitdirname:
-            splitdir = os.path.join(os.path.dirname(inputfile), 'marineloc')
+        is_splitdir = os.path.isdir(splitdir)
+        pattern = re.compile(rf"^{re.escape(basename)}_split\d{{5}}$")
+#        is_notempty = is_splitdir and any(os.path.isfile(f) for f in glob.glob(os.path.join(splitdir, '*_split*')))
+        is_split = is_splitdirname and is_splitdir and any(
+            os.path.isfile(os.path.join(splitdir, filename))
+            and pattern.match(filename)
+            for filename in os.listdir(splitdir)
+        )
+#        is_split = is_splitdirname and is_notempty
 
-        issplitdir = os.path.isdir(splitdir)
-        isnotempty = issplitdir and any(os.path.isfile(f) for f in glob.glob(os.path.join(splitdir, '*_split*')))
-        issplit = issplitdirname and isnotempty
-
-        if not issplit:
+        if not is_split:
 
             columns = [latkey, lonkey]
             if len(controlkey) != 0:
@@ -267,7 +300,13 @@ def apply(inputfile, inputfile_format, latkey='', lonkey='', idxkey='', controlk
 
             if len(idxkey) == 0:
 
-                files = [f for f in glob.glob(os.path.join(splitdir, '*_split*')) if os.path.isfile(f)]
+#                files = [f for f in glob.glob(os.path.join(splitdir, '*_split*')) if os.path.isfile(f)]
+                files = sorted(
+                    os.path.join(splitdir, filename)
+                    for filename in os.listdir(splitdir)
+                    if os.path.isfile(os.path.join(splitdir, filename))
+                    and pattern.match(filename)
+                    )
 
                 with open(files[0],'r') as f:
                     header = f.readline().strip('\n').split(sep)
@@ -279,17 +318,6 @@ def apply(inputfile, inputfile_format, latkey='', lonkey='', idxkey='', controlk
                     raise ValueError('`marineloc.py` | `idxkey` must be specified when `inputfile` has already been split into multiple files')
 
             printv('', verbose=verbose, indent=indent)
-
-        if (outputdir is None) or (len(outputdir) == 0):
-            outputdir = './marineloc'
-
-        try:
-            os.mkdir(outputdir)
-        except FileExistsError:
-            pass
-
-        if (not any(Path(outputdir).iterdir())) and ('marineloc' not in outputdir.split('/')):
-            outputdir = os.path.join(outputdir, 'marineloc')
 
         # Generate a mask differentiating land, sea, and coast
 
@@ -350,19 +378,20 @@ def apply(inputfile, inputfile_format, latkey='', lonkey='', idxkey='', controlk
     printv('** filtermarinelocations', verbose=verbose, indent=indent)
     printv('', verbose=verbose)
 
-    if len(outputdir) != 0:
+    assert len(outputdir) != 0
 
-        if 'marineloc' not in outputdir.split('/'):
-            outputdir = os.path.join(outputdir, 'marineloc')
-            try:
-                os.mkdir(outputdir)
-            except FileExistsError:
-                pass
+#    if 'marineloc' not in outputdir.split('/'):
+#        outputdir = os.path.join(outputdir, 'marineloc')
+#        try:
+#            os.mkdir(outputdir)
+#        except FileExistsError:
+#            pass
 
-        if (outputfile is None) or (len(outputfile) == 0):
-            outputfile = getdefaultoutputfile.apply(inputfile, 'marineloc', outputdir=outputdir, add_processedby=False, verbose=verbose, indent=indent)
-        if len(os.path.dirname(outputfile)) == 0:
-            outputfile = os.path.join(outputdir, outputfile)
+    if (outputfile is None) or (len(outputfile) == 0):
+        outputfile = getdefaultoutputfile.apply(inputfile, 'marineloc', outputdir=outputdir, add_processedby=False, verbose=verbose, indent=indent)
+
+    if len(os.path.dirname(outputfile)) == 0:
+        outputfile = os.path.join(outputdir, outputfile)
 
     params_filterdata = {
                          'inputfile': inputfile,
