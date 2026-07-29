@@ -1,0 +1,36 @@
+stages:
+    - buildwebsite
+    - deploy
+
+# Deploy ______________________________________________________________________
+pages:
+    stage: deploy
+    tags:
+        - shell
+    script:
+        # Create public if it does not already exist
+        # Important for the first RUN of this task
+        - mkdir -p public/
+        - if [ -d site ]; then cp -r site/* public/; fi
+    artifacts:
+        paths:
+        - public
+    only: # Only executed for this branch
+        - master
+
+# Build________________________________________________________________________
+website:
+  stage: buildwebsite
+  image: python:3.12
+  tags: 
+      - docker
+  script:
+    # Installs zensical
+    - pip install zensical mkdocstrings-python
+    # Installs the marindb library
+    - pip install .
+    # Generate the website
+    - zensical build --clean
+  artifacts:
+    paths:
+        - site
