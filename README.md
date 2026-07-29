@@ -1,7 +1,7 @@
 # marinedb
 
 `marinedb` is a modular Python package for curating large marine biodiversity
-occurrence datasets for downstream ecological analyses, with a particular focus on 
+datasets for downstream ecological analyses, with a particular focus on 
 Species Distribution Models (SDMs). The package provides taxonomic, temporal, spatial, 
 and occurrence-data cleaning tools.
 
