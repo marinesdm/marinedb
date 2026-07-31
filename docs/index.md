@@ -17,9 +17,16 @@ it through the Windows Subsystem for Linux.
     portability will be improved in future releases.
 
 1. Clone the repository using SSH:
-```bash
-git clone git@gitlab-research.centralesupelec.fr:smartbiodiv/sdm-data.git
-```
+
+    ```bash
+    git clone git@gitlab-research.centralesupelec.fr:smartbiodiv/sdm-data.git
+    ```
+    or HTTPS:
+
+    ```bash
+    git clone https://gitlab-research.centralesupelec.fr/smartbiodiv/sdm-data.git
+    ```
+
 
 2. Move to the repository root:
 ```bash
