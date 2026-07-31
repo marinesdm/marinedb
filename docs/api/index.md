@@ -196,6 +196,16 @@ The `processing` section is executed first, followed by `postprocessing`.
 Steps are executed sequentially, so each operation receives the result produced by the
 preceding operation.
 
+For each operation, the configuration must identify the column or columns to
+which it applies, provide any required arguments other than `df`, and specify
+optional parameters when needed.
+
+!!! note
+
+    Do not specify the `df` argument in the configuration file. The current
+    data partition is passed automatically to each operation by the `marinedb`
+    workflow.
+
 Modules can:
 
 - be applied to a single dataset column
@@ -249,7 +259,7 @@ defined in separate entries or grouped under the same column entry.
         - year:
             - isna:
                 flag: false
-             - isboundedby:
+            - isboundedby:
                 operator: "<"
                 value: 1950
                 flag: true
