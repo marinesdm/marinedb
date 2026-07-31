@@ -33,15 +33,20 @@ it through the Windows Subsystem for Linux.
 cd /path/to/sdm-data
 ```
 
-3. Install the package in editable mode:
-```bash
-pip install -e .
-```
+3. For users, install the package with:
+    ```bash
+    pip install git+https://gitlab-research.centralesupelec.fr/smartbiodiv/sdm-data.git
+    ```
 
-    Editable installation links the Python environment to the local repository.
-    Updates retrieved with `git pull` are therefore generally available without
-    reinstalling `marinedb`. Reinstallation may still be required when package
-    dependencies or installation settings change.
+    For developers, install the package in editable mode:
+    ```bash
+    pip install -e .
+    ```
+
+        Editable installation links the Python environment to the local repository.
+        Updates retrieved with `git pull` are therefore generally available without
+        reinstalling `marinedb`. Reinstallation may still be required when package
+        dependencies or installation settings change.
 
 ## Getting started
 
