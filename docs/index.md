@@ -43,10 +43,10 @@ cd /path/to/sdm-data
     pip install -e .
     ```
 
-        Editable installation links the Python environment to the local repository.
-        Updates retrieved with `git pull` are therefore generally available without
-        reinstalling `marinedb`. Reinstallation may still be required when package
-        dependencies or installation settings change.
+    Editable installation links the Python environment to the local repository.
+    Updates retrieved with `git pull` are therefore generally available without
+    reinstalling `marinedb`. Reinstallation may still be required when package
+    dependencies or installation settings change.
 
 ## Getting started
 
