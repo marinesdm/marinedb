@@ -837,8 +837,8 @@ def process_one_dataframe(df, config, config_variables_updated, isvariable, outp
     if columns is None:
         columns = list(df.columns)
 
-    if len(df) != 0:
-        writedataframe.to_txt(df[columns], outputfile, init=init_storage, verbose=False, indent=indent)
+#    if len(df) != 0:
+    writedataframe.to_txt(df[columns], outputfile, init=init_storage, verbose=False, indent=indent)
 
     end = time.time()
 
@@ -879,8 +879,12 @@ def read_firstlastindex(inputfile):
 
         last_line = f.readline().decode()
 
-    first_index = int(first_line.strip('\n').split('\t')[index_idx])
-    last_index = int(last_line.strip('\n').split('\t')[index_idx])
+    if len(first_line) != 0:
+        first_index = int(first_line.strip('\n').split('\t')[index_idx])
+        last_index = int(last_line.strip('\n').split('\t')[index_idx])
+    else:
+        first_index = 0
+        last_index = 0
 
     return first_index, last_index
 
