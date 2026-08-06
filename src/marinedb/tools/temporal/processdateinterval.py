@@ -232,7 +232,14 @@ def apply(df, datekey, drop_interval=False, strategy='overlap', maxinterval_numb
     pattern = r'([0-9]{4}(?:-[0-9]{2}){0,2})(?:/([0-9]{4}(?:-[0-9]{2}){0,2}))?'
     isformatrecognized = df[datekey].str.fullmatch(pattern)
     if not isformatrecognized.all():
-        raise ValueError(f"`processdateinterval.py` | all dates should follow the 'YYYY[[-MM[-DD]]/YYYY[-MM[-DD]]]' format. Please use `parsedate.py` upstream to convert date strings to this valid format.")
+        invalid_format = df.loc[~isformatrecognized,datekey].tolist()
+        examples = ", ".join(repr(x) for x in invalid_format[:5])
+        suffix = "etc" if len(invalid_format) > 5 else ""
+        raise ValueError(
+            f"`processdateinterval.py` | All dates must follow the 'YYYY[[-MM[-DD]]/YYYY[-MM[-DD]]]' format. "
+            f"Found {len(invalid_format)} invalid value(s). Examples: {examples}{suffix}. "
+            "Please use `parsedate.py` upstream to convert date strings to this valid format."
+        )
 
     issymmetrical = df.loc[(~pd.isnull(df[datekey])),datekey].str.extract(pattern)
     issymmetrical = issymmetrical[(~pd.isnull(issymmetrical.iloc[:,1]))]

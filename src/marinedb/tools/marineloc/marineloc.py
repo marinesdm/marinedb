@@ -220,7 +220,6 @@ def apply(inputfile, inputfile_format, latkey='', lonkey='', idxkey='', controlk
     """
 
     sep = sep.encode('utf-8').decode('unicode_escape')
-    print("outputdir 1:", outputdir) # debug
 
     # Output directory
 
@@ -243,8 +242,6 @@ def apply(inputfile, inputfile_format, latkey='', lonkey='', idxkey='', controlk
     if (not any_file_processed) and ('marineloc' not in outputdir_parts):
         outputdir = os.path.join(outputdir, 'marineloc')
         os.makedirs(outputdir, exist_ok=True)
-
-    print("outputdir 2:", outputdir) # debug
 
     # Split the file into CHUNKSIZE-line chunks
 
