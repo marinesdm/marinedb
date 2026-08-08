@@ -369,8 +369,9 @@ Each module page documents its accepted parameters and their behavior.
 
 `marinedb` systematically records processing provenance in column names.
 
-- Columns derived from an existing column follow the pattern `<column>_processedby_<operation>`. 
+- Columns derived from an existing column follow the pattern `<column>_processedby_<operation>` 
 - Columns newly created by an operation follow the pattern `<column>_generatedby_<operation>`
+- Columns without either suffix are original variables retained unchanged from the source dataset and have not been processed by the curation workflow
 
 !!! example
     For example, taxonomic harmonization may produce columns such as `species_processedby_isinworms` 
