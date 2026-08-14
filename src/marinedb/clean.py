@@ -19,6 +19,7 @@ import inspect
 import argparse
 import pandas as pd
 from copy import deepcopy
+from datetime import datetime
 from itertools import groupby
 from operator import itemgetter
 from joblib import Parallel, delayed
@@ -90,6 +91,8 @@ SUPPORTED_POSTPROCFUNCTIONS = [
                               ]
 
 BATCH_SIZE = 100000
+
+MARINEDB_STATS_OUTPUTFILE = f"marinedb_stats_{datetime.today().strftime('%Y%m%d')}.txt"
 
 class MyDumper(yaml.Dumper):
 
@@ -766,7 +769,7 @@ def curate_data(df, config, config_variables_updated, isvariable, init=False, ve
 
     # Perform multiple processing steps to curate the dataset
 
-    df = tools.apply(df, config['processing'], verbose=verbose, indent=indent, partition=partition, outputdir_marinedb=config['outputdir_path'])
+    df = tools.apply(df, config['processing'], verbose=verbose, indent=indent, partition=partition, outputdir_marinedb=config['outputdir_path'], outputfile_marinedb=MARINEDB_STATS_OUTPUTFILE)
 
     # Update `variables` section in `config`
 
@@ -805,7 +808,7 @@ def curate_data(df, config, config_variables_updated, isvariable, init=False, ve
 
     return df, config, config_variables_updated
 
-def process_one_dataframe(df, config, config_variables_updated, isvariable, outputfile, outputdir='', columns=None, cpu_idx=None, init_process=False, init_storage=False, verbose=True, indent=''):
+def process_one_dataframe(df, config, config_variables_updated, isvariable, outputfile, outputdir='', columns=None, cpu_idx=None, init_process=False, init_storage=False, config_filename=None, verbose=True, indent=''):
 
     if cpu_idx is not None:
 
@@ -857,8 +860,9 @@ def process_one_dataframe(df, config, config_variables_updated, isvariable, outp
         if not os.path.isdir(outputdir):
             os.makedirs(outputdir)
         timefilepath = os.path.join(outputdir, f'time_' + 'temp%05d' % cpu_idx)
+        today = datetime.today().strftime('%Y-%m-%d')
         with open(timefilepath, 'w', encoding='utf-8') as f:
-            f.write('\t'.join([str(cpu_idx), str(span), str(nlines), str(len(df))]) + '\n')
+            f.write('\t'.join([str(cpu_idx), str(span), str(nlines), str(len(df)), config_filename, today]) + '\n')
 
     return config_variables_updated, columns
 
@@ -1044,7 +1048,7 @@ def concat_times(inputdir, outputdir, cleanup=True):
         print(f'  Storing in {outputfile}')
         print()
 
-    colnames = ['batch','time','n_lines_before','n_lines_after']
+    colnames = ['batch','time','n_lines_before','n_lines_after','configuration_file','date']
     init=True
 
     for filepath in files:
@@ -1055,7 +1059,10 @@ def concat_times(inputdir, outputdir, cleanup=True):
         else:
             times = pd.concat([times[colnames],content[colnames]], ignore_index=True, axis=0)
 
-    times.to_csv(outputfile, sep='\t', index=False)
+    if os.path.isfile(outputfile):
+        times.to_csv(outputfile, sep='\t', index=False, header=False, mode='a')
+    else:
+        times.to_csv(outputfile, sep='\t', index=False)
 
     if cleanup:
 
@@ -1084,6 +1091,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     cleanup = args.cleanup
+    config_filename = os.path.basename(args.config_file)
 
     with open(args.config_file,'r') as f:
         config = yaml.safe_load(f)
@@ -1611,13 +1619,16 @@ if __name__ == '__main__':
     # `Variables` section
 
     ## Default to all columns if no variables are selected
+    with open_file(config['inputfile_path'],'r') as data:
+        header = decode_line(data.readline()).strip('\n').split('\t')
     if not isvariable:
-        with open_file(config['inputfile_path'],'r') as data:
-            header = decode_line(data.readline()).strip('\n').split('\t')
         config['variables'] = header
 
     ## Add 'index_marinedb' column to support process resumption
     config['variables'].append({'index_marinedb': {'index_marinedb': 'int'}})
+    add_index_marinedb = False
+    if 'index_marinedb' not in header:
+        add_index_marinedb = True
 
     ## If `resolvetaxamatch` and verbatim columns are specified,
     ## include verbatim and authorship columns in the `variables` section
@@ -1692,6 +1703,8 @@ if __name__ == '__main__':
 
             header = decode_line(data.readline()).strip('\n').split('\t')
             header_length = len(header)
+            if add_index_marinedb:
+                header = ['index_marinedb'] + header
 
             batch = 0
             error = []
@@ -1714,7 +1727,8 @@ if __name__ == '__main__':
                 obs = [preprocessquotationmark.apply(value) for value in obs]
 
                 if len(obs) == header_length:
-                    obs.insert(0, idx)
+                    if add_index_marinedb:
+                        obs.insert(0, idx)
                     data2clean.append(obs)
                     batch += 1
                 else:
@@ -1730,16 +1744,30 @@ if __name__ == '__main__':
                     print()
 
                     try:
-                        df2clean = pd.DataFrame(data2clean, columns = ['index_marinedb'] + header, dtype=dtypes_mapping)
+                        df2clean = pd.DataFrame(data2clean, columns=header, dtype=dtypes_mapping) # ['index_marinedb'] + header
                     except:
-                        df2clean = pd.DataFrame(data2clean, columns = ['index_marinedb'] + header)
+                        df2clean = pd.DataFrame(data2clean, columns=header)
 
                     if parallel:
                         cpu_idx = ((nbatch + 1) if resume else nbatch)
                     else:
                         cpu_idx = None
 
-                    config_variables_updated, columns = process_one_dataframe(df2clean, config, config_variables_updated, isvariable, outputfile, outputdir=outputdir, columns=columns, cpu_idx=cpu_idx, verbose=True, init_process=init_process, init_storage=init_storage)
+                    params = {
+                              'config': config,
+                              'config_variables_updated': config_variables_updated,
+                              'isvariable': isvariable,
+                              'outputfile': outputfile,
+                              'outputdir': outputdir,
+                              'columns': columns,
+                              'cpu_idx': cpu_idx,
+                              'verbose': True,
+                              'init_process': init_process,
+                              'init_storage': init_storage,
+                              'config_filename': config_filename,
+                             }
+
+                    config_variables_updated, columns = process_one_dataframe(df2clean, **params)
 
                     config_variables_updated_outputfile = os.path.basename(args.config_file).split('.')[0]
                     config_variables_updated_outputfile = os.path.join(config['outputdir_path'], f'{config_variables_updated_outputfile}_updated.yaml')
@@ -1761,9 +1789,9 @@ if __name__ == '__main__':
                     print()
 
                     try:
-                        df2clean = pd.DataFrame(data2clean, columns = ['index_marinedb'] + header, dtype=dtypes_mapping)
+                        df2clean = pd.DataFrame(data2clean, columns=header, dtype=dtypes_mapping)
                     except:
-                        df2clean = pd.DataFrame(data2clean, columns = ['index_marinedb'] + header)
+                        df2clean = pd.DataFrame(data2clean, columns=header)
                     data2clean.clear()
 
                     index_start = list(range(batch))[::BATCH_SIZE]
@@ -1778,6 +1806,7 @@ if __name__ == '__main__':
                               'outputdir': outputdir,
                               'columns': columns,
                               'init_process': False,
+                              'config_filename': config_filename,
                              }
 
                     if cpu_main != 1:
@@ -1819,9 +1848,9 @@ if __name__ == '__main__':
             _, cpu_main = set_cpu(config, parallel, cpu_main=cpu_main, cpu_max=cpu_max)
 
             try:
-                df2clean = pd.DataFrame(data2clean, columns = ['index_marinedb'] + header, dtype=dtypes_mapping)
+                df2clean = pd.DataFrame(data2clean, columns=header, dtype=dtypes_mapping)
             except:
-                df2clean = pd.DataFrame(data2clean, columns = ['index_marinedb'] + header)
+                df2clean = pd.DataFrame(data2clean, columns=header)
 
             index_start = list(range(batch))[::BATCH_SIZE]
             index_end = list(range(BATCH_SIZE,batch))[::BATCH_SIZE] + [batch]
@@ -1844,6 +1873,7 @@ if __name__ == '__main__':
                       'outputdir': outputdir,
                       'columns': columns,
                       'init_process': False,
+                      'config_filename': config_filename
                      }
 
             if cpu_main != 1:
