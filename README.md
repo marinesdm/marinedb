@@ -7,7 +7,7 @@ and occurrence-data cleaning tools.
 
 ## Documentation
 
-Full documentation is available at: https://smartbiodiv.pages.centralesupelec.fr/sdm-data.
+Full documentation is available at: https://marinesdm.github.io/marinedb/
 
 The documentation includes: 
 
@@ -24,17 +24,17 @@ The documentation includes:
 1. Clone the repository using SSH:
 
     ```bash
-    git clone git@gitlab-research.centralesupelec.fr:smartbiodiv/sdm-data.git
+    git clone git@github.com:marinesdm/marinedb.git
     ```
     or HTTPS:
 
     ```bash
-    git clone https://gitlab-research.centralesupelec.fr/smartbiodiv/sdm-data.git
+    git clone https://github.com/marinesdm/marinedb.git
     ```
 
 2. Move to the repository root:
 ```bash
-cd /path/to/sdm-data
+cd /path/to/marinedb
 ```
 
 3. Install the package in editable mode:
@@ -56,7 +56,7 @@ For example:
 python clean.py configuration/config_jedi.yaml --parallel --cleanup
 ```
 
-See the [workflow overview](https://smartbiodiv.pages.centralesupelec.fr/sdm-data/api/) for instructions on building and running a complete workflow.
+See the [workflow overview](https://marinesdm.github.io/marinedb/api/) for instructions on building and running a complete workflow.
 
 ## Main capabilities
 
