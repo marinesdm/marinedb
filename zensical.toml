@@ -1,8 +1,8 @@
 [project]
 site_name= "marinedb"
-site_url= "https://smartbiodiv.pages.centralesupelec.fr/sdm-data/"
+site_url= "https://marinesdm.github.io/marinedb/"
 repo_name = "marinedb"
-repo_url= "https://gitlab-research.centralesupelec.fr/smartbiodiv/sdm-data"
+repo_url= "https://github.com/marinesdm/marinedb"
 copyright = """
 <p xmlns:cc="http://creativecommons.org/ns#" 
    xmlns:dct="http://purl.org/dc/terms/">
