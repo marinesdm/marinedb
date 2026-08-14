@@ -4,7 +4,11 @@
 # External imports
 
 import os
+import re
+import glob
+import time
 import pandas as pd
+from datetime import datetime
 
 # Internal imports
 
@@ -43,8 +47,83 @@ __all__ = ['contains',
            'isdateinvalid',
            'isdateunlikely']
 
+TODAY = datetime.today().strftime('%Y%m%d')
+DEFAULT_OUTPUTFILE = f'marinedb_stats_{TODAY}.txt'
 
-def apply(df, config_dict, verbose=True, indent='', store_stats=True, outputdir_marinedb='./', outputfile_marinedb='marinedb_stats.txt', partition=None):
+def resolve_outputfile(outputfile_marinedb, df, sep="\t"):
+
+    expected_header = df.columns.tolist()
+
+    def header_matches(filepath):
+        with open(filepath, "r", encoding="utf-8") as f:
+            existing_header = f.readline().rstrip("\n\r").split(sep)
+
+        return existing_header == expected_header
+
+    def get_base_filepath(filepath):
+        """
+        Remove an existing _YYYYMMDD or _YYYYMMDD_HHMMSS suffix.
+        """
+        directory, filename = os.path.split(filepath)
+        stem, ext = os.path.splitext(filename)
+
+        stem = re.sub(
+            r"_\d{8}(?:_\d{6})?$",
+            "",
+            stem,
+        )
+
+        return os.path.join(directory, stem + ext)
+
+    base_filepath = get_base_filepath(outputfile_marinedb)
+
+    directory, filename = os.path.split(base_filepath)
+    stem, ext = os.path.splitext(filename)
+
+    today = datetime.today().strftime("%Y%m%d")
+
+    dated_filepath = os.path.join(
+        directory,
+        f"{stem}_{today}{ext}",
+    )
+
+    # 1. Try the requested file first
+    if os.path.isfile(outputfile_marinedb):
+        if header_matches(outputfile_marinedb):
+            return outputfile_marinedb
+
+    # 2. Search all existing files associated with today's date
+    dated_files = glob.glob(
+        os.path.join(
+            directory,
+            f"{stem}_{today}*{ext}",
+        )
+    )
+
+    for filepath in sorted(dated_files):
+        if header_matches(filepath):
+            return filepath
+
+    # 3. If the dated filename does not exist yet, use it
+    if not os.path.isfile(dated_filepath):
+        return dated_filepath
+
+    # 4. Otherwise, create a new time-stamped filename
+    while True:
+        current_time = datetime.today().strftime("%H%M%S")
+
+        filepath = os.path.join(
+            directory,
+            f"{stem}_{today}_{current_time}{ext}",
+        )
+
+        if not os.path.isfile(filepath):
+            return filepath
+
+        # Extremely unlikely, but ensure HHMMSS changes before retrying
+        time.sleep(1)
+
+def apply(df, config_dict, verbose=True, indent='', store_stats=True, outputdir_marinedb='./', outputfile_marinedb=DEFAULT_OUTPUTFILE, partition=None):
 
     if len(os.path.dirname(outputfile_marinedb)) == 0:
         outputfile_marinedb = os.path.join(outputdir_marinedb, outputfile_marinedb)
@@ -121,6 +200,8 @@ def apply(df, config_dict, verbose=True, indent='', store_stats=True, outputdir_
     if store_stats:
 
         stats = pd.DataFrame([stats], columns=header, dtype=int)
+
+        outputfile_marinedb = resolve_outputfile(outputfile_marinedb, stats, sep='\t')
 
         if os.path.isfile(outputfile_marinedb):
             stats.to_csv(outputfile_marinedb, sep='\t', index=False, header=False, mode='a')
