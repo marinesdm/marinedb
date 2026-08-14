@@ -19,23 +19,24 @@ it through the Windows Subsystem for Linux.
 1. Clone the repository using SSH:
 
     ```bash
-    git clone git@gitlab-research.centralesupelec.fr:smartbiodiv/sdm-data.git
+    git clone git@github.com:marinesdm/marinedb.git
     ```
     or HTTPS:
 
     ```bash
-    git clone https://gitlab-research.centralesupelec.fr/smartbiodiv/sdm-data.git
+    git clone https://github.com/marinesdm/marinedb.git
     ```
 
 
 2. Move to the repository root:
-```bash
-cd /path/to/sdm-data
-```
+
+    ```bash
+    cd /path/to/marinedb
+    ```
 
 3. For users, install the package with:
     ```bash
-    pip install git+https://gitlab-research.centralesupelec.fr/smartbiodiv/sdm-data.git
+    pip install git+https://github.com/marinesdm/marinedb.git
     ```
 
     For developers, install the package in editable mode:
