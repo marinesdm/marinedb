@@ -30,9 +30,7 @@ data:
               - 'authority'
             doublecheck: True
             overwrite: True
-            overwrite_parallel: True
             resume: True
-            resume_parallel: True
             parallel: True
             max_attempt: 20
         - isinworms:
@@ -56,14 +54,13 @@ data:
               rank: 'string'
               authority: 'string'
             check_ambiguity: True
-            uncertainty_level: 3
+#            uncertainty_level: 3
             fuzzy: True
             verbatimcolumn: ['scientificName', 'scientificNameAuthorship', 'originalScientificName']
             verbatimauthorshiponly: [False, True, False]
             keep_fossil: False
             inplace: True
             resume: True
-            resume_parallel: True
             resume_mode: 'soft'
             parallel: True
             flag_nomatch: False
@@ -100,9 +97,21 @@ data:
     - basisOfRecord:
         - mapbasisofrecord:
             inplace: True
-        - doesnotcontain:
-            values: 'FOSSIL'
+        - notisin:
+            values: 'FOSSIL_SPECIMEN'
             flag: False
+    - occurrenceStatus:
+        - isin:
+            values: ['absent','not observed','Absence','pseudo-absent','Ausent']
+            flag: True
+            dropna: False
+            minimize_flagname: True
+            flagname_mapping:
+              'absent': 0
+              'not observed': 1
+              'Absence': 2
+              'pseudo-absent': 3
+              'Ausent': 4
     - tool:
         - islatloninvalid: # excluded at data acquisition
             latkey: 'decimalLatitude'
@@ -124,7 +133,7 @@ data:
             flag: False
     - coordinateUncertaintyInMeters:
         - isboundedby:
-            operator: '>'
+            operator: '<='
             value: 1000
             flag: False
             dropna: False
@@ -155,7 +164,8 @@ data:
             # split dates
             split_date: 'all'
             drop_mismatch_split: True
-            inplace_split: True
+            inplace_components_split: True
+            inplace_date_split: True
             dropna_date: True
         - isdateunlikely:
             yearkey: 'year'
@@ -169,7 +179,7 @@ data:
             value: 1950
             flag: True
     - flags:
-        - contains:
+        - doesnotcontain:
             values:
               - 'DATE_IN_FUTURE'
               - 'ON_LAND'
@@ -179,8 +189,8 @@ data:
 #              - 'DEPTH_EXCEEDS_BATH'
 #              - 'MIN_DEPTH_EXCEEDS_MAX'
 #              - 'DEPTH_OUT_OF_RANGE'
-#              flag: True
-#              minimize_flagname: True
+#            flag: True
+#            minimize_flagname: True
 #            flagname_mapping:
 #              'DEPTH_EXCEEDS_BATH': 0
 #              'MIN_DEPTH_EXCEEDS_MAX': 1
@@ -201,10 +211,12 @@ data:
         month: 'int'
     - day:
         day: 'int'
-#    - minimumDepthInMeters:
-#        minimumDepthInMeters: 'float'
-#    - maximumDepthInMeters:
-#        maximumDepthInMeters: 'float'
+    - minimumDepthInMeters:
+        minimumDepthInMeters: 'float'
+    - maximumDepthInMeters:
+        maximumDepthInMeters: 'float'
+    - depth
+    - verbatimDepth
     - species
     - genus
     - family
@@ -213,9 +225,12 @@ data:
     - phylum
     - kingdom
     - basisOfRecord
-#    - flags:
-#        obis_issue: 'str'
+    - flag_occurrenceStatus_isin_0-1-2-3-4:
+        flag_absence: 'bool'
+    - flags:
+        obis_issue: 'str'
     - license
+    - accessRights
     - flag_status_generatedby_isinworms_notisin_0-1-2-3-4-5-6:
         flag_status_generatedby_isinworms_notfitforuse: 'bool'
 #    - flag_flags_contains_0-1-2:
@@ -231,9 +246,9 @@ data:
     - catalogNumber         # OBIS/GBIF/JeDI overlap
 
   postprocessing:
-    - tool:
-      - resolvetaxamatch:
-          review_level: 3
+#    - tool:
+#      - resolvetaxamatch:
+#          review_level: 3
     - tool:
       - taxasubset:
           lowerbound: 50

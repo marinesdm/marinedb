@@ -30,9 +30,7 @@ data:
               - 'authority'
             doublecheck: True
             overwrite: True
-            overwrite_parallel: True
             resume: True
-            resume_parallel: True
             parallel: True
             max_attempt: 20
         - isinworms:
@@ -55,14 +53,13 @@ data:
               isBrackish: 'Int64'
               authority: 'string'
             check_ambiguity: True
-            uncertainty_level: 3
+#            uncertainty_level: 3
             fuzzy: True
             verbatimcolumn: ['verbatimScientificName', 'verbatimScientificNameAuthorship']
             verbatimauthorshiponly: [False, True]
             keep_fossil: False
             inplace: True
             resume: True
-            resume_parallel: True
             resume_mode: 'soft'
             parallel: True
             flag_nomatch: False
@@ -99,8 +96,8 @@ data:
     - basisOfRecord:
         - mapbasisofrecord:
             inplace: True
-        - doesnotcontain:
-            values: 'FOSSIL'
+        - notisin:
+            values: 'FOSSIL_SPECIMEN'
             flag: False
     - occurrenceStatus:
         - isin:
@@ -128,7 +125,7 @@ data:
             flag: False
     - coordinateUncertaintyInMeters:
         - isboundedby:
-            operator: '>'
+            operator: '<='
             value: 1000
             flag: False
             dropna: False
@@ -154,7 +151,8 @@ data:
             # split dates
             split_date: 'all'
             drop_mismatch_split: True
-            inplace_split: True
+            inplace_components_split: True
+            inplace_date_split: True
             dropna_date: True
         - isdateunlikely:
             yearkey: 'year'
@@ -209,10 +207,10 @@ data:
         month: 'int'
     - day:
         day: 'int'
-#    - depth:
-#        depth: 'float'
-#    - depthAccuracy:
-#        depthAccuracy: 'float'
+    - depth:
+        depth: 'float'
+    - depthAccuracy:
+        depthAccuracy: 'float'
     - verbatimScientificName: species
     - genus
     - family
@@ -225,8 +223,8 @@ data:
         flag_absence: 'bool'
 #    - individualCount:
 #        individualCount: 'int'
-#    - issue:
-#        gbif_issue: 'str'
+    - issue:
+        gbif_issue: 'str'
     - license
     - flag_status_generatedby_isinworms_notisin_0-1-2-3-4-5-6:
         flag_status_generatedby_isinworms_notfitforuse: 'bool'
@@ -241,9 +239,9 @@ data:
     - recordNumber      # OBIS/GBIF/JeDI overlap
 
   postprocessing:
-    - tool:
-      - resolvetaxamatch:
-          review_level: 3
+#    - tool:
+#      - resolvetaxamatch:
+#          review_level: 3
     - tool:
       - taxasubset:
           lowerbound: 50
