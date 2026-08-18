@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # coding: utf-8
 
+import os
 import argparse
 import numpy as np
 import pandas as pd
@@ -326,7 +327,7 @@ def format_threshold(value):
 
     return f"{value:.2f}"
 
-def plot_bivariate_world(gdf, richness_threshold, cell_metric_threshold, cell_metric="n_records", boundary_metric="share_species_le_threshold", boundary_metric_threshold=None, title="Species Richness and Mean Records per Species", lower_occurrence_threshold=10, palette=None, output_path=None):
+def plot_bivariate_world(gdf, richness_threshold, cell_metric_threshold, cell_metric="n_records", boundary_metric="share_species_le_threshold", boundary_metric_threshold=None, title="Species Richness and Mean Records per Species", lower_occurrence_threshold=10, palette=None, outputdir=None, resolution=3):
 
     # pielou_evenness : 0.8
     # share_species_le_threshold : 0.75
@@ -369,16 +370,14 @@ def plot_bivariate_world(gdf, richness_threshold, cell_metric_threshold, cell_me
 
             boundary_legend = (
                  "High-volume cells\n"
-                f"≥{boundary_metric_threshold:.0%} of species have "
+                f"≥{boundary_metric_threshold:.0%} species with "
                 f"≤{lower_occurrence_threshold} records"
             )
 
             eligible = gdf["bivariate_class"].isin(['HH','LH'])
             low_species_representation = eligible & gdf["share_species_le_threshold"].ge(boundary_metric_threshold)
 
-    world = gpd.read_file(
-        geodatasets.get_path("naturalearth.land")
-    )
+    world = gpd.read_file(geodatasets.get_path("naturalearth.land"))
 
     # Equal Earth
     target_crs = "EPSG:8857"
@@ -388,7 +387,10 @@ def plot_bivariate_world(gdf, richness_threshold, cell_metric_threshold, cell_me
 
     fig, ax = plt.subplots(figsize=(17, 9))
 
-    land_color = "#E8E8E8" # "#E6E6E6" # "#D9D9D9"
+    # Reserve space on the left for the legends
+    fig.subplots_adjust(left=0.16, right=0.99, bottom=0.06, top=0.98)
+
+    land_color = "#E8E8E8"
     ocean_color = "#FFFFFF"
 
     fig.patch.set_facecolor(ocean_color)
@@ -398,8 +400,8 @@ def plot_bivariate_world(gdf, richness_threshold, cell_metric_threshold, cell_me
     world_projected.plot(
         ax=ax,
         color=land_color,
-        edgecolor="none",
-        linewidth=0,
+        edgecolor="#B8B8B8",
+        linewidth=0.5,
         zorder=1
     )
 
@@ -408,8 +410,8 @@ def plot_bivariate_world(gdf, richness_threshold, cell_metric_threshold, cell_me
     cells_projected.plot(
         ax=ax,
         color=cell_colors,
-        edgecolor="none",
-        linewidth=0,
+        edgecolor="white",
+        linewidth=0.1,
         zorder=2,
     )
 
@@ -419,14 +421,14 @@ def plot_bivariate_world(gdf, richness_threshold, cell_metric_threshold, cell_me
             cells_projected.loc[low_evenness].boundary.plot(
                 ax=ax,
                 color="#3A3A3A",
-                linewidth=1.4,
+                linewidth=0.9,
                 zorder=3,
             )
         elif boundary_metric == "share_species_le_threshold":
             cells_projected.loc[low_species_representation].boundary.plot(
                 ax=ax,
-                color="#3A3A3A",
-                linewidth=1.4,
+                color="#4A4A4A",
+                linewidth=1.2,
                 zorder=3,
             )
 
@@ -436,13 +438,14 @@ def plot_bivariate_world(gdf, richness_threshold, cell_metric_threshold, cell_me
     ax.set_xlim(bounds[0], bounds[2])
     ax.set_ylim(bounds[1], bounds[3])
 
-    legend_ax = inset_axes(
-        ax,
-        width="12%",
-        height="18%",
-        loc="lower left",
-        borderpad=2.0,
-    )
+    # Legend block position
+
+    legend_left = 0.12 # 0.14
+    legend_bottom = 0.137
+    legend_width = 0.085 * 0.8
+    legend_height = 0.16 * 0.8
+
+    legend_ax = fig.add_axes([legend_left, legend_bottom, legend_width, legend_height])
 
     # Bottom row: low number of records
     # Top row: high number of records
@@ -467,6 +470,17 @@ def plot_bivariate_world(gdf, richness_threshold, cell_metric_threshold, cell_me
         labels=["Low", "High"],
         fontsize=8,
     )
+
+    legend_ax.xaxis.tick_top()
+    legend_ax.tick_params(
+        axis="x",
+        top=True,
+        labeltop=True,
+        bottom=False,
+        labelbottom=False,
+        length=0,
+    )
+
     legend_ax.set_yticks(
         [0, 1],
         labels=["Low", "High"],
@@ -478,7 +492,7 @@ def plot_bivariate_world(gdf, richness_threshold, cell_metric_threshold, cell_me
 
     legend_ax.plot(
         [0.5, 0.5],
-        [0.0, -0.03],
+        [1.0, 1.03],
         transform=legend_ax.transAxes,
         color="#555555",
         linewidth=0.8,
@@ -487,13 +501,13 @@ def plot_bivariate_world(gdf, richness_threshold, cell_metric_threshold, cell_me
 
     legend_ax.annotate(
         richness_threshold_label,
-        xy=(0.5, 0.0),
+        xy=(0.5, 1.0),
         xycoords=legend_ax.transAxes,
-        xytext=(0, -8),
+        xytext=(0, 7),
         textcoords="offset points",
         fontsize=7,
         ha="center",
-        va="top",
+        va="bottom",
         annotation_clip=False,
     )
 
@@ -521,8 +535,11 @@ def plot_bivariate_world(gdf, richness_threshold, cell_metric_threshold, cell_me
     legend_ax.set_xlabel(
         "Species richness",
         fontsize=9,
-        labelpad=7,
+        labelpad=8,
     )
+
+    legend_ax.xaxis.set_label_position("top")
+
     legend_ax.set_ylabel(
         cell_metric_label,
         fontsize=9,
@@ -537,44 +554,68 @@ def plot_bivariate_world(gdf, richness_threshold, cell_metric_threshold, cell_me
 
     if cell_metric == "n_records":
 
-        x_rect = 0.02
-        y_rect = 1.10
-        rect_w = 0.10
-        rect_h = 0.10
-
-        evenness_box = Rectangle(
-            (x_rect, y_rect),
-            rect_w,
-            rect_h,
-            transform=legend_ax.transAxes,
+        boundary_patch = Patch(
             facecolor="white",
-            edgecolor="#3A3A3A",
-            linewidth=1.4,
-            clip_on=False,
+            edgecolor="#4A4A4A",
+            linewidth=1.2,
+            label=boundary_legend,
         )
 
-        legend_ax.add_patch(evenness_box)
-
-        legend_ax.text(
-            x_rect + rect_w + 0.05,
-            y_rect + rect_h / 2,
-            boundary_legend,
-            transform=legend_ax.transAxes,
-            fontsize=9,
-            ha="left",
-            va="center",
-            clip_on=False
+        boundary_legend_obj = fig.legend(
+            handles=[boundary_patch],
+            loc="lower left",
+            bbox_to_anchor=(legend_left - 0.0035, legend_bottom - 0.0125 - 0.03), # 0.05
+#            bbox_to_anchor=(legend_left + legend_width + 0.002, legend_bottom - 0.0125),
+            bbox_transform=fig.transFigure,
+            frameon=False,
+            fontsize=8.5,
+            handlelength=1.2,
+            handleheight=1.0,
+            handletextpad=0.6,
+            borderaxespad=0,
         )
 
-    fig.tight_layout()
+#        x_rect = 0.02
+#        y_rect = 1.10
+#        rect_w = 0.10
+#        rect_h = 0.10
+#
+#        evenness_box = Rectangle(
+#            (x_rect, y_rect),
+#            rect_w,
+#            rect_h,
+#            transform=legend_ax.transAxes,
+#            facecolor="white",
+#            edgecolor="#3A3A3A",
+#            linewidth=1.4,
+#            clip_on=False,
+#        )
+#
+#        legend_ax.add_patch(evenness_box)
+#
+#        legend_ax.text(
+#            x_rect + rect_w + 0.05,
+#            y_rect + rect_h / 2,
+#            boundary_legend,
+#            transform=legend_ax.transAxes,
+#            fontsize=9,
+#            ha="left",
+#            va="center",
+#            clip_on=False
+#        )
 
-    if output_path is not None:
+#    fig.tight_layout()
+
+    if outputdir is not None:
+        print("Saving figure...")
+        outputfile = os.path.join(outputdir, f'h3_bivariate_map_res{resolution}_1.png')
         fig.savefig(
-            output_path,
+            outputfile,
             dpi=300,
             bbox_inches="tight",
             facecolor=ocean_color,
         )
+        print(f"Figure saved to: {os.path.abspath(outputfile)}")
 
     return fig, ax
 
@@ -587,7 +628,7 @@ if __name__=='__main__':
     parser.add_argument('--species-column', '--species', type=str, help='Name of the column containing the species identifier.', required=True)
     parser.add_argument('--delimiter', type=str, help='Field delimiter used in the input file. Enclose special characters or delimiters containing spaces in quotation marks', default='\t')
     # Warning: delimiter must be enclosed in quotation marks
-    parser.add_argument('--resolution', type=int, metavar="0-15", help='H3 grid resolution. Higher values produce smaller cells and a more detailed map, but require more computation.', default=2)
+    parser.add_argument('--resolution', type=int, metavar="0-15", help='H3 grid resolution. Higher values produce smaller cells and a more detailed map, but require more computation.', default=3)
     parser.add_argument('--lower-occurrence-threshold', type=int, help="Record-count threshold used to identify poorly represented species. A species with this number of records or fewer within an H3 cell is considered underrepresented.", default=10)
     parser.add_argument('--upper-occurrence-threshold', type=int, help="Record-count threshold used to identify well-represented species. A species with at least this number of records within an H3 cell is considered sufficiently represented.", default=50)
     parser.add_argument('--cell-metric', type=str, choices = ["n_records", "mean_records_per_species", "median_records_per_species"], help="Cell-level metric combined with species richness in the bivariate classification.", default='n_records')
@@ -598,7 +639,8 @@ if __name__=='__main__':
     parser.add_argument('--boundary-metric-threshold', type=float, help="Threshold used to determine which H3 cells are highlighted with a boundary. Its interpretation depends on --boundary-metric. For 'species_representation', it is the minimum share of poorly represented species required to flag a cell. For 'record_evenness', it is the maximum Pielou evenness below which a cell is flagged.", default=None)
 #    parser.add_argument('--title', type=str, help="Title displayed above the map.", default="Species Richness and Mean Records per Species")
     parser.add_argument('--palette', nargs=4, type=str, metavar=("LL", "HL", "LH", "HH"), help="Four colors assigned respectively to the LL, HL, LH, and HH: low richness/low number of records, high richness/low number of records, low richness/high number of records, and high richness/high number of records. Colors may be hexadecimal codes or Matplotlib color names.", default=None)
-    parser.add_argument('--outputfile-path', '--output', type=str, help="Path of the output image file. The file format is inferred from its extension, for example '.png', '.pdf', or '.svg'. If omitted, the map is displayed without being saved.", default=None)
+#    parser.add_argument('--output-path', '--output', type=str, help="Path of the output image file. The file format is inferred from its extension, for example '.png', '.pdf', or '.svg'. If omitted, the map is displayed without being saved.", default=None)
+    parser.add_argument('--output-directory', '--outputdir', type=str, help="Directory path of the output image file. If omitted, the map is displayed without being saved.", default=None)
     args = parser.parse_args()
 
     file = args.inputfile_path
@@ -642,7 +684,8 @@ if __name__=='__main__':
               'boundary_metric_threshold': args.boundary_metric_threshold,
               'palette': palette,
               'lower_occurrence_threshold': args.lower_occurrence_threshold,
-              'output_path': args.outputfile_path
+              'outputdir': args.output_directory,
+              'resolution': args.resolution
              }
 
     fig, ax = plot_bivariate_world(result, **params)
