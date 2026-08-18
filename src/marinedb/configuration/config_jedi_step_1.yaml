@@ -1,0 +1,186 @@
+data:
+
+  inputfile_path: "/data/dream/zrr/elena/data/JeDI.csv"
+
+  inputdir_path: "/data/dream/zrr/elena/jedi_marinedb/source"
+
+  outputdir_path: "/data/dream/zrr/elena/jedi_marinedb/curated"
+
+  outputfile_path: "jedi_processedby_marinedb.temp"
+
+  processing:
+    - tool:
+        - format:
+            dataset_name: 'jedi'
+            overwrite: False
+    - tool:
+        - marineloc:
+            latkey: 'decimalLatitude'
+            lonkey: 'decimalLongitude'
+            inputfile_format: 'pandas'
+            parallel: True
+            filterfile: '/data/dream/zrr/elena/jedi_marinedb/source/marineloc/processed/marine_filter'
+    - scientificName:
+        - createwormsfilters:
+            skip_uniques_rebuild: True
+            wormscall:
+              - 'AphiaID'
+              - 'scientificname'
+              - 'genus'
+              - 'family'
+              - 'order'
+              - 'cls'
+              - 'phylum'
+              - 'kingdom'
+              - 'match_type'
+              - 'status'
+              - 'valid_AphiaID'
+              - 'lsid'
+              - 'isMarine'
+              - 'isBrackish'
+              - 'authority'
+            doublecheck: True
+            overwrite: True
+            resume: True
+            parallel: True
+            max_attempt: 20
+        - isinworms:
+            stdnan: True
+            rank_mapping:
+              scientificname: 'scientificName'
+              genus: 'genus'
+              family: 'family'
+              order: 'order'
+              cls: 'class'
+              phylum: 'phylum'
+              kingdom: 'kingdom'
+            worms_dtypes:
+              AphiaID: 'Int64'
+              match_type: 'string'
+              status: 'string'
+              valid_AphiaID: 'Int64'
+              lsid: 'string'
+              isMarine: 'Int64'
+              isBrackish: 'Int64'
+              authority: 'string'
+            check_ambiguity: True
+            uncertainty_level: 3
+            fuzzy: True
+            keep_fossil: False
+            inplace: True
+            resume: True
+            resume_mode: 'soft'
+            parallel: True
+            flag_nomatch: False
+            flag_uncertain: False
+            store_isinworms: False
+    - samplingProtocol:
+        - mapbasisofrecord:
+            inplace: False
+        - notisin:
+            values: 'FOSSIL_SPECIMEN'
+            flag: False
+    - occurrenceStatus:
+        - isin:
+            values: 'absent'
+            flag: True
+            dropna: True
+    - tool:
+        - islatloninvalid:
+            latkey: 'decimalLatitude'
+            lonkey: 'decimalLongitude'
+            flag: False
+            dropna: True
+        - islatlonzero:
+            latkey: 'decimalLatitude'
+            lonkey: 'decimalLongitude'
+            flag: False
+        - doeslateqlon:
+            latkey: 'decimalLatitude'
+            lonkey: 'decimalLongitude'
+            flag: False
+        - belowminlatlonprecision:
+            latkey: 'decimalLatitude'
+            lonkey: 'decimalLongitude'
+            value: 2
+            flag: False
+#    - marinedb_mask: # coast
+#        - isin:
+#            values: 2
+#            flag: True
+    - tool:
+        - temporal:
+            # parse dates
+            datekey: 'eventDate'
+            yearkey: 'year'
+            monthkey: 'month'
+            daykey: 'day'
+            inplace_parse: True
+            stdnan: True
+            # process date intervals
+            flag_interval: True
+            drop_interval: False
+            strategy_interval: 'overlap'
+            inplace_interval: False
+            # split dates
+            split_date: 'all'
+            drop_mismatch_split: True
+            inplace_components_split: True
+            inplace_date_split: True
+            dropna_date: True
+        - isdateunlikely:
+            yearkey: 'year'
+            year_max: 2014
+            flag: False
+    - year:
+        - isna:
+            flag: False
+        - isboundedby:
+            operator: '<'
+            value: 1950
+            flag: True
+
+  variables:
+
+    - jedi_id:
+        jedi_id: 'int'
+    - decimalLatitude:
+        decimalLatitude: 'float'
+    - decimalLongitude:
+        decimalLongitude: 'float'
+    - eventDate
+    - year:
+        year: 'int'
+    - month:
+        month: 'int'
+    - day:
+        day: 'int'
+    - scientificName:
+        species: 'str'
+    - genus
+    - family
+    - order
+    - class
+    - phylum
+    - kingdom
+    - basisOfRecord
+    - flag_occurrenceStatus_isin_absent:
+        flag_absence: 'bool'
+    - verbatimDepth:                      # not processed
+        verbatimDepth: 'float'
+    - minimumDepthInMeters:               # not processed
+        minimumDepthInMeters: 'float'
+    - maximumDepthInMeters:               # not processed
+        maximumDepthInMeters: 'float'
+    - collectionCode                      # OBIS/GBIF/JeDI overlap
+    - ownerInstitutionCode                # OBIS/GBIF/JeDI overlap
+
+  postprocessing:
+    - tool:
+      - resolvetaxamatch:
+          review_level: 3
+    - tool:
+      - taxasubset:
+          lowerbound: 50
+          flag: True
+          dropna: True

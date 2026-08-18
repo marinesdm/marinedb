@@ -1,0 +1,44 @@
+data:
+
+  inputfile_path: "/data/dream/zrr/elena/jedi_marinedb/curated/jedi_processedby_marinedb_resolvetaxamatch_taxasubset.temp"
+
+  inputdir_path: "/data/dream/zrr/elena/jedi_marinedb/source"
+
+  outputdir_path: "/data/dream/zrr/elena/jedi_marinedb/curated"
+
+  outputfile_path: "jedi_processedby_marinedb_resolvetaxamatch_taxasubset.txt"
+
+  processing:
+
+    - kingdom:
+        - notisin:
+            values: ['Bacteria', 'Archaea', 'Viruses']
+            flag: False
+    - class:
+        - isin:
+            values: ['Aves']
+            flag: True
+    - status_generatedby_isinworms:
+        - notisin:
+            values:
+              - 'accepted'
+              - 'alternative representation'
+              - 'unaccepted'
+              - 'unreplaced junior homonym'
+              - 'junior homonym'
+              - 'superseded combination'
+              - 'superseded rank'
+            flag: True
+            minimize_flagname: True
+            flagname_mapping:
+              'accepted': 0
+              'alternative representation': 1
+              'unaccepted': 2
+              'unreplaced junior homonym': 3
+              'junior homonym': 4
+              'superseded combination': 5
+              'superseded rank': 6
+
+  variables:
+
+  postprocessing:
